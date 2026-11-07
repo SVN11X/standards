@@ -1,5 +1,5 @@
 # Rules and files shared by every profile.
-version: 1.4.0
+version: 1.5.0
 
 required_files:
   - README.md
@@ -21,7 +21,7 @@ required_files:
   - .github/workflows/standard.yml
 
 # Skills every repository lists, before the profile's own skills.
-skills: [code-review]
+skills: [repo-improve, code-review]
 
 gitignore:
   - .standards/
@@ -38,7 +38,7 @@ fixed:
   - Only standard files and tool manifests live at the repository root. Everything else goes into a folder of the layout.
   - Every top-level folder has a README.md saying what goes there, what does not and how files are named.
   - Commit small, focused changes with Conventional Commits messages (feat, fix, docs, refactor, test, chore).
-  - Never commit secrets, tokens, personal data, or files over 5 MB outside Git LFS.
+  - Never commit secrets, tokens, personal data, executables, or files over 5 MB outside Git LFS.
   - Leave the repository passing the standard check.
 
 anti_slop:
@@ -75,6 +75,18 @@ root_files:
   - README.md
   - LICENSE
   - LICENSE.*
+  - LICENSE-*
+  - NOTICE
+  - NOTICE.*
+  - THIRD-PARTY*
+  - THIRD_PARTY*
+  - DATA-LICENSE*
+  - ROADMAP.md
+  - AUTHORS*
+  - GOVERNANCE.md
+  - turbo.json
+  - nx.json
+  - lerna.json
   - CHANGELOG.md
   - AGENTS.md
   - CLAUDE.md
@@ -131,6 +143,15 @@ root_files:
   - firebase.json
   - renovate.json
   - "*.code-workspace"
+
+# Top-level folders every profile allows. LICENSES/ follows the REUSE specification for license texts.
+always_folders: [docs, LICENSES]
+
+# Executables do not belong in git. Download them in a setup script instead.
+forbidden_extensions: [exe, dll, msi, dmg, so, dylib, jar, apk]
+
+# A top-level folder with more files than this is a warning: large data belongs in external storage, releases or LFS.
+max_files_per_folder: 2000
 
 # Hidden folders allowed at the top level. Declare any other one in .standard.yml under extra_folders.
 hidden_folders: [.github, .gemini, .vscode, .devcontainer, .husky, .claude, .agents, .cursor, .codex, .changeset, .dvc, .streamlit, .storybook]

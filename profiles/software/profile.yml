@@ -81,6 +81,25 @@ options:
       data-oriented:
         rules:
           - Keep hot data in contiguous arrays (Structure of Arrays). Measure before and after every optimization.
+  layout:
+    question: One project, or a monorepo with several apps and packages?
+    default: single
+    choices:
+      single: {}
+      monorepo:
+        add_folders:
+          apps:
+            description: Deployable applications, one folder each.
+            goes_here: One folder per app, each with its own README.
+            not_here: Code shared by several apps (packages/).
+            naming: kebab-case, for example apps/desktop.
+          packages:
+            description: Libraries shared by the apps.
+            goes_here: One folder per package, each with its own README.
+            not_here: Applications (apps/).
+            naming: kebab-case, for example packages/speech-analysis.
+        rules:
+          - Workspace tooling lives at the root (for example pnpm-workspace.yaml). Each app and package has its own README and its own tests.
   language:
     question: Main language (for example python, typescript, cpp, rust)?
     default: python

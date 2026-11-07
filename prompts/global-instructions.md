@@ -14,7 +14,7 @@ On Windows, `~` is your user folder, for example `C:\Users\<you>`.
 My repositories follow SVN11X/standards: https://github.com/SVN11X/standards
 
 - Inside a repository, follow its AGENTS.md. It wins over these lines.
-- To create a repository or reorganize one, use the repo-setup skill. Without skills, ask me to paste prompts/intake.md from the standard.
+- To improve a repository as a whole, use the repo-improve skill. To create a repository or reorganize one, use the repo-setup skill. Without skills, ask me to paste prompts/intake.md from the standard.
 - To review code or a pull request, use the code-review skill. Without skills, ask me to paste prompts/review.md.
 - To improve a website or an interactive page, use the web-improve skill.
 - To review a thesis, paper, report or documentation, use the docs-review skill.

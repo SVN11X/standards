@@ -25,6 +25,13 @@ folders:
     not_here: Test data over 1 MB.
     naming: Mirror the file under test, for example main-menu.test.js.
 
+  scripts:
+    description: Developer scripts.
+    goes_here: Build, data generation and maintenance scripts.
+    not_here: Code the site or pipeline needs at run time (src/).
+    naming: kebab-case or snake_case, with a one-line usage note at the top.
+    optional: true
+
 gitignore: [node_modules/, dist/, .cache/, coverage/, .vite/]
 
 fixed:
@@ -67,8 +74,16 @@ options:
         rules:
           - Plain HTML, CSS and JavaScript served from src/. No bundler.
       npm:
+        root_files: [index.html]
+        add_folders:
+          public:
+            description: Static files the build copies as they are.
+            goes_here: Favicon, robots.txt, manifest, files that must keep their exact URL.
+            not_here: Images and media the code imports (assets/ or src/).
+            naming: kebab-case, except names a standard requires (robots.txt, favicon.ico).
         rules:
-          - package.json at the root with dev, build and test scripts. Commit the lockfile. Build output goes to dist/ and is not committed.
+          - package.json at the root with dev, build and test scripts. Commit the lockfile. Build output goes to dist/ and is never committed.
+          - The tool's conventions win, for example index.html at the root and public/ for Vite.
   motion:
     question: How much motion should the interface have?
     default: subtle

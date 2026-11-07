@@ -29,6 +29,13 @@ folders:
     not_here: Real data.
     naming: Mirror the module under test.
 
+  scripts:
+    description: Developer scripts.
+    goes_here: Build, data generation and maintenance scripts.
+    not_here: Code the site or pipeline needs at run time (src/).
+    naming: kebab-case or snake_case, with a one-line usage note at the top.
+    optional: true
+
 gitignore: [__pycache__/, .venv/, .ipynb_checkpoints/, mlruns/, .dvc/cache/, data/private/]
 
 fixed:

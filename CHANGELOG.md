@@ -2,6 +2,21 @@
 
 All notable changes to this standard are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/2.0.0/) and versions follow [Semantic Versioning](https://semver.org/).
 
+## [1.5.0] - 2026-11-07
+
+### Added
+
+- `repo-improve` skill: improves a repository as a whole, from diagnosis to one pull request per improvement.
+- `release` scripts that run the whole release in one step and refuse to reuse a version tag that points elsewhere.
+- Checks for committed executables and for top-level folders with thousands of files.
+- `layout: monorepo` option in the software profile, with `apps/` and `packages/`.
+- Move plan aliases for common Spanish folder names and for `e2e/`.
+
+### Changed
+
+- The web profile follows tool conventions when it builds with npm: `index.html` at the root and `public/` for static files.
+- Root files such as `LICENSE-*`, `NOTICE`, `THIRD-PARTY*`, `ROADMAP.md` and `AUTHORS` are allowed, and `LICENSES/` (REUSE) is allowed in every profile.
+
 ## [1.4.0] - 2026-11-07
 
 ### Added

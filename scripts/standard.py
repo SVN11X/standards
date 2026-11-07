@@ -124,6 +124,7 @@ def resolve(profile: dict, answers: dict) -> dict:
     folders = {name: dict(spec or {}) for name, spec in (profile.get("folders") or {}).items()}
     subfolders: dict[str, dict] = {}
     files = list(profile.get("files") or [])
+    root_files = list(profile.get("root_files") or [])
     option_rules: list[str] = []
     problems: list[str] = []
     options = profile.get("options") or {}
@@ -144,10 +145,11 @@ def resolve(profile: dict, answers: dict) -> dict:
         for parent, children in (choice.get("subfolders") or {}).items():
             subfolders.setdefault(parent, {}).update(children)
         files.extend(choice.get("files") or [])
+        root_files.extend(choice.get("root_files") or [])
     for key in sorted(set(answers) - set(options)):
         problems.append(f"Option '{key}' does not exist in the {profile['name']} profile.")
     subfolders = {parent: children for parent, children in subfolders.items() if parent in folders}
-    return {"folders": folders, "subfolders": subfolders, "files": files,
+    return {"folders": folders, "subfolders": subfolders, "files": files, "root_files": root_files,
             "option_rules": option_rules, "problems": problems}
 
 
@@ -188,7 +190,7 @@ def markdown_sections(text: str) -> dict[str, str]:
 def layout_lines(folders: dict, subfolders: dict, parts: dict, extra: dict, with_docs: bool) -> list[str]:
     lines = []
     for name, spec in folders.items():
-        line = f"- `{name}/`: {spec.get('description', '')}"
+        line = f"- `{name}/`: {spec.get('description', '')}" + (" Optional." if spec.get("optional") else "")
         children = subfolders.get(name)
         if children:
             line += " Inside: " + ", ".join(f"`{child}/`" for child in children) + "."
@@ -519,6 +521,8 @@ def init_repo(repo: Path, settings: dict) -> list[str]:
             copy_file(optional, rel, repo, ctx, created)
 
     for name, spec in resolved["folders"].items():
+        if spec.get("optional") and not (repo / name).exists():
+            continue
         write_if_missing(repo / name / "README.md", folder_readme(name, spec), created, repo)
         for child, description in resolved["subfolders"].get(name, {}).items():
             write_if_missing(repo / name / child / "README.md", f"# {child}\n\n{description}\n", created, repo)
@@ -644,7 +648,7 @@ def check_layout(files: list[str], config: dict, profile: dict, resolved: dict, 
     folders, subfolders = resolved["folders"], resolved["subfolders"]
     parts = config.get("parts") or {}
     extra = config.get("extra_folders") or {}
-    declared = set(folders) | set(parts) | set(extra) | {"docs"}
+    declared = set(folders) | set(parts) | set(extra) | always_folders()
     present = {f.split("/", 1)[0] for f in files if "/" in f}
     hidden_allowed = set(base.get("hidden_folders") or []) | set(extra)
     for name in sorted(present):
@@ -667,6 +671,21 @@ def check_layout(files: list[str], config: dict, profile: dict, resolved: dict, 
             if f"{part}/{required}" not in files:
                 report.error(f"{part}/{required}", "Missing in a declared part. Run init --existing, then agents.")
 
+    forbidden = {ext.lower() for ext in base.get("forbidden_extensions") or []}
+    for rel in files:
+        if rel.rsplit(".", 1)[-1].lower() in forbidden and "." in rel.rsplit("/", 1)[-1]:
+            report.error(rel, "Executables do not belong in git. Download them in a setup script or a release.")
+    limit = base.get("max_files_per_folder") or 0
+    if limit:
+        counts: dict[str, int] = {}
+        for rel in files:
+            if "/" in rel:
+                top = rel.split("/", 1)[0]
+                counts[top] = counts.get(top, 0) + 1
+        for top, count in sorted(counts.items()):
+            if count > limit:
+                report.warn(top, f"{count} files. Large data belongs in external storage, release assets or Git LFS.")
+
     for name, spec in folders.items():
         allowed = {ext.lower() for ext in spec.get("extensions") or []}
         pattern = re.compile(spec["naming_regex"]) if spec.get("naming_regex") else None
@@ -680,7 +699,7 @@ def check_layout(files: list[str], config: dict, profile: dict, resolved: dict, 
             if pattern and not pattern.match(filename):
                 report.warn(rel, f"Name does not follow the {name}/ convention: {spec.get('naming', '')}")
 
-    root_patterns = root_file_patterns(profile)
+    root_patterns = root_file_patterns(resolved)
     for rel in files:
         if "/" in rel or rel.startswith("."):
             continue
@@ -832,6 +851,11 @@ DIR_ALIASES = {
     "asset": "assets", "assets": "assets", "static": "assets", "images": "assets", "img": "assets", "media": "assets",
     "model": "models", "models": "models", "figures": "figures", "figs": "figures",
     "chapters": "content", "content": "content", "modules": "modules", "environments": "environments", "envs": "environments",
+    "e2e": "tests/e2e", "licenses": "LICENSES", "css": "src/css", "styles": "src/styles", "js": "src/js",
+    "fonts": "assets/fonts",
+    "pruebas": "tests", "documentacion": "docs", "documentos": "docs", "datos": "data", "herramientas": "scripts",
+    "modelos": "models", "imagenes": "assets", "contenido": "content", "capitulos": "content", "figuras": "figures",
+    "bibliografia": "bibliography", "plantillas": "templates", "mecanica": "mechanical", "electronica": "electronics",
 }
 SUFFIX_TARGETS = [
     ((".bat", ".cmd", ".ps1", ".sh"), ["scripts"]),
@@ -845,15 +869,23 @@ SUFFIX_TARGETS = [
     ((".md", ".txt", ".rst", ".pdf", ".docx"), ["docs"]),
     ((".tf",), ["modules"]),
 ]
-SECRET_HINTS = ("cookie", "credential", "secret", "token", "id_rsa")
-SECRET_SUFFIXES = (".pem", ".key", ".pfx", ".p12")
-GENERATED_HINTS = {"output", "outputs", "export", "exports", "out", "dist", "build", "tmp", "temp", "cache", "logs", "log"}
+SECRET_NAME = re.compile(
+    r"^(?:\.env(?:\.(?!example$)[\w.-]+)?"
+    r"|.+\.(?:pem|key|pfx|p12)"
+    r"|id_(?:rsa|ecdsa|ed25519)"
+    r"|(?:.+[_.-])?(?:cookies?|credentials?|secrets?|tokens?)(?:\.(?:json|txt|ya?ml|env|ini|cfg|sqlite|db))?)$")
+GENERATED_HINTS = {"output", "outputs", "export", "exports", "out", "dist", "build", "tmp", "temp", "cache", "logs", "log",
+                   "astro", "site", "next"}
 REFERENCE_SUFFIXES = TEXT_SUFFIXES | {".bat", ".cmd", ".ps1", ".sh", ".toml", ".yml", ".yaml", ".json", ".cfg", ".ini"}
 PLAN_PATH = Path("docs") / "migration-plan.yml"
 
 
-def root_file_patterns(profile: dict) -> list[str]:
-    return list(base_config().get("root_files") or []) + list(profile.get("root_files") or [])
+def root_file_patterns(resolved: dict) -> list[str]:
+    return list(base_config().get("root_files") or []) + list(resolved.get("root_files") or [])
+
+
+def always_folders() -> set[str]:
+    return set(base_config().get("always_folders") or ["docs"])
 
 
 def kebab(filename: str) -> str:
@@ -871,10 +903,8 @@ def snake(filename: str) -> str:
 
 
 def looks_secret(filename: str) -> bool:
-    lowered = filename.lower()
-    if lowered == ".env" or (lowered.startswith(".env.") and lowered != ".env.example"):
-        return True
-    return lowered.endswith(SECRET_SUFFIXES) or any(hint in lowered for hint in SECRET_HINTS)
+    """True for names that usually hold credentials or sessions, such as .env, *.pem or cookies.txt."""
+    return bool(SECRET_NAME.match(filename.lower()))
 
 
 def root_file_target(filename: str, available: set[str]) -> tuple[str | None, str]:
@@ -907,8 +937,8 @@ def plan_migration(repo: Path, profile_name: str, answers: dict) -> dict:
     if resolved["problems"]:
         raise StandardError(" ".join(resolved["problems"]))
     folders = resolved["folders"]
-    available = set(folders) | {"docs"}
-    root_patterns = root_file_patterns(profile)
+    available = set(folders) | always_folders()
+    root_patterns = root_file_patterns(resolved)
     hidden_allowed = set(base_config().get("hidden_folders") or [])
     files = list_files(repo)
     moves, decide, flagged_dirs = [], [], set()
@@ -931,10 +961,10 @@ def plan_migration(repo: Path, profile_name: str, answers: dict) -> dict:
                 decide.append({"path": rel, "light": "yellow", "reason": reason})
             continue
         top = parts[0]
-        if top in folders or top == "docs" or top in hidden_allowed:
+        if top in folders or top in always_folders() or top in hidden_allowed:
             continue
         alias = DIR_ALIASES.get(top.lower())
-        if not top.startswith(".") and alias in available:
+        if not top.startswith(".") and alias and alias.split("/")[0] in available:
             moves.append({"from": rel, "to": "/".join([alias] + parts[1:]),
                           "reason": f"{top}/ is {alias}/ in the {profile['name']} profile."})
             continue
@@ -1120,7 +1150,7 @@ def cmd_skills_repo(out_dir: Path) -> None:
 
 def git_add_all(repo: Path) -> None:
     subprocess.run(["git", "init", "-q"], cwd=repo, check=True)
-    subprocess.run(["git", "add", "-A"], cwd=repo, check=True)
+    subprocess.run(["git", "-c", "core.autocrlf=false", "add", "-A"], cwd=repo, check=True)
 
 
 def cmd_selftest() -> int:
