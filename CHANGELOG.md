@@ -2,6 +2,18 @@
 
 All notable changes to this standard are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/2.0.0/) and versions follow [Semantic Versioning](https://semver.org/).
 
+## [1.3.0] - 2026-11-07
+
+### Added
+
+- The skills repository is a plugin marketplace (`.claude-plugin/`), so claude.ai and Claude Code can install the skills once and sync updates automatically.
+
+### Changed
+
+- The skills read the rules from SVN11X/standards at the version the repository pins, the same source the check uses. The bundled copy is only a fallback without network access.
+- Generated files are always written with LF line endings, also on Windows.
+- A new standard version alone no longer flags `AGENTS.md`. Only a change in its content does.
+
 ## [1.2.0] - 2026-11-07
 
 ### Added

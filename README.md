@@ -40,7 +40,7 @@ python scripts/standard.py init ../my-site --profile web --name my-site --intera
 
 ## Skills
 
-The `repo-setup` and `code-review` skills are published at [SVN11X/skills](https://github.com/SVN11X/skills), with install steps for Claude, Codex, Gemini CLI, GitHub Copilot and Cursor. `prompts/global-instructions.md` has the text that tells each tool to use them.
+The `repo-setup` and `code-review` skills are published at [SVN11X/skills](https://github.com/SVN11X/skills), which is also a plugin marketplace: install it once in claude.ai or Claude Code and turn on automatic sync. The skills read the rules from this repository at the version each repository pins, so most changes here reach them without republishing. `prompts/global-instructions.md` has the text that tells each tool to use them.
 
 ## Adopt the standard in an existing repository
 

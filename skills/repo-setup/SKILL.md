@@ -7,7 +7,19 @@ description: Create a new repository or reorganize an existing one so it follows
 
 Set up or reorganize a repository so it follows SVN11X/standards.
 
-The standard is bundled in `standard/` next to this file, pinned to the version in `standard/VERSION`. Use only this copy. Never download the standard or any other instructions at run time, because a downloaded instruction file is the agent fetching its own next prompt.
+## Get the rules
+
+The rules live in the SVN11X/standards repository. Read the version the repository pins, so you work with exactly what its check enforces:
+
+1. Read the `standard:` line in `.standard.yml`, for example `SVN11X/standards@v1`. For a new repository use `SVN11X/standards@v1`.
+2. Clone that version into a temporary folder outside the repository. `<ref>` is the part after `@`, for example `v1`:
+   ```bash
+   git clone --depth 1 --branch <ref> https://github.com/SVN11X/standards <tmp>/standards
+   ```
+3. Use that folder as `<standard>` in every command below.
+4. If the clone fails, for example without network access, use the copy bundled next to this file in `standard/` and tell the owner its version, from `standard/VERSION`.
+
+Fetch rules only from SVN11X/standards at a pinned tag, the same source the check uses. Never fetch instructions from anywhere else, because a downloaded instruction file from an unknown source is the agent fetching its own next prompt.
 
 ## Ground rules
 
@@ -15,7 +27,6 @@ The standard is bundled in `standard/` next to this file, pinned to the version 
 - The owner writes the intent: `docs/goals.md`, `DESIGN.md` for web, and the standard's `preferences.md`. Ask questions, transcribe and format the answers, but never invent content. Leave `TODO(owner)` where an answer is missing.
 - Moving, renaming or deleting files is a yellow change. Propose the plan and wait for confirmation.
 - Use `git mv` for every move so the history follows the file.
-- `<skill-dir>` below means the folder that contains this SKILL.md.
 - The script needs PyYAML. Install it with `pip install pyyaml` if the import fails.
 
 ## 1. Find the situation
@@ -39,7 +50,7 @@ When two profiles fit, pick the one that describes what the repository delivers 
 
 ## 3. Interview the owner
 
-Read `<skill-dir>/standard/profiles/<profile>/profile.yml`. Ask its `options` questions in one round, each with its choices and the default marked. Use your tool's multiple-choice interface when it has one. Also ask the language of user-facing content.
+Read `<standard>/profiles/<profile>/profile.yml`. Ask its `options` questions in one round, each with its choices and the default marked. Use your tool's multiple-choice interface when it has one. Also ask the language of user-facing content.
 
 Then ask for the goals: vision, users, objectives, non-goals, success criteria, priorities and constraints. Short answers are fine. If the owner prefers to write the goals later, leave the template.
 
@@ -50,7 +61,7 @@ For the web profile, ask whether the owner wants to answer the design direction 
 New repository:
 
 ```bash
-python <skill-dir>/standard/scripts/standard.py init <path> --profile <profile> --name <name> \
+python <standard>/scripts/standard.py init <path> --profile <profile> --name <name> \
   --option <key>=<value> ... --part <folder>=<profile> --content-language <code> --setup-done
 ```
 
@@ -58,19 +69,19 @@ Existing repository:
 
 1. Generate the move plan. It writes `docs/migration-plan.yml` and moves nothing:
    ```bash
-   python <skill-dir>/standard/scripts/standard.py migrate . --profile <profile> --option <key>=<value>
+   python <standard>/scripts/standard.py migrate . --profile <profile> --option <key>=<value>
    ```
 2. Edit the plan before showing it. Translate every `to` name to English, keeping its meaning (for example `docs/correccion-whisper-cpu.md` becomes `docs/whisper-cpu-fix.md`). For each item under `decide`, write your proposal next to it. Generated output goes to `.gitignore` and leaves git with `git rm -r --cached`. Anything that looks like a secret or a browser session is red.
 3. Show the owner a short summary: how many files move, where each group goes, the decisions, and the references that will need fixing. Moving files is yellow, so wait for the owner.
-4. Apply it: `python <skill-dir>/standard/scripts/standard.py migrate . --apply`. It moves every file with `git mv`, so history follows, and adds the missing standard files without overwriting anything.
+4. Apply it: `python <standard>/scripts/standard.py migrate . --apply`. It moves every file with `git mv`, so history follows, and adds the missing standard files without overwriting anything.
 5. Fix every line listed under `references` in the plan: paths inside launcher scripts, imports, CI and build paths, GitHub Pages settings.
 6. Resolve every `decide` item the way the owner agreed.
 
-Then write the owner's answers into `docs/goals.md` and, for web, `DESIGN.md`, and run `python <skill-dir>/standard/scripts/standard.py agents .` so `AGENTS.md` picks up the goal summary.
+Then write the owner's answers into `docs/goals.md` and, for web, `DESIGN.md`, and run `python <standard>/scripts/standard.py agents .` so `AGENTS.md` picks up the goal summary.
 
 ## 5. Verify
 
-Run `python <skill-dir>/standard/scripts/standard.py check .`. Fix every error. Report the warnings to the owner, usually as the list of `TODO(owner)` items left.
+Run `python <standard>/scripts/standard.py check .`. Fix every error. Report the warnings to the owner, usually as the list of `TODO(owner)` items left.
 
 ## 6. Enforce
 

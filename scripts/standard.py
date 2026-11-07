@@ -58,6 +58,14 @@ class StandardError(Exception):
     """A problem the user can fix. Reported without a traceback."""
 
 
+# Files
+
+def write_text(path: Path, text: str) -> None:
+    """Write UTF-8 with LF line endings on every system, as .gitattributes expects."""
+    with path.open("w", encoding="utf-8", newline="\n") as handle:
+        handle.write(text)
+
+
 # Loading
 
 def load_yaml(path: Path) -> dict:
@@ -108,7 +116,7 @@ def write_config(repo: Path, config: dict) -> None:
     header = ("# Identity of this repository for the standard.\n"
               "# After editing, run: python .standards/scripts/standard.py agents .\n")
     body = yaml.safe_dump(ordered, sort_keys=False, allow_unicode=True, width=120)
-    (repo / ".standard.yml").write_text(header + body, encoding="utf-8")
+    write_text(repo / ".standard.yml", header + body)
 
 
 def resolve(profile: dict, answers: dict) -> dict:
@@ -337,6 +345,12 @@ def without_marked_blocks(text: str) -> str:
     return MARKED_BLOCK.sub(lambda m: m.group(0) if m["name"] == "skills" else "", text)
 
 
+def comparable(text: str) -> str:
+    """Generated text without other installers' blocks and without the header that names the version."""
+    lines = tidy(without_marked_blocks(text)).splitlines()
+    return "\n".join(line for line in lines if not GENERATED_VERSION.match(line))
+
+
 def write_instruction_files(repo: Path, config: dict) -> list[str]:
     written = []
     for rel, content in build_instruction_files(repo, config).items():
@@ -345,7 +359,7 @@ def write_instruction_files(repo: Path, config: dict) -> list[str]:
         new = keep_marked_blocks(content, old)
         if new != old:
             path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_text(new, encoding="utf-8")
+            write_text(path, new)
             written.append(rel)
     return written
 
@@ -364,7 +378,7 @@ def write_if_missing(path: Path, content: str, created: list[str], repo: Path) -
     if path.exists():
         return
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(content, encoding="utf-8")
+    write_text(path, content)
     created.append(path.relative_to(repo).as_posix())
 
 
@@ -374,7 +388,7 @@ def merge_gitignore(path: Path, lines: list[str]) -> bool:
     if not missing:
         return False
     block = ([""] if existing else []) + ["# standard"] + missing
-    path.write_text("\n".join(existing + block) + "\n", encoding="utf-8")
+    write_text(path, "\n".join(existing + block) + "\n")
     return True
 
 
@@ -704,7 +718,7 @@ def check_generated(repo: Path, config: dict, report: Report) -> None:
             report.error(rel, "Missing. Run agents.")
             continue
         actual = path.read_text(encoding="utf-8")
-        if tidy(without_marked_blocks(actual)) == tidy(without_marked_blocks(content)):
+        if comparable(actual) == comparable(content):
             continue
         version = GENERATED_VERSION.search(actual)
         if rel.endswith("AGENTS.md") and version and version["version"] != base["version"]:
@@ -991,7 +1005,7 @@ def write_plan(repo: Path, plan: dict) -> Path:
               "# 3. Apply: python <standards>/scripts/standard.py migrate . --apply\n"
               "# 4. Fix every line listed under 'references', then run agents and check.\n")
     body = yaml.safe_dump(plan, sort_keys=False, allow_unicode=True, width=120)
-    path.write_text(header + body, encoding="utf-8")
+    write_text(path, header + body)
     return path
 
 
@@ -1053,7 +1067,7 @@ def cmd_package_skills(out_dir: Path) -> None:
     (snapshot / "scripts").mkdir()
     shutil.copy2(STANDARD_ROOT / "scripts" / "standard.py", snapshot / "scripts" / "standard.py")
     shutil.copy2(STANDARD_ROOT / "preferences.md", snapshot / "preferences.md")
-    (snapshot / "VERSION").write_text(version + "\n", encoding="utf-8")
+    write_text(snapshot / "VERSION", version + "\n")
 
     review_dir = out_dir / "code-review"
     shutil.copytree(STANDARD_ROOT / "skills" / "code-review", review_dir, ignore=ignore)
@@ -1079,10 +1093,21 @@ def cmd_skills_repo(out_dir: Path) -> None:
         shutil.copytree(packaged / name, repo / "skills" / name)
         shutil.copy2(packaged / f"{name}.zip", release / f"{name}.zip")
     readme = (STANDARD_ROOT / "skills" / "published-readme.md.tmpl").read_text(encoding="utf-8")
-    (repo / "README.md").write_text(render(readme, {"version": version}), encoding="utf-8")
+    write_text(repo / "README.md", render(readme, {"version": version}))
     shutil.copy2(STANDARD_ROOT / "LICENSE", repo / "LICENSE")
-    (repo / ".gitattributes").write_text("* text=auto eol=lf\n", encoding="utf-8")
-    (out_dir / "VERSION").write_text(version + "\n", encoding="utf-8")
+    write_text(repo / ".gitattributes", "* text=auto eol=lf\n")
+    owner = DEFAULT_REPO.split("/")[0]
+    description = "Skills for the SVN11X/standards repository standard: repo-setup and code-review."
+    plugin = {"name": "standards", "version": version, "description": description,
+              "author": {"name": owner}, "repository": f"https://github.com/{owner}/skills", "license": "MIT"}
+    marketplace = {"name": owner.lower(), "owner": {"name": owner},
+                   "metadata": {"description": description, "version": version},
+                   "plugins": [{"name": "standards", "source": "./", "description": description,
+                                "version": version, "author": {"name": owner}}]}
+    (repo / ".claude-plugin").mkdir()
+    write_text(repo / ".claude-plugin" / "plugin.json", json.dumps(plugin, indent=2) + "\n")
+    write_text(repo / ".claude-plugin" / "marketplace.json", json.dumps(marketplace, indent=2) + "\n")
+    write_text(out_dir / "VERSION", version + "\n")
     print(f"Built skills repository {version} in {repo}")
 
 
@@ -1124,31 +1149,39 @@ def cmd_selftest() -> int:
 
         stray = first_repo / "stray"
         stray.mkdir()
-        (stray / "notes.txt").write_text("x\n", encoding="utf-8")
+        write_text(stray / "notes.txt", "x\n")
         git_add_all(first_repo)
         expect_error("undeclared folder", "not declared")
         shutil.rmtree(stray)
 
         agents = first_repo / "AGENTS.md"
         original = agents.read_text(encoding="utf-8")
-        agents.write_text(original + "\nExtra rule written by hand.\n", encoding="utf-8")
+        write_text(agents, original + "\nExtra rule written by hand.\n")
         expect_error("hand-edited AGENTS.md", "edited by hand")
-        agents.write_text(original + "\n<!-- antislop:start -->\n## antislop\nPointer.\n<!-- antislop:end -->\n",
-                          encoding="utf-8")
+        write_text(agents, original + "\n<!-- antislop:start -->\n## antislop\nPointer.\n<!-- antislop:end -->\n")
         if run_check(first_repo).errors:
             failures.append("a block owned by another installer should not count as a hand edit")
         else:
             print("negative case passed: foreign marked block is kept")
-        agents.write_text(original, encoding="utf-8")
+        write_text(agents, original)
+        write_text(agents, original.replace(base_config()["version"], "0.9.0", 1))
+        bumped = run_check(first_repo)
+        if bumped.errors:
+            failures.append("an older version in the header alone should not be an error")
+        elif any("Generated with" in message for _, message in bumped.warnings):
+            failures.append("an older version in the header alone should not even warn")
+        else:
+            print("positive case passed: a version bump alone does not flag AGENTS.md")
+        write_text(agents, original)
 
         loose = first_repo / "helper_script.py"
-        loose.write_text("x = 1\n", encoding="utf-8")
+        write_text(loose, "x = 1\n")
         git_add_all(first_repo)
         expect_error("loose file at the root", "not allowed at the repository root")
         loose.unlink()
         hidden = first_repo / ".tools"
         hidden.mkdir()
-        (hidden / "tool.txt").write_text("x\n", encoding="utf-8")
+        write_text(hidden / "tool.txt", "x\n")
         git_add_all(first_repo)
         expect_error("undeclared hidden folder", "Hidden folder")
         shutil.rmtree(hidden)
@@ -1156,9 +1189,9 @@ def cmd_selftest() -> int:
 
         readme = next(first_repo.glob("*/README.md"))
         readme_text = readme.read_text(encoding="utf-8")
-        readme.write_text(readme_text + "\nLorem ipsum dolor sit amet.\n", encoding="utf-8")
+        write_text(readme, readme_text + "\nLorem ipsum dolor sit amet.\n")
         expect_error("lorem ipsum", "lorem ipsum")
-        readme.write_text(readme_text, encoding="utf-8")
+        write_text(readme, readme_text)
 
         os.environ["PR_TITLE"], os.environ["PR_BODY"] = "update files", "## Task\n\nCloses #\n"
         expect_error("pull request title", "Conventional Commits", pull_request=True)
@@ -1171,9 +1204,8 @@ def cmd_selftest() -> int:
             print("positive case passed: complete pull request")
 
         goals = first_repo / "docs" / "goals.md"
-        goals.write_text(goals.read_text(encoding="utf-8").replace(
-            "TODO(owner): One sentence. What this repository exists to achieve.", "Show live air quality for my city."),
-            encoding="utf-8")
+        write_text(goals, goals.read_text(encoding="utf-8").replace(
+            "TODO(owner): One sentence. What this repository exists to achieve.", "Show live air quality for my city."))
         expect_error("goals changed without regenerating", "Out of date")
         write_instruction_files(first_repo, read_config(first_repo))
         if "Show live air quality" not in agents.read_text(encoding="utf-8"):
@@ -1183,7 +1215,8 @@ def cmd_selftest() -> int:
 
         skills_out = root / "skills-out"
         cmd_skills_repo(skills_out)
-        expected = ["repo/README.md", "repo/skills/repo-setup/SKILL.md", "repo/skills/repo-setup/standard/VERSION",
+        expected = ["repo/.claude-plugin/plugin.json", "repo/.claude-plugin/marketplace.json",
+                    "repo/README.md", "repo/skills/repo-setup/SKILL.md", "repo/skills/repo-setup/standard/VERSION",
                     "repo/skills/code-review/SKILL.md", "release/repo-setup.zip", "release/code-review.zip"]
         missing = [rel for rel in expected if not (skills_out / rel).exists()]
         if missing:
@@ -1195,13 +1228,13 @@ def cmd_selftest() -> int:
         messy.mkdir()
         for name in ("extractor.py", "complete_hq.py", "bootstrap_deno.py", "test_extractor.py",
                      "EXTRAER_TODO_WINDOWS.bat", "GUIA_AUDITORIA.md", "requirements.txt"):
-            (messy / name).write_text("x\n", encoding="utf-8")
-        (messy / "EXTRAER_TODO_WINDOWS.bat").write_text("@echo off\npython extractor.py --all\n", encoding="utf-8")
+            write_text(messy / name, "x\n")
+        write_text(messy / "EXTRAER_TODO_WINDOWS.bat", "@echo off\npython extractor.py --all\n")
         (messy / "output_example").mkdir()
-        (messy / "output_example" / "sample.json").write_text("{}\n", encoding="utf-8")
+        write_text(messy / "output_example" / "sample.json", "{}\n")
         (messy / ".tools").mkdir()
-        (messy / ".tools" / "deno.txt").write_text("x\n", encoding="utf-8")
-        (messy / ".env").write_text("TOKEN=x\n", encoding="utf-8")
+        write_text(messy / ".tools" / "deno.txt", "x\n")
+        write_text(messy / ".env", "TOKEN=x\n")
         git_add_all(messy)
         plan = plan_migration(messy, "software", {})
         moves = {m["from"]: m["to"] for m in plan["moves"]}
@@ -1237,8 +1270,8 @@ def cmd_selftest() -> int:
 
         existing = root / "existing"
         existing.mkdir()
-        (existing / "README.md").write_text("# Mine\n", encoding="utf-8")
-        (existing / ".gitignore").write_text("secret.txt\n", encoding="utf-8")
+        write_text(existing / "README.md", "# Mine\n")
+        write_text(existing / ".gitignore", "secret.txt\n")
         init_repo(existing, {"profile": "software", "existing": True})
         if (existing / "README.md").read_text(encoding="utf-8") != "# Mine\n":
             failures.append("init --existing overwrote README.md")

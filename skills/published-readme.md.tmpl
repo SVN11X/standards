@@ -5,37 +5,35 @@ Skills for working with [SVN11X/standards](https://github.com/SVN11X/standards),
 - `repo-setup`: create a repository or reorganize an existing one under the standard.
 - `code-review`: review code or a pull request against the standard.
 
-The skills follow the open Agent Skills format (a folder with a SKILL.md file), so the same folders work in Claude, Codex, Gemini CLI, GitHub Copilot, Cursor and other tools.
+The skills read the rules from SVN11X/standards at the version each repository pins, so most changes to the standard reach them without reinstalling anything. This repository is also a plugin marketplace, so changes to the skills themselves arrive through automatic sync.
 
-## Install in Claude
+## Install in claude.ai (once)
 
-This covers claude.ai and Claude Code signed in with the same account.
-
-1. Download `repo-setup.zip` and `code-review.zip` from the latest release of this repository.
-2. In Claude, open Customize, then Skills.
-3. Click +, then Create skill, then Upload a skill, and upload one ZIP. Repeat for the other.
+1. Open Customize, then Plugins. Click +, then Add marketplace, and sync from the GitHub repository `SVN11X/skills`.
+2. From that marketplace, install the `standards` plugin.
+3. In the Personal tab of the plugins directory, open the menu next to the marketplace and turn on Sync automatically.
 
 Code execution must be on in Settings, Capabilities.
 
-## Install in several agents at once
+## Install in Claude Code (once)
 
-With Node.js installed, this installs into Claude Code, Codex, Gemini CLI, GitHub Copilot, Cursor and others. It asks which agents to use.
+```text
+/plugin marketplace add SVN11X/skills
+/plugin install standards@svn11x
+```
+
+Then open `/plugin`, go to Marketplaces, select `svn11x` and choose Enable auto-update.
+
+## Install in other agents
+
+With Node.js installed, this installs into Codex, Gemini CLI, GitHub Copilot, Cursor and others. Run it again to update.
 
 ```bash
 npx skills add SVN11X/skills
 ```
 
-## Install by hand
+By hand, copy each folder in `skills/` into the skills folder of your tool: `~/.codex/skills/`, `~/.gemini/skills/`, `~/.copilot/skills/`, `~/.cursor/skills/`, or `.agents/skills/` inside one project.
 
-Copy each folder in `skills/` into the skills folder of your tool:
+## Without the marketplace
 
-- Claude Code: `~/.claude/skills/`
-- Codex: `~/.codex/skills/`
-- Gemini CLI: `~/.gemini/skills/`
-- GitHub Copilot: `~/.copilot/skills/`
-- Cursor: `~/.cursor/skills/`
-- One project only, for any of them: `.agents/skills/` inside the project.
-
-## Update
-
-Install again after each new release. The skills never download the standard at run time. Each one carries a copy pinned to the version in `skills/repo-setup/standard/VERSION`.
+Each release also attaches `repo-setup.zip` and `code-review.zip`, which can be uploaded in Customize, Skills.
