@@ -10,14 +10,18 @@ description: Improve an existing repository as a whole. Find out what "better" m
 ## Ground rules
 
 - Talk to the owner in their language. Write repository artifacts in English.
-- The owner's goals decide what "better" means. If `docs/goals.md` is missing or empty, ask for the vision, users, non-goals, success criteria and priorities first, and write the answers down.
+- The owner's goals decide what "better" means. Without confirmed goals there is no list: step 1 is mandatory.
 - One improvement per pull request. Moving or deleting files, changing public URLs and rewriting history are yellow changes: propose them and wait.
 - Never invent measurements, results or a passing check.
 
-## 1. Understand
+## 1. Understand and confirm, before anything else
 
-- Read `README.md`, `docs/goals.md`, `AGENTS.md`, `.standard.yml`, the recent commits and, if available, the open issues.
-- Identify the profile and its parts the way repo-setup does. If the repository does not follow the standard yet, adopting it is the first improvement: hand it to repo-setup, which plans and applies the move.
+1. Read `README.md`, `docs/goals.md`, `AGENTS.md`, `.standard.yml`, the main source files, the recent commits and, if available, the open issues. For a website, also read the page itself: what it says, what the visitor does, step by step.
+2. Write an Understanding block in plain words: what the repository is for, who uses it, the main task step by step, how it works (for example where the processing runs), and anything that looked contradictory. Ask the owner to confirm or correct it. Every later decision rests on this, so do not continue until the owner confirms.
+3. Interview the owner for whatever is missing or marked `TODO(owner)`: `docs/goals.md` (vision, users, objectives, non-goals, success criteria, priorities, constraints), `DESIGN.md` for the web profile (identity, audience, personality, palette, typography, motion, references), and the status line of `README.md`. Ask one short round at a time, with choices when they help, using the tool's question interface if it has one.
+4. Transcribe the answers into those files in English, keeping the owner's meaning, and show the result for confirmation. Never invent an answer. Leave `TODO(owner)` only for questions the owner chose to skip.
+
+Identify the profile and its parts the way repo-setup does. If the repository does not follow the standard yet, adopting it is the first improvement: hand it to repo-setup, which plans and applies the move.
 
 ## 2. Diagnose with the standard
 

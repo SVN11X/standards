@@ -2,6 +2,17 @@
 
 All notable changes to this standard are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/2.0.0/) and versions follow [Semantic Versioning](https://semver.org/).
 
+## [1.8.0] - 2026-11-07
+
+### Added
+
+- `web-improve` reference `layout-and-space.md`: measurements and documented rules (Baymard, WCAG, Nielsen Norman Group, Material Design) to judge the use of space.
+
+### Changed
+
+- `repo-improve` starts by stating what it understood and getting the owner's confirmation, then interviews the owner for goals, design direction and README status before any diagnosis.
+- `web-improve` interviews the owner for `DESIGN.md` before any visual change, and every layout finding cites a rule and a measurement.
+
 ## [1.7.1] - 2026-11-07
 
 ### Fixed

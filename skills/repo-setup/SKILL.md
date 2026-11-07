@@ -52,7 +52,7 @@ When two profiles fit, pick the one that describes what the repository delivers 
 
 Read `<standard>/profiles/<profile>/profile.yml`. Ask its `options` questions in one round, each with its choices and the default marked. Use your tool's multiple-choice interface when it has one. Also ask the language of user-facing content.
 
-Then ask for the goals: vision, users, objectives, non-goals, success criteria, priorities and constraints. Short answers are fine. If the owner prefers to write the goals later, leave the template.
+Then ask for the goals: vision, users, objectives, non-goals, success criteria, priorities and constraints. Short answers are fine. Do not skip this round: leave the template only when the owner explicitly chooses to answer later.
 
 For the web profile, ask whether the owner wants to answer the design direction questions now (identity, audience, personality, palette, typography, motion, references) or write `DESIGN.md` later.
 

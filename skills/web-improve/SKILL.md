@@ -17,7 +17,7 @@ Improve a real site so visitors understand it, can use it, and it stays fast, ac
 
 ## Read the repository's own rules first
 
-If the repository has an `AGENTS.md`, follow it. Its options (motion, 3D, flows, theme), fixed rules and recorded decisions win over this skill. If `DESIGN.md` exists, it is the visual direction. Without it, ask for direction or label your visual work as a draft. If the antislop skills are installed, use antislop-ui, antislop-human, antislop-layoutmobile and antislop-copywriting for their topics.
+If the repository has an `AGENTS.md`, follow it. Its options (motion, 3D, flows, theme), fixed rules and recorded decisions win over this skill. `DESIGN.md` is the visual direction. If it is missing or has `TODO(owner)` items, interview the owner before any visual change (identity, audience, personality, palette, typography, motion, references), transcribe the answers and show them for confirmation. If the antislop skills are installed, use antislop-ui, antislop-human, antislop-layoutmobile and antislop-copywriting for their topics.
 
 ## 1. Inventory without changing anything
 
@@ -29,6 +29,8 @@ If the repository has an `AGENTS.md`, follow it. Its options (motion, 3D, flows,
 ## 2. Audit the experience
 
 Review the home page and main routes: what the site offers and for whom within five seconds, hierarchy, navigation, calls to action, mobile, accessibility, states (loading, empty, error, success), text length and repetition, images, motion and forms. Use the heuristics in `references/art-direction-and-content.md`.
+
+Judge the use of space with `references/layout-and-space.md`, not by taste. Every layout finding cites the rule and its source, and gives a measurement: characters per line, how much of the first screen the main task uses, side margins, at 360, 768, 1280 and 1920 px.
 
 ## 3. Prioritize
 
