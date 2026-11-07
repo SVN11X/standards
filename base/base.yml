@@ -1,5 +1,5 @@
 # Rules and files shared by every profile.
-version: 1.0.0
+version: 1.1.0
 
 required_files:
   - README.md
@@ -19,6 +19,9 @@ required_files:
   - .github/pull_request_template.md
   - .github/ISSUE_TEMPLATE/task.yml
   - .github/workflows/standard.yml
+
+# Skills every repository lists, before the profile's own skills.
+skills: [code-review]
 
 gitignore:
   - .standards/

@@ -2,6 +2,14 @@
 
 All notable changes to this standard are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/2.0.0/) and versions follow [Semantic Versioning](https://semver.org/).
 
+## [1.1.0] - 2026-11-07
+
+### Added
+
+- `skills-repo` command and `publish-skills` scripts that publish the skills to SVN11X/skills, with a release holding the ZIP files.
+- `prompts/global-instructions.md` so every tool knows the standard outside a repository.
+- Every repository lists the `code-review` skill, and `AGENTS.md` says where the standard's skills are published.
+
 ## [1.0.0] - 2026-11-07
 
 ### Added

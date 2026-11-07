@@ -7,6 +7,7 @@ Commands:
   check PATH [--pr]          check structure, intent and slop, plus the pull request with --pr
   templates OUT_DIR          build one template repository per profile
   package-skills OUT_DIR     bundle the skills with a pinned copy of the standard
+  skills-repo OUT_DIR        build the public skills repository and its release archives
   selftest                   run every profile through init and check
 """
 from __future__ import annotations
@@ -292,6 +293,7 @@ def build_instruction_files(repo: Path, config: dict) -> dict[str, str]:
         "anti_slop": bullets(base["anti_slop"]),
         "preferences": "\n".join(core_preferences()) or "- None recorded.",
         "skills": ", ".join(config.get("skills") or []) or "none",
+        "skills_repo": ctx["standard_repo"].split("/")[0] + "/skills",
     })
     files = {
         "AGENTS.md": tidy(render((BASE / "agents.md.tmpl").read_text(encoding="utf-8"), agents_ctx)),
@@ -468,7 +470,8 @@ def build_config(repo: Path, config: dict, profile: dict, settings: dict) -> dic
         "parts": parts,
         "part_options": part_options,
         "extra_folders": config.get("extra_folders") or {},
-        "skills": config.get("skills") or list(profile.get("skills") or []),
+        "skills": config.get("skills") or list(dict.fromkeys(
+            list(base_config().get("skills") or []) + list(profile.get("skills") or []))),
     }
 
 
@@ -833,6 +836,28 @@ def cmd_package_skills(out_dir: Path) -> None:
         print(f"Packaged {archive}")
 
 
+def cmd_skills_repo(out_dir: Path) -> None:
+    """Build the public skills repository in OUT/repo and its release archives in OUT/release."""
+    if out_dir.exists():
+        shutil.rmtree(out_dir)
+    packaged = out_dir / "packaged"
+    cmd_package_skills(packaged)
+    version = base_config()["version"]
+    repo = out_dir / "repo"
+    release = out_dir / "release"
+    (repo / "skills").mkdir(parents=True)
+    release.mkdir()
+    for name in ("repo-setup", "code-review"):
+        shutil.copytree(packaged / name, repo / "skills" / name)
+        shutil.copy2(packaged / f"{name}.zip", release / f"{name}.zip")
+    readme = (STANDARD_ROOT / "skills" / "published-readme.md.tmpl").read_text(encoding="utf-8")
+    (repo / "README.md").write_text(render(readme, {"version": version}), encoding="utf-8")
+    shutil.copy2(STANDARD_ROOT / "LICENSE", repo / "LICENSE")
+    (repo / ".gitattributes").write_text("* text=auto eol=lf\n", encoding="utf-8")
+    (out_dir / "VERSION").write_text(version + "\n", encoding="utf-8")
+    print(f"Built skills repository {version} in {repo}")
+
+
 def git_add_all(repo: Path) -> None:
     subprocess.run(["git", "init", "-q"], cwd=repo, check=True)
     subprocess.run(["git", "add", "-A"], cwd=repo, check=True)
@@ -915,6 +940,16 @@ def cmd_selftest() -> int:
         else:
             print("positive case passed: goal summary reaches AGENTS.md")
 
+        skills_out = root / "skills-out"
+        cmd_skills_repo(skills_out)
+        expected = ["repo/README.md", "repo/skills/repo-setup/SKILL.md", "repo/skills/repo-setup/standard/VERSION",
+                    "repo/skills/code-review/SKILL.md", "release/repo-setup.zip", "release/code-review.zip"]
+        missing = [rel for rel in expected if not (skills_out / rel).exists()]
+        if missing:
+            failures.append(f"skills-repo is missing {missing}")
+        else:
+            print("positive case passed: skills repository")
+
         existing = root / "existing"
         existing.mkdir()
         (existing / "README.md").write_text("# Mine\n", encoding="utf-8")
@@ -970,6 +1005,9 @@ def main(argv: list[str] | None = None) -> int:
     package = commands.add_parser("package-skills", help="bundle the skills")
     package.add_argument("out_dir")
 
+    skills_repo = commands.add_parser("skills-repo", help="build the public skills repository")
+    skills_repo.add_argument("out_dir")
+
     commands.add_parser("selftest", help="run every profile through init and check")
 
     args = parser.parse_args(argv)
@@ -997,6 +1035,9 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         if args.command == "package-skills":
             cmd_package_skills(Path(args.out_dir).resolve())
+            return 0
+        if args.command == "skills-repo":
+            cmd_skills_repo(Path(args.out_dir).resolve())
             return 0
         if args.command == "selftest":
             return cmd_selftest()

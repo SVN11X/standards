@@ -1,8 +1,9 @@
 # skills
 
-Skills for Claude and for other tools that read the SKILL.md format.
+Source of the skills for Claude and for every tool that reads the open Agent Skills format.
 
 - `repo-setup`: create a repository or adopt the standard in an existing one.
 - `code-review`: review code or a pull request against the standard.
+- `published-readme.md.tmpl`: README of the public skills repository.
 
-Do not upload these folders directly. Run `python scripts/standard.py package-skills dist/skills`, which bundles each skill with a copy of the standard pinned to the current version. A skill never downloads the standard at run time.
+Do not install these folders directly. `scripts/publish-skills.ps1` (or `publish-skills.sh`) bundles each skill with a copy of the standard pinned to the current version, publishes them to the `skills` repository, and attaches the ZIP files to a release there. A skill never downloads the standard at run time.

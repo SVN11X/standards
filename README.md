@@ -38,6 +38,10 @@ pip install pyyaml
 python scripts/standard.py init ../my-site --profile web --name my-site --interactive
 ```
 
+## Skills
+
+The `repo-setup` and `code-review` skills are published at [SVN11X/skills](https://github.com/SVN11X/skills), with install steps for Claude, Codex, Gemini CLI, GitHub Copilot and Cursor. `prompts/global-instructions.md` has the text that tells each tool to use them.
+
 ## Adopt the standard in an existing repository
 
 Use the `repo-setup` skill, or run `init --existing`, which adds missing files and never overwrites. Moving files is always proposed first and done with `git mv`.
@@ -61,7 +65,7 @@ python scripts/standard.py check ../my-site
    git push -f origin v1
    ```
 
-4. Rebuild the templates with `scripts/publish-templates.sh` (bash) or `scripts/publish-templates.ps1` (Windows PowerShell), and package the skills again with `python scripts/standard.py package-skills dist/skills`.
+4. Publish the skills and rebuild the templates: `scripts/publish-skills` and then `scripts/publish-templates`, with `.sh` in bash or `.ps1` in Windows PowerShell.
 5. In each repository, run `agents` to refresh `AGENTS.md`. Until then the check only warns.
 
 A breaking change gets a new major tag (`v2`). Each repository moves to it when the owner decides.
@@ -72,7 +76,7 @@ A breaking change gets a new major tag (`v2`). Each repository moves to it when 
 - `profiles/`: one folder per profile with `profile.yml` (folders, fixed rules, reasons, setup questions) and its extra files.
 - `patterns/`: one card per design pattern.
 - `prompts/`: prompts to paste into AI tools that do not have the skills.
-- `skills/`: `repo-setup` and `code-review`.
-- `scripts/`: `standard.py` (init, agents, check, templates, package-skills, selftest), `publish-templates.sh` and `publish-templates.ps1`.
+- `skills/`: source of `repo-setup` and `code-review`. The published copies live in SVN11X/skills.
+- `scripts/`: `standard.py` (init, agents, check, templates, package-skills, selftest), `publish-templates` and `publish-skills`, each in `.sh` and `.ps1`.
 - `preferences.md`: the owner's taste, with good and bad examples.
 - `references.md`: the sources behind the rules.
