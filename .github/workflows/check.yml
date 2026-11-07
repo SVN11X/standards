@@ -12,7 +12,7 @@ jobs:
   standard:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
@@ -28,13 +28,13 @@ jobs:
           echo "ref=$ref" >> "$GITHUB_OUTPUT"
 
       # The repository is fixed so a pull request cannot point the check at other code.
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           repository: SVN11X/standards
           ref: ${{ steps.version.outputs.ref }}
           path: .standards
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
 

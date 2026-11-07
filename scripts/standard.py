@@ -8,6 +8,7 @@ Commands:
   templates OUT_DIR          build one template repository per profile
   package-skills OUT_DIR     bundle the skills with a pinned copy of the standard
   skills-repo OUT_DIR        build the public skills repository and its release archives
+  migrate PATH --profile NAME   propose a move plan for an existing repository, then apply it with --apply
   selftest                   run every profile through init and check
 """
 from __future__ import annotations
@@ -264,7 +265,7 @@ def common_context(repo: Path, config: dict) -> dict:
         "layout_lines": "\n".join(layout_lines(resolved["folders"], resolved["subfolders"], parts,
                                                config.get("extra_folders") or {}, with_docs=True)),
         "site_dir": "dist" if built else "src",
-        "build_steps": ("\n      - uses: actions/setup-node@v4\n        with:\n          node-version: 22\n"
+        "build_steps": ("\n      - uses: actions/setup-node@v5\n        with:\n          node-version: 22\n"
                         "          cache: npm\n      - run: npm ci\n      - run: npm run build") if built else "",
     }
 
@@ -631,8 +632,12 @@ def check_layout(files: list[str], config: dict, profile: dict, resolved: dict, 
     extra = config.get("extra_folders") or {}
     declared = set(folders) | set(parts) | set(extra) | {"docs"}
     present = {f.split("/", 1)[0] for f in files if "/" in f}
+    hidden_allowed = set(base.get("hidden_folders") or []) | set(extra)
     for name in sorted(present):
         if name.startswith("."):
+            if name not in hidden_allowed:
+                report.error(name, "Hidden folder is not allowed. Move its files into the layout, add it to .gitignore "
+                                   "if it is local state, or declare it in .standard.yml under extra_folders with a reason.")
             continue
         if name not in declared:
             report.error(name, "Top-level folder is not declared. Move its files into the layout, "
@@ -661,10 +666,13 @@ def check_layout(files: list[str], config: dict, profile: dict, resolved: dict, 
             if pattern and not pattern.match(filename):
                 report.warn(rel, f"Name does not follow the {name}/ convention: {spec.get('naming', '')}")
 
-    loose = set(base.get("loose_root_extensions") or [])
+    root_patterns = root_file_patterns(profile)
     for rel in files:
-        if "/" not in rel and rel.rsplit(".", 1)[-1].lower() in loose:
-            report.warn(rel, "Loose file at the repository root. Move it into a folder of the layout.")
+        if "/" in rel or rel.startswith("."):
+            continue
+        if not any(fnmatch.fnmatchcase(rel, pattern) for pattern in root_patterns):
+            report.error(rel, "File is not allowed at the repository root. Move it into a folder of the layout. "
+                              "With many files, run migrate to get a move plan.")
 
 
 def check_required(repo: Path, files: list[str], config: dict, profile: dict, resolved: dict, report: Report) -> None:
@@ -798,6 +806,226 @@ def run_check(repo: Path, pull_request: bool = False) -> Report:
     return report
 
 
+# migrate
+
+DIR_ALIASES = {
+    "test": "tests", "tests": "tests", "spec": "tests", "specs": "tests",
+    "doc": "docs", "docs": "docs", "documentation": "docs", "guides": "docs",
+    "src": "src", "source": "src", "lib": "src", "app": "src",
+    "script": "scripts", "scripts": "scripts", "bin": "scripts", "tools": "scripts",
+    "data": "data", "dataset": "data", "datasets": "data",
+    "notebook": "notebooks", "notebooks": "notebooks",
+    "asset": "assets", "assets": "assets", "static": "assets", "images": "assets", "img": "assets", "media": "assets",
+    "model": "models", "models": "models", "figures": "figures", "figs": "figures",
+    "chapters": "content", "content": "content", "modules": "modules", "environments": "environments", "envs": "environments",
+}
+SUFFIX_TARGETS = [
+    ((".bat", ".cmd", ".ps1", ".sh"), ["scripts"]),
+    ((".ipynb",), ["notebooks"]),
+    ((".js", ".mjs", ".cjs", ".ts", ".jsx", ".tsx", ".vue", ".svelte", ".html", ".htm", ".css", ".scss"), ["src"]),
+    ((".c", ".h", ".cpp", ".hpp", ".ino"), ["firmware", "src"]),
+    ((".tex",), ["content"]),
+    ((".bib",), ["bibliography"]),
+    ((".csv", ".tsv", ".parquet", ".xlsx", ".json", ".jsonl"), ["data"]),
+    ((".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".ico"), ["assets", "figures", "docs"]),
+    ((".md", ".txt", ".rst", ".pdf", ".docx"), ["docs"]),
+    ((".tf",), ["modules"]),
+]
+SECRET_HINTS = ("cookie", "credential", "secret", "token", "id_rsa")
+SECRET_SUFFIXES = (".pem", ".key", ".pfx", ".p12")
+GENERATED_HINTS = {"output", "outputs", "export", "exports", "out", "dist", "build", "tmp", "temp", "cache", "logs", "log"}
+REFERENCE_SUFFIXES = TEXT_SUFFIXES | {".bat", ".cmd", ".ps1", ".sh", ".toml", ".yml", ".yaml", ".json", ".cfg", ".ini"}
+PLAN_PATH = Path("docs") / "migration-plan.yml"
+
+
+def root_file_patterns(profile: dict) -> list[str]:
+    return list(base_config().get("root_files") or []) + list(profile.get("root_files") or [])
+
+
+def kebab(filename: str) -> str:
+    stem, dot, suffix = filename.rpartition(".")
+    if not dot:
+        stem, suffix = filename, ""
+    stem = re.sub(r"[^a-z0-9]+", "-", stem.lower()).strip("-") or "file"
+    return stem + ("." + suffix.lower() if suffix else "")
+
+
+def snake(filename: str) -> str:
+    stem, _, suffix = filename.rpartition(".")
+    stem = re.sub(r"[^a-z0-9]+", "_", stem.lower()).strip("_") or "module"
+    return f"{stem}.{suffix.lower()}"
+
+
+def looks_secret(filename: str) -> bool:
+    lowered = filename.lower()
+    if lowered == ".env" or (lowered.startswith(".env.") and lowered != ".env.example"):
+        return True
+    return lowered.endswith(SECRET_SUFFIXES) or any(hint in lowered for hint in SECRET_HINTS)
+
+
+def root_file_target(filename: str, available: set[str]) -> tuple[str | None, str]:
+    lowered = filename.lower()
+    suffix = Path(lowered).suffix
+    if suffix == ".py":
+        if lowered.startswith("test_") or lowered.endswith("_test.py"):
+            candidates, reason = ["tests"], "Test module."
+        elif lowered.startswith(("bootstrap", "install")):
+            candidates, reason = ["scripts", "src"], "Setup script for developers."
+        else:
+            candidates, reason = ["src"], "Python source code."
+        for folder in candidates:
+            if folder in available:
+                return f"{folder}/{snake(filename)}", reason
+        return None, "No folder for Python code in this profile. Choose a destination."
+    for suffixes, candidates in SUFFIX_TARGETS:
+        if suffix in suffixes:
+            for folder in candidates:
+                if folder in available:
+                    return f"{folder}/{kebab(filename)}", f"{suffix} files belong in {folder}/."
+            return None, f"No folder for {suffix} files in this profile. Choose a destination or declare an extra folder."
+    return None, "Unknown file type. Choose a destination."
+
+
+def plan_migration(repo: Path, profile_name: str, answers: dict) -> dict:
+    """Propose where every misplaced file should go. Nothing is moved here."""
+    profile = load_profile(profile_name)
+    resolved = resolve(profile, answers)
+    if resolved["problems"]:
+        raise StandardError(" ".join(resolved["problems"]))
+    folders = resolved["folders"]
+    available = set(folders) | {"docs"}
+    root_patterns = root_file_patterns(profile)
+    hidden_allowed = set(base_config().get("hidden_folders") or [])
+    files = list_files(repo)
+    moves, decide, flagged_dirs = [], [], set()
+
+    for rel in files:
+        parts = rel.split("/")
+        filename = parts[-1]
+        if looks_secret(filename):
+            decide.append({"path": rel, "light": "red",
+                           "reason": "Looks like a secret or a session file. Remove it from git (git rm --cached), "
+                                     "add it to .gitignore and rotate the secret. Do not move it."})
+            continue
+        if len(parts) == 1:
+            if filename.startswith(".") or any(fnmatch.fnmatchcase(filename, p) for p in root_patterns):
+                continue
+            target, reason = root_file_target(filename, available)
+            if target:
+                moves.append({"from": rel, "to": target, "reason": reason})
+            else:
+                decide.append({"path": rel, "light": "yellow", "reason": reason})
+            continue
+        top = parts[0]
+        if top in folders or top == "docs" or top in hidden_allowed:
+            continue
+        alias = DIR_ALIASES.get(top.lower())
+        if not top.startswith(".") and alias in available:
+            moves.append({"from": rel, "to": "/".join([alias] + parts[1:]),
+                          "reason": f"{top}/ is {alias}/ in the {profile['name']} profile."})
+            continue
+        if top in flagged_dirs:
+            continue
+        flagged_dirs.add(top)
+        tokens = set(re.split(r"[^a-z0-9]+", top.lower()))
+        if top.startswith("."):
+            reason = ("Hidden folder not allowed by the standard. Move tools into scripts/, add it to .gitignore if it "
+                      "is local state, or declare it in .standard.yml under extra_folders with a reason.")
+        elif tokens & GENERATED_HINTS:
+            reason = ("Looks like generated output. Add it to .gitignore and remove it from git (git rm -r --cached), "
+                      "or keep only small real examples in tests/fixtures/ or docs/examples/.")
+        else:
+            reason = (f"Folder is not part of the {profile['name']} layout. Choose a destination, or declare it in "
+                      ".standard.yml under extra_folders with a reason.")
+        decide.append({"path": f"{top}/", "light": "yellow", "reason": reason})
+
+    moving_away = {move["from"] for move in moves}
+    targets: dict[str, int] = {}
+    for move in moves:
+        targets[move["to"]] = targets.get(move["to"], 0) + 1
+    kept = []
+    for move in moves:
+        clash = targets[move["to"]] > 1 or ((repo / move["to"]).exists() and move["to"] not in moving_away)
+        if clash:
+            decide.append({"path": move["from"], "light": "yellow",
+                           "reason": f"Destination {move['to']} is already taken. Choose another name."})
+        else:
+            kept.append(move)
+    add_references(repo, files, kept)
+    return {"profile": profile["name"], "options": {k: as_text(v) for k, v in answers.items()},
+            "moves": kept, "decide": decide}
+
+
+def add_references(repo: Path, files: list[str], moves: list[dict]) -> None:
+    """List the lines that mention a moved file, so paths and imports can be fixed after the move."""
+    new_path = {move["from"]: move["to"] for move in moves}
+    texts = {}
+    for rel in files:
+        path = repo / rel
+        if path.suffix.lower() in REFERENCE_SUFFIXES and path.stat().st_size < 1024 * 1024:
+            texts[rel] = path.read_text(encoding="utf-8", errors="ignore").splitlines()
+    for move in moves:
+        old_name = move["from"].rsplit("/", 1)[-1]
+        module = re.compile(rf"\b(?:import|from)\s+{re.escape(Path(old_name).stem)}\b") if old_name.endswith(".py") else None
+        same_folder = move["to"].rsplit("/", 1)[0]
+        found = []
+        for rel, lines in texts.items():
+            if rel == move["from"]:
+                continue
+            shown = new_path.get(rel, rel)
+            for number, line in enumerate(lines, start=1):
+                by_name = old_name in line
+                by_import = bool(module and module.search(line)) and shown.rsplit("/", 1)[0] != same_folder
+                if by_name or by_import:
+                    found.append(f"{shown}:{number}")
+        if found:
+            move["references"] = found[:20]
+
+
+def write_plan(repo: Path, plan: dict) -> Path:
+    path = repo / PLAN_PATH
+    path.parent.mkdir(parents=True, exist_ok=True)
+    header = (f"# Migration plan generated by {DEFAULT_REPO} {base_config()['version']}. Nothing has moved yet.\n"
+              "# 1. Review every move. Edit 'to' to rename, for example to translate a name to English.\n"
+              "# 2. Resolve every item under 'decide' by hand. The check fails until they are resolved.\n"
+              "# 3. Apply: python <standards>/scripts/standard.py migrate . --apply\n"
+              "# 4. Fix every line listed under 'references', then run agents and check.\n")
+    body = yaml.safe_dump(plan, sort_keys=False, allow_unicode=True, width=120)
+    path.write_text(header + body, encoding="utf-8")
+    return path
+
+
+def remove_empty_parents(path: Path, stop: Path) -> None:
+    parent = path.parent
+    while parent != stop and parent.exists() and not any(parent.iterdir()):
+        parent.rmdir()
+        parent = parent.parent
+
+
+def apply_migration(repo: Path) -> tuple[list[str], list[str]]:
+    plan_file = repo / PLAN_PATH
+    if not plan_file.exists():
+        raise StandardError(f"No plan at {PLAN_PATH}. Run migrate without --apply first.")
+    if not (repo / ".git").exists():
+        raise StandardError("migrate --apply needs a git repository, so every moved file keeps its history.")
+    plan = load_yaml(plan_file)
+    moved = []
+    for move in plan.get("moves") or []:
+        source, target = repo / move["from"], repo / move["to"]
+        if not source.exists():
+            continue
+        if target.exists():
+            raise StandardError(f"{move['to']} already exists. Edit the plan and run --apply again.")
+        target.parent.mkdir(parents=True, exist_ok=True)
+        result = subprocess.run(["git", "mv", "--", move["from"], move["to"]], cwd=repo, capture_output=True, text=True)
+        if result.returncode != 0:
+            shutil.move(str(source), str(target))
+        remove_empty_parents(source, repo)
+        moved.append(f"{move['from']} -> {move['to']}")
+    created = init_repo(repo, {"profile": plan["profile"], "options": plan.get("options") or {}, "existing": True})
+    return moved, created
+
+
 # templates, packaging and selftest
 
 def cmd_templates(out_dir: Path) -> None:
@@ -913,6 +1141,19 @@ def cmd_selftest() -> int:
             print("negative case passed: foreign marked block is kept")
         agents.write_text(original, encoding="utf-8")
 
+        loose = first_repo / "helper_script.py"
+        loose.write_text("x = 1\n", encoding="utf-8")
+        git_add_all(first_repo)
+        expect_error("loose file at the root", "not allowed at the repository root")
+        loose.unlink()
+        hidden = first_repo / ".tools"
+        hidden.mkdir()
+        (hidden / "tool.txt").write_text("x\n", encoding="utf-8")
+        git_add_all(first_repo)
+        expect_error("undeclared hidden folder", "Hidden folder")
+        shutil.rmtree(hidden)
+        subprocess.run(["git", "add", "-A"], cwd=first_repo, check=True)
+
         readme = next(first_repo.glob("*/README.md"))
         readme_text = readme.read_text(encoding="utf-8")
         readme.write_text(readme_text + "\nLorem ipsum dolor sit amet.\n", encoding="utf-8")
@@ -949,6 +1190,50 @@ def cmd_selftest() -> int:
             failures.append(f"skills-repo is missing {missing}")
         else:
             print("positive case passed: skills repository")
+
+        messy = root / "messy"
+        messy.mkdir()
+        for name in ("extractor.py", "complete_hq.py", "bootstrap_deno.py", "test_extractor.py",
+                     "EXTRAER_TODO_WINDOWS.bat", "GUIA_AUDITORIA.md", "requirements.txt"):
+            (messy / name).write_text("x\n", encoding="utf-8")
+        (messy / "EXTRAER_TODO_WINDOWS.bat").write_text("@echo off\npython extractor.py --all\n", encoding="utf-8")
+        (messy / "output_example").mkdir()
+        (messy / "output_example" / "sample.json").write_text("{}\n", encoding="utf-8")
+        (messy / ".tools").mkdir()
+        (messy / ".tools" / "deno.txt").write_text("x\n", encoding="utf-8")
+        (messy / ".env").write_text("TOKEN=x\n", encoding="utf-8")
+        git_add_all(messy)
+        plan = plan_migration(messy, "software", {})
+        moves = {m["from"]: m["to"] for m in plan["moves"]}
+        expected_moves = {"extractor.py": "src/extractor.py", "bootstrap_deno.py": "scripts/bootstrap_deno.py",
+                          "test_extractor.py": "tests/test_extractor.py",
+                          "EXTRAER_TODO_WINDOWS.bat": "scripts/extraer-todo-windows.bat",
+                          "GUIA_AUDITORIA.md": "docs/guia-auditoria.md"}
+        decided = {d["path"] for d in plan["decide"]}
+        refs = next((m.get("references", []) for m in plan["moves"] if m["from"] == "extractor.py"), [])
+        if any(moves.get(k) != v for k, v in expected_moves.items()) or "requirements.txt" in moves:
+            failures.append(f"migration moves are wrong: {moves}")
+        elif not {"output_example/", ".tools/", ".env"} <= decided:
+            failures.append(f"migration decisions are wrong: {decided}")
+        elif "scripts/extraer-todo-windows.bat:2" not in refs:
+            failures.append(f"migration references are wrong: {refs}")
+        else:
+            print("positive case passed: migration plan")
+        write_plan(messy, plan)
+        apply_migration(messy)
+        git_add_all(messy)
+        leftovers = {where.split("/")[0] for where, _ in run_check(messy).errors}
+        if not leftovers <= {"output_example", ".tools", ".env"}:
+            failures.append(f"after migration only the decisions should fail, got {sorted(leftovers)}")
+        else:
+            subprocess.run(["git", "rm", "-r", "-q", "--cached", "output_example", ".tools", ".env"], cwd=messy, check=True)
+            for name in ("output_example", ".tools"):
+                shutil.rmtree(messy / name)
+            (messy / ".env").unlink()
+            if run_check(messy).errors:
+                failures.append(f"migrated repository still fails: {run_check(messy).errors}")
+            else:
+                print("positive case passed: migrated repository passes the check")
 
         existing = root / "existing"
         existing.mkdir()
@@ -1005,6 +1290,13 @@ def main(argv: list[str] | None = None) -> int:
     package = commands.add_parser("package-skills", help="bundle the skills")
     package.add_argument("out_dir")
 
+    migrate = commands.add_parser("migrate", help="plan and apply the move of an existing repository into the layout")
+    migrate.add_argument("path")
+    migrate.add_argument("--profile", choices=profile_names())
+    migrate.add_argument("--option", action="append", metavar="KEY=VALUE")
+    migrate.add_argument("--apply", action="store_true", help="apply docs/migration-plan.yml")
+    migrate.add_argument("--replan", action="store_true", help="replace an existing plan")
+
     skills_repo = commands.add_parser("skills-repo", help="build the public skills repository")
     skills_repo.add_argument("out_dir")
 
@@ -1035,6 +1327,23 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         if args.command == "package-skills":
             cmd_package_skills(Path(args.out_dir).resolve())
+            return 0
+        if args.command == "migrate":
+            repo = Path(args.path).resolve()
+            if args.apply:
+                moved, created = apply_migration(repo)
+                print("\n".join(f"moved {line}" for line in moved) or "Nothing to move.")
+                print("\n".join(f"created {rel}" for rel in created))
+                print("\nNext: fix the lines under 'references' in docs/migration-plan.yml, resolve 'decide', "
+                      "then run agents and check.")
+                return 0
+            if not args.profile:
+                raise StandardError("Choose a profile with --profile: " + ", ".join(profile_names()))
+            if (repo / PLAN_PATH).exists() and not args.replan:
+                raise StandardError(f"{PLAN_PATH} already exists. Edit it and run --apply, or use --replan.")
+            plan = plan_migration(repo, args.profile, parse_pairs(args.option))
+            path = write_plan(repo, plan)
+            print(f"{len(plan['moves'])} moves and {len(plan['decide'])} decisions written to {path}")
             return 0
         if args.command == "skills-repo":
             cmd_skills_repo(Path(args.out_dir).resolve())

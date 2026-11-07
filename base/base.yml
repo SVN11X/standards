@@ -1,5 +1,5 @@
 # Rules and files shared by every profile.
-version: 1.1.0
+version: 1.2.0
 
 required_files:
   - README.md
@@ -35,6 +35,7 @@ gitignore:
 
 fixed:
   - Keep the top-level layout listed above. A new top-level folder is a yellow change.
+  - Only standard files and tool manifests live at the repository root. Everything else goes into a folder of the layout.
   - Every top-level folder has a README.md saying what goes there, what does not and how files are named.
   - Commit small, focused changes with Conventional Commits messages (feat, fix, docs, refactor, test, chore).
   - Never commit secrets, tokens, personal data, or files over 5 MB outside Git LFS.
@@ -69,7 +70,70 @@ placeholder_hosts:
   - picsum.photos
   - dummyimage.com
 
-loose_root_extensions: [py, js, mjs, ts, jsx, tsx, html, css, scss, c, h, cpp, hpp, rs, go, java, ipynb, csv, parquet, png, jpg, jpeg, gif, webp, svg, pdf, tex, sh]
+# Files allowed at the repository root. Files starting with a dot are always allowed. Anything else is an error.
+root_files:
+  - README.md
+  - LICENSE
+  - LICENSE.*
+  - CHANGELOG.md
+  - AGENTS.md
+  - CLAUDE.md
+  - GEMINI.md
+  - DESIGN.md
+  - CITATION.cff
+  - CONTRIBUTING.md
+  - SECURITY.md
+  - CODE_OF_CONDUCT.md
+  - SUPPORT.md
+  - pyproject.toml
+  - setup.py
+  - setup.cfg
+  - requirements*.txt
+  - uv.lock
+  - poetry.lock
+  - Pipfile
+  - Pipfile.lock
+  - environment.yml
+  - package.json
+  - package-lock.json
+  - pnpm-lock.yaml
+  - pnpm-workspace.yaml
+  - yarn.lock
+  - bun.lock
+  - bun.lockb
+  - deno.json
+  - deno.jsonc
+  - deno.lock
+  - tsconfig*.json
+  - jsconfig.json
+  - "*.config.js"
+  - "*.config.cjs"
+  - "*.config.mjs"
+  - "*.config.ts"
+  - Makefile
+  - justfile
+  - Taskfile.yml
+  - Dockerfile
+  - docker-compose*.yml
+  - compose*.yml
+  - Cargo.toml
+  - Cargo.lock
+  - go.mod
+  - go.sum
+  - CMakeLists.txt
+  - platformio.ini
+  - mkdocs.yml
+  - _quarto.yml
+  - wrangler.toml
+  - wrangler.jsonc
+  - netlify.toml
+  - vercel.json
+  - firebase.json
+  - renovate.json
+  - "*.code-workspace"
+
+# Hidden folders allowed at the top level. Declare any other one in .standard.yml under extra_folders.
+hidden_folders: [.github, .gemini, .vscode, .devcontainer, .husky, .claude, .agents, .cursor, .codex, .changeset, .dvc, .streamlit, .storybook]
 
 max_file_mb: 5
 max_agents_lines: 150

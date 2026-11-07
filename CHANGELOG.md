@@ -2,6 +2,19 @@
 
 All notable changes to this standard are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/2.0.0/) and versions follow [Semantic Versioning](https://semver.org/).
 
+## [1.2.0] - 2026-11-07
+
+### Added
+
+- `migrate` command: writes a move plan for a messy repository, then applies it with `git mv` and lists the lines that need fixing.
+- `settings/ruleset-main.json` and `protect-repo` scripts that require a pull request with a passing standard check.
+
+### Changed
+
+- Loose files at the repository root are errors, not warnings. Only standard files and tool manifests may stay there.
+- Undeclared hidden folders are errors.
+- Official actions moved to their Node 24 versions (`actions/checkout@v5`, `actions/setup-python@v6`, `actions/setup-node@v5`).
+
 ## [1.1.0] - 2026-11-07
 
 ### Added

@@ -44,7 +44,18 @@ The `repo-setup` and `code-review` skills are published at [SVN11X/skills](https
 
 ## Adopt the standard in an existing repository
 
-Use the `repo-setup` skill, or run `init --existing`, which adds missing files and never overwrites. Moving files is always proposed first and done with `git mv`.
+The check fails while files sit outside the layout: loose files at the root, undeclared folders and undeclared hidden folders are errors. To fix a messy repository:
+
+1. `python scripts/standard.py migrate <repo> --profile <profile>` writes `docs/migration-plan.yml` with every proposed move, the decisions left to the owner, and the lines that mention each moved file. Nothing moves yet.
+2. Review and edit the plan, for example to translate names to English.
+3. `python scripts/standard.py migrate <repo> --apply` moves the files with `git mv` and adds the missing standard files.
+4. Fix the listed references, resolve the decisions, then run `agents` and `check`.
+
+The `repo-setup` skill follows the same steps.
+
+## Enforce it
+
+`scripts/protect-repo.ps1 -Repo OWNER/REPO` (or `protect-repo.sh`) applies `settings/ruleset-main.json`. From then on, changes reach the default branch only through a pull request whose standard check passed.
 
 ## Check a repository locally
 
@@ -77,6 +88,7 @@ A breaking change gets a new major tag (`v2`). Each repository moves to it when 
 - `patterns/`: one card per design pattern.
 - `prompts/`: prompts to paste into AI tools that do not have the skills.
 - `skills/`: source of `repo-setup` and `code-review`. The published copies live in SVN11X/skills.
-- `scripts/`: `standard.py` (init, agents, check, templates, package-skills, selftest), `publish-templates` and `publish-skills`, each in `.sh` and `.ps1`.
+- `scripts/`: `standard.py` (init, agents, check, migrate, templates, package-skills, skills-repo, selftest), and `publish-templates`, `publish-skills` and `protect-repo`, each in `.sh` and `.ps1`.
+- `settings/`: repository settings as code, such as the branch ruleset.
 - `preferences.md`: the owner's taste, with good and bad examples.
 - `references.md`: the sources behind the rules.

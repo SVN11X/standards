@@ -56,11 +56,15 @@ python <skill-dir>/standard/scripts/standard.py init <path> --profile <profile> 
 
 Existing repository:
 
-1. List the files with `git ls-files`.
-2. Write a move plan: old path, new path, and the reason, one line each. Mark every move as yellow. Mark anything touching secrets, raw data, history or licenses as red. List the references each move breaks: imports, links, build and CI paths, GitHub Pages settings.
-3. Show the plan and wait for the owner.
-4. Apply the moves with `git mv` and fix the references.
-5. Run `python <skill-dir>/standard/scripts/standard.py init . --existing --profile <profile> --option ... --setup-done`. It adds missing files and never overwrites existing ones.
+1. Generate the move plan. It writes `docs/migration-plan.yml` and moves nothing:
+   ```bash
+   python <skill-dir>/standard/scripts/standard.py migrate . --profile <profile> --option <key>=<value>
+   ```
+2. Edit the plan before showing it. Translate every `to` name to English, keeping its meaning (for example `docs/correccion-whisper-cpu.md` becomes `docs/whisper-cpu-fix.md`). For each item under `decide`, write your proposal next to it. Generated output goes to `.gitignore` and leaves git with `git rm -r --cached`. Anything that looks like a secret or a browser session is red.
+3. Show the owner a short summary: how many files move, where each group goes, the decisions, and the references that will need fixing. Moving files is yellow, so wait for the owner.
+4. Apply it: `python <skill-dir>/standard/scripts/standard.py migrate . --apply`. It moves every file with `git mv`, so history follows, and adds the missing standard files without overwriting anything.
+5. Fix every line listed under `references` in the plan: paths inside launcher scripts, imports, CI and build paths, GitHub Pages settings.
+6. Resolve every `decide` item the way the owner agreed.
 
 Then write the owner's answers into `docs/goals.md` and, for web, `DESIGN.md`, and run `python <skill-dir>/standard/scripts/standard.py agents .` so `AGENTS.md` picks up the goal summary.
 
@@ -68,7 +72,17 @@ Then write the owner's answers into `docs/goals.md` and, for web, `DESIGN.md`, a
 
 Run `python <skill-dir>/standard/scripts/standard.py check .`. Fix every error. Report the warnings to the owner, usually as the list of `TODO(owner)` items left.
 
-## 6. Deliver
+## 6. Enforce
+
+After the restructured repository is merged, tell the owner to protect it from the standards repository, so nothing reaches the default branch without a pull request that passes the check:
+
+```powershell
+.\scripts\protect-repo.ps1 -Repo <owner>/<repo>
+```
+
+Never suggest it for generated repositories (standards, skills, template-*).
+
+## 7. Deliver
 
 - Agent with access to the repository: commit on a branch with Conventional Commits messages and open a pull request with every section of the template filled.
 - Chat without repository access: return a ZIP with the full repository and a patch made with `git format-patch` that applies with `git am`.
@@ -81,3 +95,5 @@ End with the list of things only the owner can write.
 - Layouts owned by a tool win: ROS 2 workspaces, PlatformIO, Unity, Next.js. Declare extra top-level folders in `.standard.yml` under `extra_folders`, with a reason, instead of forcing them into `src/`.
 - `docs/` holds intent and project documentation. If an old repository uses `docs/` for its website, the site moves to `src/` as part of the plan.
 - When you cannot tell whether a file is still used, do not delete it. Ask the owner where it should go.
+- Python scripts moved from the root into `src/` still import each other when they share a folder. Launchers that ran `python extractor.py` from the root must point to the new path, for example `python "%~dp0..\src\extractor.py"` in a `.bat` file.
+- Many launcher scripts that differ only in flags are a sign for one command line entry point with options. Propose it as a later task, not as part of the move.
