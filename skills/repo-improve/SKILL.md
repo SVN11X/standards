@@ -53,7 +53,7 @@ Hand each topic to the skill that owns it:
 - Theses, reports and documentation: docs-review.
 - Interface slop, accessibility, mobile layout and copy: the antislop skills, when installed.
 
-Each improvement is its own commit, verified with the check before the next one starts, so any of them can be reverted alone. Group them in one pull request, or one per improvement if the owner prefers. In a chat without repository access, deliver one patch for `git am` instead, and a ZIP only when the owner asks. Never paste whole files or logs in the reply. Record decisions in `docs/decisions/` and surviving assumptions in `docs/assumptions.md`. Update the status in `docs/improvement-plan.md` as you go.
+Each improvement is its own commit, verified with the check before the next one starts, so any of them can be reverted alone. Open the pull request with a Conventional Commits title (for example `refactor: adopt the repository standard`) and a body that copies `.github/pull_request_template.md` with every section filled: Task, What I understood, Assumptions, Decisions, Not done, How to verify. Write the body to a file outside the repository and use `gh pr create --title "..." --body-file <file>`. Then wait for the check and fix it if it fails. Group them in one pull request, or one per improvement if the owner prefers. In a chat without repository access, deliver one patch for `git am` instead, and a ZIP only when the owner asks. Never paste whole files or logs in the reply. Record decisions in `docs/decisions/` and surviving assumptions in `docs/assumptions.md`. Update the status in `docs/improvement-plan.md` as you go.
 
 ## Models in Claude Code
 

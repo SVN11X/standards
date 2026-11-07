@@ -105,7 +105,7 @@ Never suggest it for generated repositories (standards, skills, template-*).
 
 ## 8. Deliver
 
-- Agent with access to the repository: commit on a branch with Conventional Commits messages and open a pull request with every section of the template filled.
+- Agent with access to the repository: commit on a branch with Conventional Commits messages and open a pull request with every section of the template filled. Open the pull request with a Conventional Commits title (for example `refactor: adopt the repository standard`) and a body that copies `.github/pull_request_template.md` with every section filled: Task, What I understood, Assumptions, Decisions, Not done, How to verify. Write the body to a file outside the repository and use `gh pr create --title "..." --body-file <file>`. Then wait for the check and fix it if it fails.
 - Chat without repository access: clone the repository if it is public, commit the change on top of its real base, and return one patch made with `git format-patch` that applies with `git am`. Return a ZIP only when the owner asks for it.
 - Save tokens: never paste whole files or logs in the reply. Summarize what changed.
 
