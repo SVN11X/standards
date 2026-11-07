@@ -2,6 +2,12 @@
 
 All notable changes to this standard are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/2.0.0/) and versions follow [Semantic Versioning](https://semver.org/).
 
+## [1.7.1] - 2026-11-07
+
+### Fixed
+
+- Rebase merging is allowed, so a pull request from repo-improve keeps one commit per improvement on the default branch. Squash merging stays available for single-change pull requests.
+
 ## [1.7.0] - 2026-11-07
 
 ### Added
