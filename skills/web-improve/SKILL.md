@@ -58,5 +58,6 @@ Follow `references/quality-and-delivery.md`. Check syntax and paths under the re
 ## 7. Deliver
 
 - Agent with repository access: commit on a branch with Conventional Commits messages and open a pull request with every template section filled.
-- Chat with files only: deliver a full ZIP of the corrected project and, when the real base commit is available, a patch for `git am` made and verified with `scripts/deliver_git.py`. Without a base, deliver the ZIP and say what is missing for the patch.
+- Chat without repository access: clone the repository if it is public, commit the change on top of its real base, and deliver one patch for `git am`, made and verified with `scripts/deliver_git.py`. Deliver a full ZIP only when the owner asks for it, or when there is no git base at all.
+- Save tokens: never paste whole files, logs or unchanged code in the reply. Show only the lines that change when the owner needs to see them.
 - End with a short summary: what changed and why, the files, the checks that ran and their results, pending risks, and how to deploy.

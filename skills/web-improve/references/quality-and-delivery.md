@@ -53,16 +53,16 @@ A skill gives instructions. It does not grant git, a browser, write access to Gi
 3. Keep the delivery to those commits. Use a branch or an isolated copy when the history has unrelated work.
 4. Export with `git format-patch --full-index --binary --stdout BASE..FINAL`. A linear series can go in one `.patch` file.
 5. Apply it with `git am` on a clean copy of BASE and compare the resulting tree with FINAL, including binaries and permissions.
-6. Package every versioned file of FINAL in the full ZIP, keeping the structure. The ZIP is a snapshot without git history.
+6. Only when the owner asks for it, package every versioned file of FINAL in a full ZIP, keeping the structure.
 
-`scripts/deliver_git.py` automates steps 4 to 6. It needs Python 3 and git, a clean working tree, a reachable base, linear commits and no submodules. It works locally, never changes the original repository, installs nothing and never writes to the remote.
+`scripts/deliver_git.py` automates steps 4 and 5, and step 6 with `--zip`. It needs Python 3 and git, a clean working tree, a reachable base, linear commits and no submodules. It works locally, never changes the original repository, installs nothing and never writes to the remote.
 
 ```bash
 python scripts/deliver_git.py --help
 python scripts/deliver_git.py --repo /path/to/project --base BASE_COMMIT --output /path/to/delivery --name project
 ```
 
-Without the base, deliver the verifiable work and explain what is missing to build the patch. Never fabricate a base or promise that a patch applies to any version.
+Without a base, explain what is missing to build the patch, and offer a ZIP. Never fabricate a base or promise that a patch applies to any version. Tell the owner to save the patch outside the repository folder, so it is never committed by accident.
 
 ## Final message
 
@@ -72,4 +72,4 @@ At most twelve lines unless the owner asks for more:
 - Changes: main files and blocks.
 - Verification: commands and scenarios that really ran, with results, or "not verified".
 - Pending: relevant risks and the next step.
-- Delivery: links to the ZIP and the verified patch, the base commit, and the command `git am <file>.patch`.
+- Delivery: the verified patch, its base commit, and the command `git am <file>.patch`. A ZIP only if the owner asked for it.

@@ -47,7 +47,7 @@ Hand each topic to the skill that owns it:
 - Theses, reports and documentation: docs-review.
 - Interface slop, accessibility, mobile layout and copy: the antislop skills, when installed.
 
-For every step: a branch, the change, the check passing, and a pull request with every section filled. Record decisions in `docs/decisions/` and surviving assumptions in `docs/assumptions.md`.
+For every step: a branch, the change, the check passing, and a pull request with every section filled. In a chat without repository access, deliver one patch for `git am` instead, and a ZIP only when the owner asks. Never paste whole files or logs in the reply. Record decisions in `docs/decisions/` and surviving assumptions in `docs/assumptions.md`.
 
 ## 6. Leave a trail
 

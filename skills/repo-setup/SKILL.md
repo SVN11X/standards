@@ -106,7 +106,8 @@ Never suggest it for generated repositories (standards, skills, template-*).
 ## 8. Deliver
 
 - Agent with access to the repository: commit on a branch with Conventional Commits messages and open a pull request with every section of the template filled.
-- Chat without repository access: return a ZIP with the full repository and a patch made with `git format-patch` that applies with `git am`.
+- Chat without repository access: clone the repository if it is public, commit the change on top of its real base, and return one patch made with `git format-patch` that applies with `git am`. Return a ZIP only when the owner asks for it.
+- Save tokens: never paste whole files or logs in the reply. Summarize what changed.
 
 End with the list of things only the owner can write.
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Export linear commits as a patch for git am, verify it on a clean copy, and build a full ZIP. No dependencies."""
+"""Export linear commits as a patch for git am and verify it on a clean copy. A full ZIP only with --zip. No dependencies."""
 import argparse
 import hashlib
 import json
@@ -81,10 +81,10 @@ def deliver(args):
         raise ValueError("Use a name of 1 to 80 letters, digits, hyphens or underscores.")
     patch_name = args.name + "_changes_git_am.patch"
     zip_name = args.name + "_full_repository.zip"
-    destinations = [output / patch_name, output / zip_name]
+    destinations = [output / patch_name] + ([output / zip_name] if args.zip else [])
     if any(path.exists() for path in destinations):
         raise ValueError("A delivery file already exists. Choose another folder or name.")
-    entries = manifest(repo, commit)
+    entries = manifest(repo, commit) if args.zip else []
     with tempfile.TemporaryDirectory(prefix="verify-delivery-") as temporary:
         directory = Path(temporary)
         patch = directory / patch_name
@@ -102,12 +102,15 @@ def deliver(args):
         tree = text_git(repo, "rev-parse", commit + "^{tree}")
         if text_git(clone, "rev-parse", "HEAD^{tree}") != tree:
             raise ValueError("The applied patch does not reproduce the final tree.")
-        archive = directory / zip_name
-        write_archive(repo, archive, args.name, entries)
+        sources = [patch]
+        if args.zip:
+            archive = directory / zip_name
+            write_archive(repo, archive, args.name, entries)
+            sources.append(archive)
         output.mkdir(parents=True, exist_ok=True)
         created = []
         try:
-            for source, destination in zip((patch, archive), destinations):
+            for source, destination in zip(sources, destinations):
                 with destination.open("xb") as stream:
                     created.append(destination)
                     with source.open("rb") as content:
@@ -116,8 +119,8 @@ def deliver(args):
             for path in created:
                 path.unlink(missing_ok=True)
             raise
-    return {"base": base, "commit": commit, "tree": tree, "git_am_verified": True, "zip_verified": True,
-            "versioned_files": len(entries), "patch": str(destinations[0]), "zip": str(destinations[1])}
+    return {"base": base, "commit": commit, "tree": tree, "git_am_verified": True,
+            "patch": str(destinations[0]), "zip": str(destinations[1]) if args.zip else None}
 
 
 def main():
@@ -126,7 +129,8 @@ def main():
     parser.add_argument("--base", required=True, help="Real base commit of the changes.")
     parser.add_argument("--commit", default="HEAD", help="Final commit. Default: HEAD.")
     parser.add_argument("--output", required=True, type=Path, help="Delivery folder outside the repository.")
-    parser.add_argument("--name", required=True, help="Prefix for the files and the folder inside the ZIP.")
+    parser.add_argument("--name", required=True, help="Prefix for the delivered files.")
+    parser.add_argument("--zip", action="store_true", help="Also build a full ZIP of the final commit, only when the owner asks.")
     args = parser.parse_args()
     try:
         result = deliver(args)
