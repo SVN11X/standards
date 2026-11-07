@@ -24,6 +24,15 @@ Review a change against the rules the repository already declares. The rules liv
 6. Tests. Is there a test or command for Done when? Do the tests check behavior rather than implementation details?
 7. Specialized reviews. For interface work, defer to antislop-ui and antislop-human when they are available. For security-sensitive changes, recommend a dedicated security review.
 
+## Deep review
+
+When the owner asks for a deep, strict or "thermo" review, or before a release, run two separate passes over the whole change and its surrounding code, not only the diff:
+
+1. Correctness and security. Look for bugs, behavior that breaks existing features, breaking changes to public interfaces or data formats, security problems (injection, missing authorization, exposed secrets, unsafe deserialization, path traversal, server-side request forgery), resource leaks, concurrency errors, swallowed errors, unfinished features exposed by mistake, and migrations that cannot be undone. Read the pull request discussion only after your own audit, so your view stays independent.
+2. Maintainability. Look for a restructuring that makes the change smaller and more direct without changing behavior: layers that only pass calls through, duplicated branches, growing chains of conditions, files that keep growing, abstractions with a single implementation. Propose the concrete restructuring, not cosmetic renames.
+
+Report each pass separately with the severity format below. This mode is inspired by the thermo-nuclear reviews published in cursor/plugins under the MIT license.
+
 ## Output
 
 Findings only, ordered by severity:

@@ -2,8 +2,12 @@
 
 Skills for working with [SVN11X/standards](https://github.com/SVN11X/standards), version {{version}}. This repository is generated from the standards repository, so do not edit it by hand.
 
-- `repo-setup`: create a repository or reorganize an existing one under the standard.
-- `code-review`: review code or a pull request against the standard.
+| Skill | What it does | Profiles |
+|-------|--------------|----------|
+| `repo-setup` | Create a repository or reorganize an existing one under the standard. | all |
+| `code-review` | Review code or a pull request against the standard, with a deep mode for security and maintainability. | all |
+| `web-improve` | Audit and improve a website: UX, interactive explanations, accessibility, performance, GitHub Pages, verified delivery. | web |
+| `docs-review` | Review a thesis, paper, report or documentation for purpose, consistency, evidence, citations, figures and build. | docs |
 
 The skills read the rules from SVN11X/standards at the version each repository pins, so most changes to the standard reach them without reinstalling anything. This repository is also a plugin marketplace, so changes to the skills themselves arrive through automatic sync.
 
@@ -33,6 +37,17 @@ npx skills add SVN11X/skills
 ```
 
 By hand, copy each folder in `skills/` into the skills folder of your tool: `~/.codex/skills/`, `~/.gemini/skills/`, `~/.copilot/skills/`, `~/.cursor/skills/`, or `.agents/skills/` inside one project.
+
+## Recommended skills from other authors
+
+These are maintained by their authors. Install them from their own source so they keep updating. The standard lists them in each repository's `AGENTS.md` when they fit the profile.
+
+| Skills | Profiles | Source |
+|--------|----------|--------|
+| antislop, antislop-ui, antislop-human, antislop-layoutmobile, antislop-copywriting, antislop-code | web, docs, software | Marketplace `miqdadbadjuber/anti-slop` (MIT) |
+| academic-paper-reviewer and related research skills | docs | `Imbad0202/academic-research-skills` (CC BY-NC 4.0) |
+| frontend-design, design | web | Anthropic's official plugin directory in Claude |
+| diagrams | docs, software, hardware | Claude's plugin directory |
 
 ## Without the marketplace
 

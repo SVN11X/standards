@@ -1,7 +1,7 @@
 name: web
 description: Sites and apps used in a browser, from a static page to a full app.
 license: MIT
-skills: [antislop, antislop-ui, antislop-human, antislop-layoutmobile, antislop-copywriting]
+skills: [web-improve, antislop, antislop-ui, antislop-human, antislop-layoutmobile, antislop-copywriting]
 patterns: [state, observer, facade]
 required_files: [CHANGELOG.md, DESIGN.md]
 files: [DESIGN.md]

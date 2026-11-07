@@ -2,6 +2,20 @@
 
 All notable changes to this standard are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/2.0.0/) and versions follow [Semantic Versioning](https://semver.org/).
 
+## [1.4.0] - 2026-11-07
+
+### Added
+
+- `web-improve` skill for the web profile: audit and improve a site, interactive explanations, GitHub Pages, and verified delivery as a pull request or a ZIP plus a patch for git am.
+- `docs-review` skill for the docs profile: purpose, consistency, evidence, citations, figures and build.
+- Deep review mode in `code-review`: separate passes for correctness and security, and for maintainability.
+- The skills repository lists recommended skills from other authors and where to install them.
+
+### Changed
+
+- The web and docs profiles list their new skills, so `AGENTS.md` names them.
+- Publishing includes every skill folder in `skills/`.
+
 ## [1.3.0] - 2026-11-07
 
 ### Added

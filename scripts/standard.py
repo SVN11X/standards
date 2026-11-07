@@ -1052,6 +1052,10 @@ def cmd_templates(out_dir: Path) -> None:
         print(f"Built {target}")
 
 
+def skill_names() -> list[str]:
+    return sorted(p.name for p in (STANDARD_ROOT / "skills").iterdir() if (p / "SKILL.md").exists())
+
+
 def cmd_package_skills(out_dir: Path) -> None:
     if out_dir.exists():
         shutil.rmtree(out_dir)
@@ -1073,8 +1077,11 @@ def cmd_package_skills(out_dir: Path) -> None:
     shutil.copytree(STANDARD_ROOT / "skills" / "code-review", review_dir, ignore=ignore)
     shutil.copytree(STANDARD_ROOT / "patterns", review_dir / "references" / "patterns", ignore=ignore)
 
-    for folder in (setup_dir, review_dir):
-        archive = shutil.make_archive(str(folder), "zip", root_dir=out_dir, base_dir=folder.name)
+    for name in skill_names():
+        if not (out_dir / name).exists():
+            shutil.copytree(STANDARD_ROOT / "skills" / name, out_dir / name, ignore=ignore)
+    for name in skill_names():
+        archive = shutil.make_archive(str(out_dir / name), "zip", root_dir=out_dir, base_dir=name)
         print(f"Packaged {archive}")
 
 
@@ -1089,7 +1096,7 @@ def cmd_skills_repo(out_dir: Path) -> None:
     release = out_dir / "release"
     (repo / "skills").mkdir(parents=True)
     release.mkdir()
-    for name in ("repo-setup", "code-review"):
+    for name in skill_names():
         shutil.copytree(packaged / name, repo / "skills" / name)
         shutil.copy2(packaged / f"{name}.zip", release / f"{name}.zip")
     readme = (STANDARD_ROOT / "skills" / "published-readme.md.tmpl").read_text(encoding="utf-8")
@@ -1097,7 +1104,7 @@ def cmd_skills_repo(out_dir: Path) -> None:
     shutil.copy2(STANDARD_ROOT / "LICENSE", repo / "LICENSE")
     write_text(repo / ".gitattributes", "* text=auto eol=lf\n")
     owner = DEFAULT_REPO.split("/")[0]
-    description = "Skills for the SVN11X/standards repository standard: repo-setup and code-review."
+    description = "Skills for the SVN11X/standards repository standard: " + ", ".join(skill_names()) + "."
     plugin = {"name": "standards", "version": version, "description": description,
               "author": {"name": owner}, "repository": f"https://github.com/{owner}/skills", "license": "MIT"}
     marketplace = {"name": owner.lower(), "owner": {"name": owner},
@@ -1217,7 +1224,9 @@ def cmd_selftest() -> int:
         cmd_skills_repo(skills_out)
         expected = ["repo/.claude-plugin/plugin.json", "repo/.claude-plugin/marketplace.json",
                     "repo/README.md", "repo/skills/repo-setup/SKILL.md", "repo/skills/repo-setup/standard/VERSION",
-                    "repo/skills/code-review/SKILL.md", "release/repo-setup.zip", "release/code-review.zip"]
+                    "repo/skills/code-review/SKILL.md", "repo/skills/web-improve/scripts/deliver_git.py",
+                    "repo/skills/docs-review/SKILL.md", "release/repo-setup.zip", "release/code-review.zip",
+                    "release/web-improve.zip", "release/docs-review.zip"]
         missing = [rel for rel in expected if not (skills_out / rel).exists()]
         if missing:
             failures.append(f"skills-repo is missing {missing}")
