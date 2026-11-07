@@ -1,0 +1,66 @@
+name: infra
+description: Servers, cloud resources and deployments defined as code.
+license: MIT
+skills: []
+patterns: []
+required_files: []
+
+folders:
+  modules:
+    description: Reusable infrastructure modules.
+    goes_here: One folder per module with its own README, inputs and outputs.
+    not_here: Values for a specific environment (environments/).
+    naming: kebab-case, named after what it builds, for example static-site.
+  environments:
+    description: One folder per environment.
+    goes_here: dev/, prod/ and others, each calling modules with its own values.
+    not_here: Copies of module code.
+    naming: The environment name, for example prod.
+  scripts:
+    description: Helper scripts.
+    goes_here: Bootstrap and maintenance scripts.
+    not_here: Anything that changes resources outside the infrastructure tool, unless recorded in docs/decisions/.
+    naming: kebab-case.
+
+gitignore: [.terraform/, "*.tfstate", "*.tfstate.*", crash.log, "*.tfvars", "!example.tfvars", .pulumi/]
+
+fixed:
+  - Every resource is defined as code. A manual console change is recorded in docs/decisions/ and then written as code.
+  - Environments are separate (at least dev and prod) and share modules, never copies.
+  - State lives in a remote backend. State files and secrets never go into git.
+  - Every change is reviewed as a plan before it is applied.
+  - Least privilege for every identity and key.
+  - Tag resources with owner, environment and project.
+  - Every paid account has a budget alert.
+
+with_reason:
+  - Opening a port or a service to the internet.
+  - Granting admin or owner roles.
+  - Destroying or replacing a resource that holds data.
+
+options:
+  provider:
+    question: Which cloud provider?
+    default: aws
+    choices:
+      aws: {}
+      azure: {}
+      gcp: {}
+      cloudflare: {}
+      other: {}
+  tool:
+    question: Which infrastructure-as-code tool?
+    default: terraform
+    choices:
+      terraform:
+        rules:
+          - Commit .terraform.lock.hcl. Run terraform fmt and terraform validate in CI.
+      opentofu:
+        rules:
+          - Commit .terraform.lock.hcl. Run tofu fmt and tofu validate in CI.
+      bicep:
+        rules:
+          - Run bicep lint in CI.
+      pulumi:
+        rules:
+          - Pin the Pulumi version and commit the lockfile of its language.

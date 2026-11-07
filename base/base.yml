@@ -1,0 +1,72 @@
+# Rules and files shared by every profile.
+version: 1.0.0
+
+required_files:
+  - README.md
+  - AGENTS.md
+  - CLAUDE.md
+  - .standard.yml
+  - .gitignore
+  - .gitattributes
+  - .editorconfig
+  - .gemini/settings.json
+  - docs/README.md
+  - docs/goals.md
+  - docs/glossary.md
+  - docs/assumptions.md
+  - docs/decisions/README.md
+  - docs/specs/README.md
+  - .github/pull_request_template.md
+  - .github/ISSUE_TEMPLATE/task.yml
+  - .github/workflows/standard.yml
+
+gitignore:
+  - .standards/
+  - .env
+  - .env.*
+  - "!.env.example"
+  - .DS_Store
+  - Thumbs.db
+  - "*.log"
+  - .idea/
+
+fixed:
+  - Keep the top-level layout listed above. A new top-level folder is a yellow change.
+  - Every top-level folder has a README.md saying what goes there, what does not and how files are named.
+  - Commit small, focused changes with Conventional Commits messages (feat, fix, docs, refactor, test, chore).
+  - Never commit secrets, tokens, personal data, or files over 5 MB outside Git LFS.
+  - Leave the repository passing the standard check.
+
+anti_slop:
+  - No comments that restate the code, narrate steps or decorate (banners, emoji).
+  - No speculative abstractions, dead code, unused dependencies or leftover placeholder data.
+  - No fabricated content. Statistics, testimonials, references and links must be real and verified.
+  - No marketing words (seamless, cutting-edge, revolutionary, game-changer, supercharge).
+  - Plain prose. Short sentences, no filler openers, no em dashes or semicolons as separators.
+
+banned_words:
+  - seamless
+  - seamlessly
+  - cutting-edge
+  - revolutionary
+  - game-changer
+  - game-changing
+  - supercharge
+  - unleash
+  - delve
+  - next-level
+  - elevate your
+  - unlock the power
+  - in today's fast-paced
+
+placeholder_hosts:
+  - via.placeholder.com
+  - placehold.co
+  - placehold.it
+  - picsum.photos
+  - dummyimage.com
+
+loose_root_extensions: [py, js, mjs, ts, jsx, tsx, html, css, scss, c, h, cpp, hpp, rs, go, java, ipynb, csv, parquet, png, jpg, jpeg, gif, webp, svg, pdf, tex, sh]
+
+max_file_mb: 5
+max_agents_lines: 150

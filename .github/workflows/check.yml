@@ -1,0 +1,65 @@
+# Reusable check that every repository calls from .github/workflows/standard.yml.
+name: check
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  standard:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Read the pinned version from .standard.yml
+        id: version
+        run: |
+          line="$(grep -E '^standard:' .standard.yml | head -n 1 | sed -E 's/^standard:[[:space:]]*//; s/[[:space:]]*(#.*)?$//')"
+          ref="${line#*@}"
+          if ! [[ "$ref" =~ ^v[0-9]+(\.[0-9]+){0,2}$ ]]; then
+            echo "::error file=.standard.yml::standard must look like SVN11X/standards@v1"
+            exit 1
+          fi
+          echo "ref=$ref" >> "$GITHUB_OUTPUT"
+
+      # The repository is fixed so a pull request cannot point the check at other code.
+      - uses: actions/checkout@v4
+        with:
+          repository: SVN11X/standards
+          ref: ${{ steps.version.outputs.ref }}
+          path: .standards
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - run: pip install pyyaml
+
+      - name: Structure, intent and slop
+        env:
+          REPO_PRIVATE: ${{ github.event.repository.private }}
+        run: python .standards/scripts/standard.py check .
+
+      - name: Pull request contract
+        if: github.event_name == 'pull_request'
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: python .standards/scripts/standard.py check . --pr
+
+      - name: Secrets
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GITLEAKS_ENABLE_COMMENTS: "false"
+
+      - name: Links
+        uses: lycheeverse/lychee-action@v2
+        with:
+          args: --no-progress --accept 200,206,429 --exclude-path .standards './**/*.md'
+          fail: true

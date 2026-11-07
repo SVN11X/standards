@@ -1,0 +1,46 @@
+name: Task
+description: A task for a person or an AI agent.
+title: "task: "
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What
+      description: The change, in one or two sentences.
+    validations:
+      required: true
+  - type: textarea
+    id: why
+    attributes:
+      label: Why
+      description: The goal or success criterion in docs/goals.md that this serves.
+    validations:
+      required: true
+  - type: input
+    id: where
+    attributes:
+      label: Where
+      description: Folders or files the change may touch.
+    validations:
+      required: true
+  - type: input
+    id: do-not-touch
+    attributes:
+      label: Do not touch
+      description: Anything that must stay as it is.
+  - type: textarea
+    id: done-when
+    attributes:
+      label: Done when
+      description: Something verifiable, such as a command that passes or a Given, When, Then criterion.
+    validations:
+      required: true
+  - type: dropdown
+    id: if-unsure
+    attributes:
+      label: If unsure
+      options:
+        - Ask before acting
+        - Pick the most reversible option and record it
+    validations:
+      required: true

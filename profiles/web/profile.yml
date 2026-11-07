@@ -1,0 +1,124 @@
+name: web
+description: Sites and apps used in a browser, from a static page to a full app.
+license: MIT
+skills: [antislop, antislop-ui, antislop-human, antislop-layoutmobile, antislop-copywriting]
+patterns: [state, observer, facade]
+required_files: [CHANGELOG.md, DESIGN.md]
+files: [DESIGN.md]
+
+folders:
+  src:
+    description: Source of the site or app.
+    goes_here: Pages, components, styles and scripts.
+    not_here: Images, fonts and media (assets/), tests (tests/), build output (dist/).
+    naming: Follow the framework convention. Plain files use kebab-case, for example main-menu.js.
+  assets:
+    description: Static media used by the site.
+    goes_here: Images, icons, fonts, video, audio and 3D models.
+    not_here: Code, documents, and design source files such as Figma exports.
+    naming: kebab-case, for example hero-dark.webp.
+    extensions: [png, jpg, jpeg, webp, avif, gif, svg, ico, woff, woff2, ttf, otf, mp4, webm, mp3, ogg, wav, glb, gltf, bin, ktx2, hdr, json]
+    naming_regex: '^[a-z0-9]+(?:-[a-z0-9]+)*(?:\.[a-z0-9]+)*$'
+  tests:
+    description: Automated tests.
+    goes_here: Unit, end-to-end and accessibility tests.
+    not_here: Test data over 1 MB.
+    naming: Mirror the file under test, for example main-menu.test.js.
+
+gitignore: [node_modules/, dist/, .cache/, coverage/, .vite/]
+
+fixed:
+  - Meet WCAG 2.2 AA. Text contrast of at least 4.5:1 (3:1 for large text), full keyboard use, visible focus, a label on every field, alt text on every meaningful image.
+  - Use native semantic HTML first (button, a, nav, main, headings in order). Every page has lang and a title.
+  - Every interactive element has hover, focus, active and disabled states. Async actions show loading, success and error.
+  - Every view that loads or lists data has empty, loading and error states.
+  - Layouts work from 320 px wide to large screens with no horizontal scroll.
+  - Respect prefers-reduced-motion.
+  - Give images and embeds a width and height so nothing jumps while loading. Measure Core Web Vitals before claiming performance (LCP under 2.5 s, INP under 200 ms, CLS under 0.1).
+  - No fabricated content. No invented statistics, testimonials, logos, or links to pages that do not exist. Label honest placeholders as placeholders.
+  - No control without real behavior.
+  - Visual direction comes from DESIGN.md, written by the owner. Without it, label the work as a draft.
+
+with_reason:
+  - Gradients, glows, glass effects or heavy shadows.
+  - 3D, parallax or scroll-driven animation.
+  - Decorative illustrations, or an icon set chosen for its look.
+  - More than two font families.
+  - Third-party scripts (analytics, widgets, embeds, trackers).
+
+options:
+  hosting:
+    question: Where will it be published?
+    default: github-pages
+    choices:
+      github-pages:
+        rules:
+          - Deploy with .github/workflows/pages.yml. In the repository settings, set the Pages source to GitHub Actions.
+        files: [.github/workflows/pages.yml.tmpl]
+      other:
+        rules:
+          - Document the deploy steps in README.md.
+      none: {}
+  build:
+    question: Does it need a build step?
+    default: none
+    choices:
+      none:
+        rules:
+          - Plain HTML, CSS and JavaScript served from src/. No bundler.
+      npm:
+        rules:
+          - package.json at the root with dev, build and test scripts. Commit the lockfile. Build output goes to dist/ and is not committed.
+  motion:
+    question: How much motion should the interface have?
+    default: subtle
+    choices:
+      none:
+        rules:
+          - No animation beyond instant state changes.
+      subtle:
+        rules:
+          - Animate only for feedback or continuity, 150 to 300 ms, using transform and opacity.
+      rich:
+        rules:
+          - Every animation has a purpose written in docs/decisions/. Animate transform and opacity. Anything that moves for more than 5 seconds has a pause control.
+  three_d:
+    question: Does the interface use 3D?
+    default: none
+    choices:
+      none:
+        rules:
+          - Do not add 3D or WebGL.
+      decorative:
+        rules:
+          - 3D is decoration. The page works fully without it.
+          - Load 3D lazily, pause rendering when it is off screen or the tab is hidden, and cap the device pixel ratio at 2.
+          - Show a static image when WebGL is unavailable or reduced motion is requested.
+      core:
+        rules:
+          - 3D is part of the product. Offer a path without 3D to the same information and actions.
+          - Write a performance budget (frame time, model size) in docs/decisions/ and keep to it. Use compressed glTF models.
+          - Pause rendering when it is off screen or the tab is hidden. Respect reduced motion.
+  flows:
+    question: Are there multi-step flows (sequenced buttons, wizards, checkouts)?
+    default: single
+    choices:
+      single: {}
+      multi-step:
+        rules:
+          - Model each flow as a state machine (see the State pattern card).
+          - Each step shows progress and lets the user go back without losing data.
+          - Disable a button while its action runs, so nothing is submitted twice. On error, stay on the step and say how to fix it.
+  theme:
+    question: Light theme, dark theme or both?
+    default: both
+    choices:
+      light:
+        rules:
+          - Ship a light theme only.
+      dark:
+        rules:
+          - Ship a dark theme only, with the reason written in DESIGN.md.
+      both:
+        rules:
+          - Follow prefers-color-scheme and offer a toggle. Both themes meet the contrast rule.

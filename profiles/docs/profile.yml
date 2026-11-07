@@ -1,0 +1,85 @@
+name: docs
+description: Documents and research, such as theses, reports, books, papers and documentation sites.
+license: CC-BY-4.0
+skills: [antislop-copywriting]
+patterns: []
+required_files: []
+
+folders:
+  content:
+    description: The text of the document.
+    goes_here: One chapter or section per file, numbered in reading order, plus the main file.
+    not_here: Figures (figures/), references (bibliography/), templates (templates/).
+    naming: NN-short-title, for example 03-methods.tex.
+  figures:
+    description: Figures with their sources.
+    goes_here: Each exported figure next to its source (script, drawing or data) with the same base name.
+    not_here: Photos or media that are not figures.
+    naming: kebab-case, for example robot-architecture.svg next to robot-architecture.drawio.
+    naming_regex: '^(?:[a-z0-9]+(?:-[a-z0-9]+)*(?:\.[a-z0-9]+)+|README\.md)$'
+  bibliography:
+    description: References.
+    goes_here: A single references.bib or references.json, and citation style files.
+    not_here: Full-text PDFs of other authors' work.
+    naming: references.bib
+    extensions: [bib, json, csl, yaml, md]
+  templates:
+    description: Institution or publisher templates.
+    goes_here: Class files, styles and title page templates, unmodified when possible.
+    not_here: Your own content.
+    naming: Keep the original file names.
+
+gitignore: ["*.aux", "*.out", "*.toc", "*.bbl", "*.blg", "*.fdb_latexmk", "*.fls", "*.synctex.gz", _build/, build/, _site/, .quarto/]
+
+fixed:
+  - One chapter or section per file in content/.
+  - A single bibliography. Every citation resolves to an entry.
+  - Every figure keeps its source next to the export, with the same base name.
+  - The document builds with one command written in README.md, and CI builds it.
+  - Tag every submitted version, for example submitted-2026-11.
+  - Check spelling in the content language before each submission.
+
+with_reason:
+  - Changing the citation style.
+  - Splitting, merging or reordering chapters.
+  - Editing the institution template.
+
+options:
+  format:
+    question: Which document format?
+    default: latex
+    choices:
+      latex:
+        rules:
+          - Build with latexmk. The main file is content/main.tex.
+      markdown:
+        rules:
+          - Build with a single tool (for example Pandoc or MkDocs) and pin its version.
+      typst:
+        rules:
+          - Build with typst compile and pin the Typst version.
+      quarto:
+        rules:
+          - Build with quarto render and pin the Quarto version.
+  citation_style:
+    question: Which citation style?
+    default: ieee
+    choices:
+      ieee:
+        rules:
+          - Cite in IEEE style.
+      apa:
+        rules:
+          - Cite in APA style.
+      other:
+        rules:
+          - Name the citation style in README.md.
+  citation:
+    question: Should others be able to cite this repository?
+    default: cff
+    choices:
+      cff:
+        rules:
+          - Keep CITATION.cff valid and up to date.
+        files: [CITATION.cff.tmpl]
+      none: {}

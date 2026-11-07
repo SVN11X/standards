@@ -1,0 +1,87 @@
+name: software
+description: Programs and libraries, including command line tools, services, desktop and mobile apps, and games.
+license: MIT
+skills: [antislop-code]
+patterns: [strategy, adapter, facade, repository, state, observer]
+required_files: [CHANGELOG.md]
+
+folders:
+  src:
+    description: Source code.
+    goes_here: Application or library code.
+    not_here: Tests (tests/), developer scripts (scripts/), generated files.
+    naming: Follow the language convention, for example snake_case modules in Python.
+  tests:
+    description: Automated tests.
+    goes_here: Unit and integration tests, and small fixtures.
+    not_here: Large data, manual test notes (docs/).
+    naming: Mirror the module under test.
+  scripts:
+    description: Developer scripts.
+    goes_here: Setup, release and maintenance scripts.
+    not_here: Code the program needs at run time (src/).
+    naming: kebab-case or snake_case, with a one-line usage note at the top.
+
+gitignore: [__pycache__/, "*.py[cod]", .venv/, venv/, build/, dist/, "*.egg-info/", node_modules/, target/, .coverage, coverage/, .pytest_cache/, .ruff_cache/]
+
+fixed:
+  - Create the project with the official tool of its language (for example uv init, npm init, cargo new or ros2 pkg create). The tool's layout wins over this profile.
+  - Automated tests run in CI. New behavior comes with a test.
+  - A formatter and a linter are configured and enforced (Ruff for Python, ESLint and Prettier for JavaScript and TypeScript, clang-format for C and C++).
+  - Dependencies are pinned and the lockfile is committed.
+  - Configuration comes from environment variables or config files. No secrets in code.
+  - Handle errors where you can act on them. Never swallow them silently.
+  - Anything that runs unattended logs through a logger, not print.
+  - Public functions and modules document what they do and why, not how.
+  - Releases follow Semantic Versioning and update CHANGELOG.md.
+
+with_reason:
+  - A new dependency.
+  - A new abstraction layer, base class or design pattern.
+  - Global state or a singleton.
+  - Threads, async concurrency or multiprocessing.
+  - Generated code committed to the repository.
+
+options:
+  kind:
+    question: What kind of software is it?
+    default: cli
+    choices:
+      library:
+        rules:
+          - The public API is documented and versioned. A breaking change requires a new major version.
+      cli:
+        rules:
+          - Every command has --help. Exit with a non-zero code on error and document the exit codes.
+      service:
+        rules:
+          - Read configuration only from the environment (twelve-factor). Expose a health check. Log structured lines to stdout. Keep no state on local disk.
+      desktop:
+        rules:
+          - Follow the platform interface guidelines. Store user data in the platform's standard folders.
+      mobile:
+        rules:
+          - Follow Apple Human Interface Guidelines or Material Design. Test on the smallest supported screen.
+      game:
+        rules:
+          - Keep simulation separate from rendering. Use data-oriented patterns (ECS, Structure of Arrays) only when profiling shows the need.
+  architecture:
+    question: How much structure does it need?
+    default: simple
+    choices:
+      simple:
+        rules:
+          - Plain functions and modules. Add structure only when a problem repeats.
+      layered:
+        rules:
+          - Domain logic does not import input and output code (database, network, UI). That code lives at the edges.
+      ddd:
+        rules:
+          - The glossary is the ubiquitous language in code. Aggregates protect their own rules. Repositories hide storage. Modules talk through domain events.
+      data-oriented:
+        rules:
+          - Keep hot data in contiguous arrays (Structure of Arrays). Measure before and after every optimization.
+  language:
+    question: Main language (for example python, typescript, cpp, rust)?
+    default: python
+    free: true

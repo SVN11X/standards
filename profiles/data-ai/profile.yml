@@ -1,0 +1,105 @@
+name: data-ai
+description: Data pipelines, analysis and machine learning.
+license: MIT
+skills: [antislop-code]
+patterns: [medallion, adapter, repository, strategy]
+required_files: []
+
+folders:
+  data:
+    description: Data, or pointers to where data lives.
+    goes_here: Small datasets, one README per dataset, schemas.
+    not_here: Large or personal data (use external storage, Git LFS or DVC), code.
+    naming: snake_case, with ISO dates when they matter, for example sales_2026_10.parquet.
+  src:
+    description: Pipeline, analysis and model code.
+    goes_here: Transformations, feature code, training and evaluation.
+    not_here: Exploration (notebooks/), data (data/).
+    naming: snake_case.
+  notebooks:
+    description: Exploration only.
+    goes_here: Notebooks numbered in reading order.
+    not_here: Logic used more than once (move it to src/).
+    naming: NN_short_description.ipynb, for example 01_explore_sales.ipynb.
+    extensions: [ipynb, md]
+    naming_regex: '^(?:\d{2}_[a-z0-9_]+\.ipynb|README\.md)$'
+  tests:
+    description: Tests and data checks.
+    goes_here: Unit tests and schema checks for each layer.
+    not_here: Real data.
+    naming: Mirror the module under test.
+
+gitignore: [__pycache__/, .venv/, .ipynb_checkpoints/, mlruns/, .dvc/cache/, data/private/]
+
+fixed:
+  - Raw data is immutable. Never edit files in the raw layer (bronze or raw), by hand or by code.
+  - Every transformation is code in src/. No manual edits to data.
+  - Running a pipeline twice gives the same result. Fix random seeds, pin dependencies, version the inputs.
+  - Each dataset has a README next to it with its source, owner, license, update frequency and schema.
+  - Schema checks (columns, types, nulls, uniqueness) run in tests or between layers.
+  - No personal or sensitive data in the repository. Data over 5 MB stays out of git (external storage, Git LFS or DVC).
+  - Commit notebooks without outputs. Logic used twice moves from notebooks/ to src/.
+  - Published data carries its own data license (CC-BY-4.0 by default), separate from the code license.
+
+with_reason:
+  - Adding a data source.
+  - Joining or enriching personal data.
+  - Sampling, filtering or dropping rows in a way that changes results.
+  - Changing the definition of a metric.
+
+options:
+  kind:
+    question: What kind of data project is it?
+    default: pipeline
+    choices:
+      pipeline:
+        subfolders:
+          data:
+            bronze: Data exactly as received from each source. Append only, never edited.
+            silver: Data cleaned and conformed by code (types, duplicates, time zones, joins).
+            gold: Data ready for reports or models, one table per business question.
+        rules:
+          - Use medallion layers. Bronze keeps data as received, silver cleans and conforms it, gold is ready for reports or models.
+          - Each layer reads only from the layer before it.
+      analysis:
+        subfolders:
+          data:
+            raw: Data as received. Never edited.
+            processed: Data derived from raw by code in src/.
+        rules:
+          - Keep data/raw (as received) and data/processed (derived by code). Medallion layers are not required.
+      ml:
+        subfolders:
+          data:
+            raw: Data as received. Never edited.
+            processed: Data derived from raw by code in src/.
+        add_folders:
+          models:
+            description: Trained models, or pointers to where they live.
+            goes_here: Small model files and one model card per model.
+            not_here: Large weights (use external storage or Git LFS).
+            naming: name_version, for example churn_v3.
+        rules:
+          - Track every experiment (parameters, data version, metrics).
+          - Every model you share has a model card (purpose, data, metrics, limits).
+  platform:
+    question: Where does it run?
+    default: local
+    choices:
+      local: {}
+      databricks:
+        rules:
+          - Export notebooks and jobs as source files in src/. The workspace is not the source of truth.
+      fabric:
+        rules:
+          - Keep notebooks and pipeline definitions in git through Fabric Git integration. The workspace is not the source of truth.
+      other: {}
+  personal_data:
+    question: Does it handle personal data?
+    default: none
+    choices:
+      none: {}
+      present:
+        rules:
+          - Pseudonymize or anonymize personal data before the silver or processed layer.
+          - Write what is collected, why and for how long it is kept in docs/decisions/.

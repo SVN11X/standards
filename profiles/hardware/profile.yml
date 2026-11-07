@@ -1,0 +1,97 @@
+name: hardware
+description: Electronics, firmware and mechanical parts.
+license: CERN-OHL-P-2.0
+skills: []
+patterns: [state, hal, double-buffer, observer]
+required_files: [CHANGELOG.md]
+
+folders:
+  electronics:
+    description: Schematics and circuit board design.
+    goes_here: Source files of the electronics design tool, part libraries, and bom.csv (bill of materials).
+    not_here: Fabrication exports (production/), firmware (firmware/).
+    naming: kebab-case. The revision lives in the git tag, not in file names.
+  firmware:
+    description: Code that runs on the device.
+    goes_here: The firmware project exactly as its tool creates it (PlatformIO, ESP-IDF, Zephyr or Arduino).
+    not_here: Desktop or phone apps (declare a part with the software profile).
+    naming: Follow the toolchain convention.
+    license: MIT
+  mechanical:
+    description: Enclosures and mechanical parts.
+    goes_here: CAD source files and STEP exports.
+    not_here: Renders used only in documentation (docs/).
+    naming: kebab-case, for example top-cover.step.
+  production:
+    description: Fabrication files generated from a tagged revision.
+    goes_here: One folder per revision (rev-a, rev-b) with gerbers, drill files, pick and place, and the BOM export.
+    not_here: Hand-edited files.
+    naming: rev-<letter>/
+
+gitignore: ["*-backups/", fp-info-cache, "*.kicad_prl", "_autosave-*", "*.lck", .pio/, build/, "*.bak"]
+
+fixed:
+  - Commit design source files (for example KiCad projects and CAD files), not only PDFs or images.
+  - Keep a bill of materials in electronics/bom.csv with manufacturer part numbers and at least one supplier per part.
+  - Each hardware revision has a letter (rev A, rev B) and a git tag. Production files are generated from that tag.
+  - The electrical rule check (ERC) and design rule check (DRC) pass before a revision is tagged.
+  - Document the pin map and the power budget in docs/.
+  - Firmware separates hardware access (a HAL, hardware abstraction layer) from application logic.
+  - Safety notes for batteries, mains voltage or heat go in README.md.
+
+with_reason:
+  - Replacing a part that has a long lead time or a single supplier.
+  - Removing a protection component (fuse, TVS diode, reverse polarity protection).
+  - Changing the board outline or mounting holes after mechanical design has started.
+
+options:
+  eda:
+    question: Which electronics design tool?
+    default: kicad
+    choices:
+      kicad:
+        rules:
+          - Run ERC and DRC with kicad-cli before tagging a revision.
+      other:
+        rules:
+          - Export the ERC and DRC reports with each revision.
+      none:
+        remove_folders: [electronics, production]
+  firmware:
+    question: Which firmware toolchain?
+    default: platformio
+    choices:
+      platformio:
+        rules:
+          - firmware/ is a PlatformIO project with platformio.ini at its root.
+      esp-idf:
+        rules:
+          - firmware/ is an ESP-IDF project created with idf.py create-project.
+      zephyr:
+        rules:
+          - firmware/ is a Zephyr application with its own prj.conf.
+      arduino:
+        rules:
+          - firmware/ holds the Arduino sketch folder. Move to PlatformIO when the project needs tests or more than one board.
+      none:
+        remove_folders: [firmware]
+  power:
+    question: How is it powered?
+    default: usb
+    choices:
+      usb: {}
+      battery:
+        rules:
+          - Document battery chemistry, protection circuit, charge current and expected runtime in docs/.
+      mains:
+        rules:
+          - Isolation, fusing and creepage distances are reviewed and recorded in docs/decisions/ before any powered test.
+  mechanical:
+    question: Is there mechanical design?
+    default: none
+    choices:
+      none:
+        remove_folders: [mechanical]
+      cad:
+        rules:
+          - Commit the CAD source and a STEP export for each revision.
