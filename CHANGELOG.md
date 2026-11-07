@@ -12,3 +12,5 @@ All notable changes to this standard are documented here. The format follows [Ke
 - Reusable check workflow covering structure, intent, slop, the pull request contract, secrets and links.
 - Ten pattern cards and an index.
 - Skills `repo-setup` and `code-review`, and prompts for tools without skills.
+- Template publishers for bash (`publish-templates.sh`) and Windows PowerShell (`publish-templates.ps1`).
+- `.gitattributes` that keeps line endings as LF on every system.

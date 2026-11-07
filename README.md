@@ -52,8 +52,16 @@ python scripts/standard.py check ../my-site
 
 1. Edit the YAML files or templates here, then run `python scripts/standard.py selftest`.
 2. Add an entry to `CHANGELOG.md` and bump `version` in `base/base.yml`.
-3. Tag the release and move the major tag: `git tag v1.1.0 && git tag -f v1 && git push origin v1.1.0 && git push -f origin v1`.
-4. Rebuild the templates with `scripts/publish-templates.sh` and package the skills again with `python scripts/standard.py package-skills dist/skills`.
+3. Tag the release and move the major tag, one command per line:
+
+   ```bash
+   git tag v1.1.0
+   git tag -f v1
+   git push origin v1.1.0
+   git push -f origin v1
+   ```
+
+4. Rebuild the templates with `scripts/publish-templates.sh` (bash) or `scripts/publish-templates.ps1` (Windows PowerShell), and package the skills again with `python scripts/standard.py package-skills dist/skills`.
 5. In each repository, run `agents` to refresh `AGENTS.md`. Until then the check only warns.
 
 A breaking change gets a new major tag (`v2`). Each repository moves to it when the owner decides.
@@ -65,6 +73,6 @@ A breaking change gets a new major tag (`v2`). Each repository moves to it when 
 - `patterns/`: one card per design pattern.
 - `prompts/`: prompts to paste into AI tools that do not have the skills.
 - `skills/`: `repo-setup` and `code-review`.
-- `scripts/`: `standard.py` (init, agents, check, templates, package-skills, selftest) and `publish-templates.sh`.
+- `scripts/`: `standard.py` (init, agents, check, templates, package-skills, selftest), `publish-templates.sh` and `publish-templates.ps1`.
 - `preferences.md`: the owner's taste, with good and bad examples.
 - `references.md`: the sources behind the rules.

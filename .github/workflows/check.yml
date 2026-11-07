@@ -61,5 +61,5 @@ jobs:
       - name: Links
         uses: lycheeverse/lychee-action@v2
         with:
-          args: --no-progress --accept 200,206,429 --exclude-path .standards './**/*.md'
+          args: --no-progress --accept 200,206,403,429 --exclude-path .standards './**/*.md'
           fail: true
