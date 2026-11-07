@@ -2,6 +2,13 @@
 
 All notable changes to this standard are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/2.0.0/) and versions follow [Semantic Versioning](https://semver.org/).
 
+## [1.8.2] - 2026-11-07
+
+### Fixed
+
+- The check runs again when the title or text of a pull request is edited, so fixing them no longer needs closing and reopening the pull request. Existing repositories update `.github/workflows/standard.yml` from the template.
+- The link check skips localhost and loopback addresses, such as local development URLs in a README.
+
 ## [1.8.1] - 2026-11-07
 
 ### Fixed
