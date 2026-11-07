@@ -89,7 +89,8 @@ A breaking change gets a new major tag (`v2`). Each repository moves to it when 
 - `profiles/`: one folder per profile with `profile.yml` (folders, fixed rules, reasons, setup questions) and its extra files.
 - `patterns/`: one card per design pattern.
 - `prompts/`: prompts to paste into AI tools that do not have the skills.
-- `skills/`: source of `repo-setup` and `code-review`. The published copies live in SVN11X/skills.
+- `skills/`: source of the skills. The published copies live in SVN11X/skills.
+- `agents/`: Claude Code subagents published with the skills, each with a fixed model.
 - `scripts/`: `standard.py` (init, agents, check, migrate, templates, package-skills, skills-repo, selftest), and `release`, `publish-templates`, `publish-skills` and `protect-repo`, each in `.sh` and `.ps1`.
 - `settings/`: repository settings as code, such as the branch ruleset.
 - `preferences.md`: the owner's taste, with good and bad examples.

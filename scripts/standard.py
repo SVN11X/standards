@@ -1305,6 +1305,8 @@ def cmd_skills_repo(out_dir: Path) -> None:
     for name in skill_names():
         shutil.copytree(packaged / name, repo / "skills" / name)
         shutil.copy2(packaged / f"{name}.zip", release / f"{name}.zip")
+    if (STANDARD_ROOT / "agents").exists():
+        shutil.copytree(STANDARD_ROOT / "agents", repo / "agents")
     readme = (STANDARD_ROOT / "skills" / "published-readme.md.tmpl").read_text(encoding="utf-8")
     write_text(repo / "README.md", render(readme, {"version": version}))
     shutil.copy2(STANDARD_ROOT / "LICENSE", repo / "LICENSE")
@@ -1450,6 +1452,7 @@ def cmd_selftest() -> int:
         skills_out = root / "skills-out"
         cmd_skills_repo(skills_out)
         expected = ["repo/.claude-plugin/plugin.json", "repo/.claude-plugin/marketplace.json",
+                    "repo/agents/standard-runner.md", "repo/agents/deep-reviewer.md",
                     "repo/README.md", "repo/skills/repo-setup/SKILL.md", "repo/skills/repo-setup/standard/VERSION",
                     "repo/skills/code-review/SKILL.md", "repo/skills/web-improve/scripts/deliver_git.py",
                     "repo/skills/docs-review/SKILL.md", "release/repo-setup.zip", "release/code-review.zip",

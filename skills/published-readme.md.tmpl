@@ -12,6 +12,15 @@ Skills for working with [SVN11X/standards](https://github.com/SVN11X/standards),
 
 The skills read the rules from SVN11X/standards at the version each repository pins, so most changes to the standard reach them without reinstalling anything. This repository is also a plugin marketplace, so changes to the skills themselves arrive through automatic sync.
 
+## Subagents for Claude Code
+
+The plugin also installs two subagents with a fixed model, so Claude Code picks the model by task:
+
+- `standard-runner` runs on Haiku: the check, move plans, tests and builds, once the decision is made.
+- `deep-reviewer` runs on Opus: read-only deep reviews, correctness and security, then maintainability.
+
+Set the main model to `opusplan` to plan on Opus and execute on Sonnet.
+
 ## Install in claude.ai (once)
 
 1. Open Customize, then Plugins. Click +, then Add marketplace, and sync from the GitHub repository `SVN11X/skills`.

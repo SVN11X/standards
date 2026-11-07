@@ -2,6 +2,17 @@
 
 All notable changes to this standard are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/2.0.0/) and versions follow [Semantic Versioning](https://semver.org/).
 
+## [1.7.0] - 2026-11-07
+
+### Added
+
+- Claude Code subagents published with the skills: `standard-runner` on Haiku for mechanical steps, `deep-reviewer` on Opus for deep reviews.
+
+### Changed
+
+- `repo-improve` lists every finding, gets one approval for the whole list, and applies all of it in order, tracking progress in `docs/improvement-plan.md`.
+- `repo-improve` and `code-review` explain how to use `opusplan` and the subagents to choose the model by task.
+
 ## [1.6.1] - 2026-11-07
 
 ### Changed

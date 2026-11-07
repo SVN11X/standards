@@ -31,7 +31,7 @@ When the owner asks for a deep, strict or "thermo" review, or before a release, 
 1. Correctness and security. Look for bugs, behavior that breaks existing features, breaking changes to public interfaces or data formats, security problems (injection, missing authorization, exposed secrets, unsafe deserialization, path traversal, server-side request forgery), resource leaks, concurrency errors, swallowed errors, unfinished features exposed by mistake, and migrations that cannot be undone. Read the pull request discussion only after your own audit, so your view stays independent.
 2. Maintainability. Look for a restructuring that makes the change smaller and more direct without changing behavior: layers that only pass calls through, duplicated branches, growing chains of conditions, files that keep growing, abstractions with a single implementation. Propose the concrete restructuring, not cosmetic renames.
 
-Report each pass separately with the severity format below. This mode is inspired by the thermo-nuclear reviews published in cursor/plugins under the MIT license.
+Report each pass separately with the severity format below. In Claude Code, delegate this mode to the `deep-reviewer` subagent, which runs on Opus, when it is available. This mode is inspired by the thermo-nuclear reviews published in cursor/plugins under the MIT license.
 
 ## Output
 
