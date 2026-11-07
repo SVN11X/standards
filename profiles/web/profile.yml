@@ -1,6 +1,7 @@
 name: web
 description: Sites and apps used in a browser, from a static page to a full app.
 license: MIT
+topics: [web]
 skills: [web-improve, antislop, antislop-ui, antislop-human, antislop-layoutmobile, antislop-copywriting]
 patterns: [state, observer, facade]
 required_files: [CHANGELOG.md, DESIGN.md]
@@ -59,6 +60,7 @@ options:
     default: github-pages
     choices:
       github-pages:
+        topics: [github-pages]
         rules:
           - Deploy with .github/workflows/pages.yml. In the repository settings, set the Pages source to GitHub Actions.
         files: [.github/workflows/pages.yml.tmpl]

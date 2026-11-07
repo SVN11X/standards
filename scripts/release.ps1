@@ -53,6 +53,18 @@ try {
     git push -q -f origin $tag $major
     Assert-Ok "Pushing the tags"
 
+    $slug = ((git remote get-url origin) -replace '^.*github\.com[:/]', '' -replace '\.git$', '').Trim()
+    gh repo edit $slug --description "How SVN11X repositories are organized, documented and reviewed, by people and by any AI tool." --enable-wiki=false --enable-projects=false --add-topic repository-standard --add-topic agents-md --add-topic github-templates --add-topic ai-agents
+    Assert-Ok "gh repo edit"
+    $notes = Join-Path ([System.IO.Path]::GetTempPath()) ("notes-" + [guid]::NewGuid().ToString() + ".md")
+    & $python scripts\standard.py notes . $version --output $notes
+    Assert-Ok "Release notes"
+    gh release view $tag --repo $slug *> $null
+    if ($LASTEXITCODE -ne 0) {
+        gh release create $tag --repo $slug --title $tag --notes-file $notes --verify-tag
+        Assert-Ok "gh release create"
+    }
+
     & (Join-Path $PSScriptRoot "publish-skills.ps1")
     & (Join-Path $PSScriptRoot "publish-templates.ps1")
     Write-Host "released $tag ($major now points to $head)"

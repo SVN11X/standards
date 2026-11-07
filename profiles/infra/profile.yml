@@ -1,6 +1,7 @@
 name: infra
 description: Servers, cloud resources and deployments defined as code.
 license: MIT
+topics: [infrastructure-as-code]
 skills: []
 patterns: []
 required_files: []

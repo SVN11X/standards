@@ -1,6 +1,7 @@
 name: Task
 description: A task for a person or an AI agent.
 title: "task: "
+labels: [task]
 body:
   - type: textarea
     id: what

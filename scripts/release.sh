@@ -43,6 +43,13 @@ fi
 git tag -f "$major" >/dev/null
 git push -q -f origin "$tag" "$major"
 
+slug="$(git remote get-url origin | sed -E 's#^.*github\.com[:/]##; s#\.git$##')"
+gh repo edit "$slug" --description "How SVN11X repositories are organized, documented and reviewed, by people and by any AI tool." \
+  --enable-wiki=false --enable-projects=false --add-topic repository-standard --add-topic agents-md --add-topic github-templates --add-topic ai-agents
+notes="$(mktemp)"
+python scripts/standard.py notes . "$version" --output "$notes"
+gh release view "$tag" --repo "$slug" >/dev/null 2>&1 || gh release create "$tag" --repo "$slug" --title "$tag" --notes-file "$notes" --verify-tag
+
 scripts/publish-skills.sh
 scripts/publish-templates.sh
 echo "released $tag ($major now points to $head)"

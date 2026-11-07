@@ -1,0 +1,12 @@
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    uses: {{standard_repo}}/.github/workflows/release.yml@{{ref}}

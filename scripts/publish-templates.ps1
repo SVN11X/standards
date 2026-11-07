@@ -42,7 +42,8 @@ foreach ($dir in Get-ChildItem $out -Directory -Filter "template-*") {
             gh repo create "$Owner/$name" --public --source=. --push --description "Template for the $name profile of $Owner/standards"
             Assert-Ok "gh repo create"
         }
-        gh repo edit "$Owner/$name" --template
+        $kind = $name.Substring("template-".Length)
+        gh repo edit "$Owner/$name" --template --description "Template for the $kind profile of $Owner/standards. Use this template, then answer the setup questions." --enable-wiki=false --enable-projects=false --add-topic template --add-topic repository-template --add-topic $kind
         Assert-Ok "gh repo edit"
         Write-Host "published $Owner/$name"
     } finally {

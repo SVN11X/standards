@@ -79,11 +79,21 @@ Existing repository:
 
 Then write the owner's answers into `docs/goals.md` and, for web, `DESIGN.md`, and run `python <standard>/scripts/standard.py agents .` so `AGENTS.md` picks up the goal summary.
 
-## 5. Verify
+## 5. GitHub settings
+
+The parts of GitHub outside the files follow the standard too: the About panel (description, website, topics), the features that are on or off (issues on, wiki and projects off unless used), merge settings, security features and labels.
+
+1. Fill `github:` in `.standard.yml`: `description` is one sentence written from the owner's vision, `homepage` is the live site or demo if there is one, `topics` starts from the profile's defaults.
+2. Show the owner the dry run: `python <standard>/scripts/standard.py github .`
+3. The owner applies it on their own machine, because it needs their GitHub login: `python <standard>/scripts/standard.py github . --apply --protect`. Without `--protect`, the branch ruleset is left as it is.
+
+The social preview image and the home page sections (the gear next to About) cannot be set through the API. Tell the owner to set them by hand once.
+
+## 6. Verify
 
 Run `python <standard>/scripts/standard.py check .`. Fix every error. Report the warnings to the owner, usually as the list of `TODO(owner)` items left.
 
-## 6. Enforce
+## 7. Enforce
 
 After the restructured repository is merged, tell the owner to protect it from the standards repository, so nothing reaches the default branch without a pull request that passes the check:
 
@@ -93,7 +103,7 @@ After the restructured repository is merged, tell the owner to protect it from t
 
 Never suggest it for generated repositories (standards, skills, template-*).
 
-## 7. Deliver
+## 8. Deliver
 
 - Agent with access to the repository: commit on a branch with Conventional Commits messages and open a pull request with every section of the template filled.
 - Chat without repository access: return a ZIP with the full repository and a patch made with `git format-patch` that applies with `git am`.

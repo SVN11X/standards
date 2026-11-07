@@ -1,6 +1,7 @@
 name: data-ai
 description: Data pipelines, analysis and machine learning.
 license: MIT
+topics: [data]
 skills: [antislop-code]
 patterns: [medallion, adapter, repository, strategy]
 required_files: []

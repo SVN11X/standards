@@ -24,7 +24,10 @@ for dir in "$out"/template-*; do
       gh repo create "$owner/$name" --public --source=. --push \
         --description "Template for the $name profile of $owner/standards"
     fi
-    gh repo edit "$owner/$name" --template
+    profile="${name#template-}"
+    gh repo edit "$owner/$name" --template \
+      --description "Template for the $profile profile of $owner/standards. Use this template, then answer the setup questions." \
+      --enable-wiki=false --enable-projects=false --add-topic template --add-topic repository-template --add-topic "$profile"
   )
   echo "published $owner/$name"
 done

@@ -2,6 +2,20 @@
 
 All notable changes to this standard are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/2.0.0/) and versions follow [Semantic Versioning](https://semver.org/).
 
+## [1.6.0] - 2026-11-07
+
+### Added
+
+- `github` command and `settings/repository.yml`: the About panel (description, website, topics), features, merge settings, security features and labels, applied with the GitHub CLI.
+- `github:` section in `.standard.yml`, with a default website for GitHub Pages sites and default topics per profile.
+- Release workflow: a `v*` tag creates a GitHub release with the notes of that version from `CHANGELOG.md`, through the `notes` command.
+- The check requires the About description once setup is done, and warns when GitHub differs from `.standard.yml`.
+- The publish and release scripts fill the About panel of the standard's own repositories and create their releases.
+
+### Changed
+
+- The Task issue form applies the `task` label.
+
 ## [1.5.0] - 2026-11-07
 
 ### Added

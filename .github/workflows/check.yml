@@ -43,6 +43,9 @@ jobs:
       - name: Structure, intent and slop
         env:
           REPO_PRIVATE: ${{ github.event.repository.private }}
+          REPO_DESCRIPTION: ${{ github.event.repository.description }}
+          REPO_HOMEPAGE: ${{ github.event.repository.homepage }}
+          REPO_TOPICS: ${{ join(github.event.repository.topics, ',') }}
         run: python .standards/scripts/standard.py check .
 
       - name: Pull request contract

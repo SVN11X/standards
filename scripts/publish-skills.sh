@@ -24,6 +24,10 @@ version="$(tr -d '[:space:]' < "$out/VERSION")"
   fi
 )
 
+gh repo edit "$owner/skills" \
+  --description "Agent skills for $owner/standards: repo-improve, repo-setup, code-review, web-improve and docs-review. Also a Claude plugin marketplace." \
+  --enable-wiki=false --enable-projects=false --add-topic agent-skills --add-topic claude-skills --add-topic claude-plugin
+
 if gh release view "v$version" --repo "$owner/skills" >/dev/null 2>&1; then
   gh release upload "v$version" "$out"/release/*.zip --repo "$owner/skills" --clobber
 else

@@ -45,6 +45,9 @@ try {
     Pop-Location
 }
 
+gh repo edit "$Owner/skills" --description "Agent skills for $Owner/standards: repo-improve, repo-setup, code-review, web-improve and docs-review. Also a Claude plugin marketplace." --enable-wiki=false --enable-projects=false --add-topic agent-skills --add-topic claude-skills --add-topic claude-plugin
+Assert-Ok "gh repo edit"
+
 $zips = @(Get-ChildItem (Join-Path $out "release") -Filter "*.zip" | ForEach-Object { $_.FullName })
 gh release view "v$version" --repo "$Owner/skills" *> $null
 if ($LASTEXITCODE -eq 0) {

@@ -1,6 +1,7 @@
 name: hardware
 description: Electronics, firmware and mechanical parts.
 license: CERN-OHL-P-2.0
+topics: [hardware]
 skills: []
 patterns: [state, hal, double-buffer, observer]
 required_files: [CHANGELOG.md]

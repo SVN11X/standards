@@ -1,6 +1,7 @@
 name: software
 description: Programs and libraries, including command line tools, services, desktop and mobile apps, and games.
 license: MIT
+topics: [software]
 skills: [antislop-code]
 patterns: [strategy, adapter, facade, repository, state, observer]
 required_files: [CHANGELOG.md]

@@ -53,6 +53,17 @@ The check fails while files sit outside the layout: loose files at the root, und
 
 The `repo-setup` skill follows the same steps.
 
+## GitHub settings
+
+Everything GitHub shows around the files follows the standard too. Each repository keeps its About panel (description, website, topics) in `.standard.yml` under `github`. `settings/repository.yml` sets the rest: features on or off, merge settings, security features and labels.
+
+```bash
+python scripts/standard.py github ../my-site            # shows what would change
+python scripts/standard.py github ../my-site --apply    # applies it with your GitHub login
+```
+
+The check warns when the About panel on GitHub differs from `.standard.yml`. Pushing a `v*` tag creates a GitHub release with the notes of that version from `CHANGELOG.md`.
+
 ## Enforce it
 
 `scripts/protect-repo.ps1 -Repo OWNER/REPO` (or `protect-repo.sh`) applies `settings/ruleset-main.json`. From then on, changes reach the default branch only through a pull request whose standard check passed.

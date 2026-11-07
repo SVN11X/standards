@@ -9,6 +9,8 @@ Commands:
   package-skills OUT_DIR     bundle the skills with a pinned copy of the standard
   skills-repo OUT_DIR        build the public skills repository and its release archives
   migrate PATH --profile NAME   propose a move plan for an existing repository, then apply it with --apply
+  github PATH [--apply]      show or apply the GitHub settings: About panel, features, security, labels
+  notes PATH VERSION         print the CHANGELOG.md section of a version, for release notes
   selftest                   run every profile through init and check
 """
 from __future__ import annotations
@@ -39,7 +41,7 @@ DEFAULT_OWNER = "SVN11X"
 OWNER_TODO = "TODO(owner)"
 LANGUAGES = {"en": "English", "es": "Spanish", "pt": "Portuguese", "fr": "French", "de": "German", "it": "Italian"}
 CONFIG_KEYS = ["standard", "owner", "name", "profile", "setup", "license", "content_language",
-               "options", "parts", "part_options", "extra_folders", "skills"]
+               "github", "options", "parts", "part_options", "extra_folders", "skills"]
 
 PLACEHOLDER = re.compile(r"(?<!\$)\{\{([a-z_]+)\}\}")
 STANDARD_REF = re.compile(r"^(?P<repo>[\w.-]+/[\w.-]+)@(?P<ref>v\d+(?:\.\d+){0,2})$")
@@ -125,6 +127,7 @@ def resolve(profile: dict, answers: dict) -> dict:
     subfolders: dict[str, dict] = {}
     files = list(profile.get("files") or [])
     root_files = list(profile.get("root_files") or [])
+    topics = list(profile.get("topics") or [])
     option_rules: list[str] = []
     problems: list[str] = []
     options = profile.get("options") or {}
@@ -146,11 +149,12 @@ def resolve(profile: dict, answers: dict) -> dict:
             subfolders.setdefault(parent, {}).update(children)
         files.extend(choice.get("files") or [])
         root_files.extend(choice.get("root_files") or [])
+        topics.extend(choice.get("topics") or [])
     for key in sorted(set(answers) - set(options)):
         problems.append(f"Option '{key}' does not exist in the {profile['name']} profile.")
     subfolders = {parent: children for parent, children in subfolders.items() if parent in folders}
     return {"folders": folders, "subfolders": subfolders, "files": files, "root_files": root_files,
-            "option_rules": option_rules, "problems": problems}
+            "topics": list(dict.fromkeys(topics)), "option_rules": option_rules, "problems": problems}
 
 
 # Rendering
@@ -471,18 +475,33 @@ def build_config(repo: Path, config: dict, profile: dict, settings: dict) -> dic
                               for key, spec in (part_profile.get("options") or {}).items()}
 
     major = base_config()["version"].split(".")[0]
+    owner = settings.get("owner") or config.get("owner") or DEFAULT_OWNER
+    name = settings.get("name") or config.get("name") or repo.name
+    current = dict(config.get("github") or {})
+    resolved_now = resolve(profile, options)
+    homepage = current.get("homepage", "")
+    if not homepage and options.get("hosting") == "github-pages" and name != "CHANGE-ME":
+        homepage = f"https://{owner.lower()}.github.io/{name}/"
+    github = {
+        "description": settings.get("description") or current.get("description", ""),
+        "homepage": homepage,
+        "topics": list(dict.fromkeys(list(current.get("topics") or []) + resolved_now["topics"])),
+    }
+    if current.get("features"):
+        github["features"] = current["features"]
     content_language = settings.get("content_language") or config.get("content_language")
     if not content_language and settings.get("interactive"):
         content_language = ask("Language of user-facing content (for example en, es)", None, "en")
     setup_done = settings.get("interactive") or settings.get("setup_done")
     return {
         "standard": settings.get("standard") or config.get("standard") or f"{DEFAULT_REPO}@v{major}",
-        "owner": settings.get("owner") or config.get("owner") or DEFAULT_OWNER,
-        "name": settings.get("name") or config.get("name") or repo.name,
+        "owner": owner,
+        "name": name,
         "profile": profile["name"],
         "setup": "done" if setup_done else config.get("setup", "pending"),
         "license": settings.get("license") or config.get("license") or profile.get("license", "MIT"),
         "content_language": content_language or "en",
+        "github": github,
         "options": options,
         "parts": parts,
         "part_options": part_options,
@@ -834,6 +853,7 @@ def run_check(repo: Path, pull_request: bool = False) -> Report:
         check_layout(files, config, profile, resolved, report)
         check_generated(repo, config, report)
         check_content(repo, files, report)
+        check_github(config, report)
     if pull_request:
         check_pull_request(report)
     return report
@@ -1070,6 +1090,162 @@ def apply_migration(repo: Path) -> tuple[list[str], list[str]]:
     return moved, created
 
 
+# GitHub settings
+
+def repository_settings() -> dict:
+    return load_yaml(STANDARD_ROOT / "settings" / "repository.yml")
+
+
+def github_slug(repo: Path, explicit: str | None) -> str:
+    if explicit:
+        return explicit
+    try:
+        url = subprocess.run(["git", "remote", "get-url", "origin"], cwd=repo, capture_output=True,
+                             text=True, check=True).stdout.strip()
+    except (OSError, subprocess.CalledProcessError):
+        raise StandardError("No git remote named origin. Pass --repo OWNER/NAME.")
+    match = re.search(r"github\.com[:/]([^/]+)/(.+?)(?:\.git)?$", url)
+    if not match:
+        raise StandardError(f"origin is not a GitHub URL: {url}. Pass --repo OWNER/NAME.")
+    return f"{match[1]}/{match[2]}"
+
+
+def github_commands(config: dict, slug: str, prune_labels: list[str] | None = None) -> list[tuple[str, list[str], str | None]]:
+    """Every gh call that brings a repository to the standard, as (label, arguments, JSON input)."""
+    settings = repository_settings()
+    about = config.get("github") or {}
+    features = {**settings["features"], **(about.get("features") or {})}
+    merge = settings["merge"]
+    flag = lambda value: "true" if value else "false"
+    commands = [("About and features", ["repo", "edit", slug,
+                 "--description", about.get("description", ""), "--homepage", about.get("homepage", ""),
+                 f"--enable-issues={flag(features['has_issues'])}", f"--enable-projects={flag(features['has_projects'])}",
+                 f"--enable-wiki={flag(features['has_wiki'])}", f"--enable-discussions={flag(features['has_discussions'])}",
+                 f"--enable-squash-merge={flag(merge['allow_squash_merge'])}",
+                 f"--enable-merge-commit={flag(merge['allow_merge_commit'])}",
+                 f"--enable-rebase-merge={flag(merge['allow_rebase_merge'])}",
+                 f"--delete-branch-on-merge={flag(merge['delete_branch_on_merge'])}"], None),
+                ("Topics", ["api", "--method", "PUT", f"repos/{slug}/topics", "--input", "-"],
+                 json.dumps({"names": list(about.get("topics") or [])})),
+                ("Squash commit message", ["api", "--method", "PATCH", f"repos/{slug}", "--input", "-"],
+                 json.dumps({"squash_merge_commit_title": merge["squash_merge_commit_title"],
+                             "squash_merge_commit_message": merge["squash_merge_commit_message"]}))]
+    security = settings["security"]
+    if security.get("vulnerability_alerts"):
+        commands.append(("Dependabot alerts", ["api", "--method", "PUT", f"repos/{slug}/vulnerability-alerts"], None))
+    if security.get("automated_security_fixes"):
+        commands.append(("Dependabot security updates", ["api", "--method", "PUT", f"repos/{slug}/automated-security-fixes"], None))
+    if security.get("private_vulnerability_reporting"):
+        commands.append(("Private vulnerability reporting", ["api", "--method", "PUT", f"repos/{slug}/private-vulnerability-reporting"], None))
+    if security.get("secret_scanning"):
+        analysis = {"secret_scanning": {"status": "enabled"}}
+        if security.get("secret_scanning_push_protection"):
+            analysis["secret_scanning_push_protection"] = {"status": "enabled"}
+        commands.append(("Secret scanning", ["api", "--method", "PATCH", f"repos/{slug}", "--input", "-"],
+                         json.dumps({"security_and_analysis": analysis})))
+    if security.get("code_scanning_default_setup"):
+        commands.append(("Code scanning", ["api", "--method", "PATCH", f"repos/{slug}/code-scanning/default-setup",
+                                           "--input", "-"], json.dumps({"state": "configured"})))
+    for label in settings["labels"]:
+        commands.append((f"Label {label['name']}", ["label", "create", label["name"], "--repo", slug, "--color",
+                                                   label["color"], "--description", label["description"], "--force"], None))
+    for name in prune_labels or []:
+        commands.append((f"Remove label {name}", ["label", "delete", name, "--repo", slug, "--yes"], None))
+    return commands
+
+
+def run_gh(arguments: list[str], payload: str | None) -> tuple[bool, str]:
+    try:
+        result = subprocess.run(["gh", *arguments], input=payload, capture_output=True, text=True)
+    except OSError:
+        raise StandardError("The GitHub CLI (gh) is not installed or not in PATH.")
+    lines = (result.stderr or result.stdout).strip().splitlines()
+    return result.returncode == 0, lines[-1] if lines else ""
+
+
+def labels_to_prune(slug: str) -> list[str]:
+    try:
+        result = subprocess.run(["gh", "label", "list", "--repo", slug, "--limit", "200", "--json", "name",
+                                 "--jq", ".[].name"], capture_output=True, text=True)
+    except OSError:
+        raise StandardError("The GitHub CLI (gh) is not installed or not in PATH.")
+    if result.returncode != 0:
+        return []
+    keep = {label["name"] for label in repository_settings()["labels"]}
+    return [name for name in result.stdout.splitlines() if name and name not in keep]
+
+
+def apply_ruleset(slug: str) -> tuple[bool, str]:
+    path = STANDARD_ROOT / "settings" / "ruleset-main.json"
+    name = json.loads(path.read_text(encoding="utf-8"))["name"]
+    listing = subprocess.run(["gh", "api", f"repos/{slug}/rulesets"], capture_output=True, text=True)
+    if listing.returncode != 0:
+        return False, "could not read rulesets. Private repositories need GitHub Pro for rulesets."
+    existing = next((item for item in json.loads(listing.stdout or "[]") if item.get("name") == name), None)
+    method, endpoint = ("PUT", f"repos/{slug}/rulesets/{existing['id']}") if existing else ("POST", f"repos/{slug}/rulesets")
+    return run_gh(["api", "--method", method, endpoint, "--input", "-"], path.read_text(encoding="utf-8"))
+
+
+def cmd_github(repo: Path, slug_arg: str | None, apply: bool, prune: bool, protect: bool) -> int:
+    config = read_config(repo)
+    slug = github_slug(repo, slug_arg)
+    if not (config.get("github") or {}).get("description"):
+        raise StandardError("Write github.description in .standard.yml first. It is the text of the About panel.")
+    prune_list = labels_to_prune(slug) if (apply and prune) else []
+    commands = github_commands(config, slug, prune_list)
+    if not apply:
+        for label, arguments, payload in commands:
+            print(f"{label}: gh {' '.join(arguments)}" + (f" <<< {payload}" if payload else ""))
+        print("\nDry run. Add --apply to change the repository on GitHub." + (" Add --protect for the branch ruleset." if not protect else ""))
+        return 0
+    failures = 0
+    for label, arguments, payload in commands:
+        ok, message = run_gh(arguments, payload)
+        print(f"{'ok  ' if ok else 'skip'} {label}" + ("" if ok else f": {message}"))
+        failures += 0 if ok else 1
+    if protect:
+        ok, message = apply_ruleset(slug)
+        print(f"{'ok  ' if ok else 'skip'} Branch ruleset" + ("" if ok else f": {message}"))
+        failures += 0 if ok else 1
+    print("\nNot available through the API, set them by hand once: the social preview image (Settings), "
+          "and which sections the home page shows (the gear next to About: Releases, Packages, Deployments).")
+    if failures:
+        print(f"{failures} settings were skipped. Some need a public repository or a paid plan.")
+    return 0
+
+
+def changelog_notes(repo: Path, version: str) -> str:
+    path = repo / "CHANGELOG.md"
+    if path.exists():
+        text = path.read_text(encoding="utf-8")
+        match = re.search(rf"^## \[{re.escape(version)}\][^\n]*\n(.*?)(?=^## \[|\Z)", text, re.S | re.M)
+        if match and match.group(1).strip():
+            return match.group(1).strip() + "\n"
+    return f"Release {version}. See the commit history for details.\n"
+
+
+def check_github(config: dict, report: Report) -> None:
+    about = config.get("github") or {}
+    description = (about.get("description") or "").strip()
+    if not description:
+        message = "Write github.description in .standard.yml: one sentence for the About panel."
+        if config.get("setup") == "done":
+            report.error(".standard.yml", message)
+        else:
+            report.warn(".standard.yml", message)
+    if os.environ.get("GITHUB_ACTIONS") != "true":
+        return
+    live = {"description": os.environ.get("REPO_DESCRIPTION", "").strip(),
+            "homepage": os.environ.get("REPO_HOMEPAGE", "").strip(),
+            "topics": sorted(t for t in os.environ.get("REPO_TOPICS", "").split(",") if t)}
+    wanted = {"description": description, "homepage": (about.get("homepage") or "").strip(),
+              "topics": sorted(about.get("topics") or [])}
+    different = [key for key in wanted if wanted[key] != live[key]]
+    if different:
+        report.warn(".standard.yml", f"The About panel on GitHub differs in {', '.join(different)}. "
+                                     "Run: python .standards/scripts/standard.py github . --apply")
+
+
 # templates, packaging and selftest
 
 def cmd_templates(out_dir: Path) -> None:
@@ -1167,8 +1343,8 @@ def cmd_selftest() -> int:
         first_repo = None
         for index, (profile, options, parts) in enumerate(cases):
             repo = root / f"case-{index}-{profile}"
-            init_repo(repo, {"profile": profile, "name": repo.name, "options": options,
-                             "parts": parts, "setup_done": True, "content_language": "es"})
+            init_repo(repo, {"profile": profile, "name": repo.name, "options": options, "parts": parts,
+                             "setup_done": True, "content_language": "es", "description": "Test repository."})
             git_add_all(repo)
             report = run_check(repo)
             lines = len((repo / "AGENTS.md").read_text(encoding="utf-8").splitlines())
@@ -1249,6 +1425,27 @@ def cmd_selftest() -> int:
             failures.append("goal summary did not reach AGENTS.md")
         else:
             print("positive case passed: goal summary reaches AGENTS.md")
+
+        commands = github_commands(read_config(first_repo), "OWNER/case")
+        labels = [label for label, _, _ in commands]
+        if not {"About and features", "Topics", "Secret scanning", "Label task"} <= set(labels):
+            failures.append(f"github settings are incomplete: {labels}")
+        else:
+            print("positive case passed: GitHub settings")
+        write_text(first_repo / "CHANGELOG.md", "# Changelog\n\n## [1.2.0] - 2026-11-07\n\n### Added\n\n- A thing.\n\n## [1.1.0]\n\n- Old.\n")
+        if changelog_notes(first_repo, "1.2.0") != "### Added\n\n- A thing.\n":
+            failures.append(f"release notes are wrong: {changelog_notes(first_repo, '1.2.0')!r}")
+        else:
+            print("positive case passed: release notes")
+        (first_repo / "CHANGELOG.md").unlink()
+        undescribed = read_config(first_repo)
+        undescribed["github"]["description"] = ""
+        report = Report()
+        check_github(undescribed, report)
+        if not report.errors:
+            failures.append("an empty About description should be an error once setup is done")
+        else:
+            print("negative case passed: empty About description")
 
         skills_out = root / "skills-out"
         cmd_skills_repo(skills_out)
@@ -1342,6 +1539,7 @@ def main(argv: list[str] | None = None) -> int:
     init.add_argument("--license", help="MIT, Apache-2.0, GPL-3.0, CERN-OHL-P-2.0, CC-BY-4.0 or none")
     init.add_argument("--standard", help="for example SVN11X/standards@v1")
     init.add_argument("--content-language", help="language code of user-facing content, for example es")
+    init.add_argument("--description", help="one sentence for the GitHub About panel")
     init.add_argument("--option", action="append", metavar="KEY=VALUE")
     init.add_argument("--part", action="append", metavar="FOLDER=PROFILE")
     init.add_argument("--part-option", action="append", metavar="FOLDER.KEY=VALUE")
@@ -1369,6 +1567,18 @@ def main(argv: list[str] | None = None) -> int:
     migrate.add_argument("--apply", action="store_true", help="apply docs/migration-plan.yml")
     migrate.add_argument("--replan", action="store_true", help="replace an existing plan")
 
+    github = commands.add_parser("github", help="show or apply the GitHub settings of a repository")
+    github.add_argument("path")
+    github.add_argument("--repo", help="OWNER/NAME, when origin is not set")
+    github.add_argument("--apply", action="store_true", help="change the repository on GitHub with gh")
+    github.add_argument("--prune-labels", action="store_true", help="remove labels that are not in the standard set")
+    github.add_argument("--protect", action="store_true", help="also apply the branch ruleset")
+
+    notes = commands.add_parser("notes", help="print the CHANGELOG.md section of a version")
+    notes.add_argument("path")
+    notes.add_argument("version")
+    notes.add_argument("--output", help="write to this file instead of printing")
+
     skills_repo = commands.add_parser("skills-repo", help="build the public skills repository")
     skills_repo.add_argument("out_dir")
 
@@ -1379,7 +1589,7 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "init":
             created = init_repo(Path(args.path), {
                 "profile": args.profile, "name": args.name, "owner": args.owner, "license": args.license,
-                "standard": args.standard, "content_language": args.content_language,
+                "standard": args.standard, "content_language": args.content_language, "description": args.description,
                 "options": parse_pairs(args.option), "parts": parse_pairs(args.part),
                 "part_options": parse_pairs(args.part_option), "existing": args.existing,
                 "interactive": args.interactive, "setup_done": args.setup_done,
@@ -1416,6 +1626,15 @@ def main(argv: list[str] | None = None) -> int:
             plan = plan_migration(repo, args.profile, parse_pairs(args.option))
             path = write_plan(repo, plan)
             print(f"{len(plan['moves'])} moves and {len(plan['decide'])} decisions written to {path}")
+            return 0
+        if args.command == "github":
+            return cmd_github(Path(args.path).resolve(), args.repo, args.apply, args.prune_labels, args.protect)
+        if args.command == "notes":
+            text = changelog_notes(Path(args.path).resolve(), args.version)
+            if args.output:
+                write_text(Path(args.output), text)
+            else:
+                print(text, end="")
             return 0
         if args.command == "skills-repo":
             cmd_skills_repo(Path(args.out_dir).resolve())

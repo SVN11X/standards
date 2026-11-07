@@ -1,0 +1,36 @@
+# GitHub settings every repository gets from `standard.py github . --apply`.
+# A visible section either has real content or is turned off. A repository can override any value
+# in .standard.yml under github.features.
+
+features:
+  has_issues: true          # tasks for people and AI agents use the Task form
+  has_projects: false       # turn on only when a board is really used
+  has_wiki: false           # documentation lives in docs/, versioned and reviewed with the code
+  has_discussions: false    # turn on only for repositories with a community
+
+merge:
+  allow_squash_merge: true  # one commit per pull request, titled with its Conventional Commits title
+  allow_merge_commit: false
+  allow_rebase_merge: false
+  delete_branch_on_merge: true
+  squash_merge_commit_title: PR_TITLE
+  squash_merge_commit_message: PR_BODY
+
+security:
+  vulnerability_alerts: true
+  automated_security_fixes: true
+  private_vulnerability_reporting: true
+  secret_scanning: true
+  secret_scanning_push_protection: true
+  code_scanning_default_setup: true
+
+labels:
+  - {name: task, color: 5319e7, description: "Created with the Task form."}
+  - {name: bug, color: d73a4a, description: "Something does not work as documented."}
+  - {name: feature, color: a2eeef, description: "New behavior or capability."}
+  - {name: docs, color: 0075ca, description: "Documentation only."}
+  - {name: refactor, color: cfd3d7, description: "Code change that keeps behavior."}
+  - {name: test, color: bfd4f2, description: "Tests only."}
+  - {name: chore, color: ededed, description: "Tooling, dependencies or maintenance."}
+  - {name: security, color: b60205, description: "Security or privacy issue."}
+  - {name: question, color: d876e3, description: "Needs an answer before work can start."}

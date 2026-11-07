@@ -1,6 +1,7 @@
 name: docs
 description: Documents and research, such as theses, reports, books, papers and documentation sites.
 license: CC-BY-4.0
+topics: [documentation]
 skills: [docs-review, antislop-copywriting]
 patterns: []
 required_files: []

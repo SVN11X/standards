@@ -57,6 +57,11 @@ Check the dimensions that apply to the repository's profile. Record evidence for
 
 When the code is substantial, run the maintainability pass of code-review's deep mode.
 
-## 10. Presentation
+## 10. Presentation and GitHub settings
 
-What a visitor sees first: the repository description, website link and topics in the About panel, a README that opens with what the project does and a link to the live site or demo, and screenshots that are real.
+What a visitor sees first: the About panel (description, website, topics), a README that opens with what the project does and a link to the live site or demo, and screenshots that are real.
+
+- Run `python <standard>/scripts/standard.py github .` to see the difference between the repository and the standard: About panel, features, merge settings, security features, labels.
+- Sections with nothing in them are turned off: wiki and projects unless they are used, and Packages or Deployments on the home page unless the repository publishes them.
+- Releases come from version tags, with notes taken from `CHANGELOG.md` by the release workflow.
+- The owner applies the settings with `--apply`, because it needs their GitHub login.
