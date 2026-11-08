@@ -1305,8 +1305,10 @@ def cmd_skills_repo(out_dir: Path) -> None:
     for name in skill_names():
         shutil.copytree(packaged / name, repo / "skills" / name)
         shutil.copy2(packaged / f"{name}.zip", release / f"{name}.zip")
-    if (STANDARD_ROOT / "agents").exists():
-        shutil.copytree(STANDARD_ROOT / "agents", repo / "agents")
+    for folder in ("agents", "hooks"):
+        if (STANDARD_ROOT / folder).exists():
+            shutil.copytree(STANDARD_ROOT / folder, repo / folder,
+                            ignore=shutil.ignore_patterns("README.md", "__pycache__"))
     readme = (STANDARD_ROOT / "skills" / "published-readme.md.tmpl").read_text(encoding="utf-8")
     write_text(repo / "README.md", render(readme, {"version": version}))
     shutil.copy2(STANDARD_ROOT / "LICENSE", repo / "LICENSE")
@@ -1453,6 +1455,7 @@ def cmd_selftest() -> int:
         cmd_skills_repo(skills_out)
         expected = ["repo/.claude-plugin/plugin.json", "repo/.claude-plugin/marketplace.json",
                     "repo/agents/standard-runner.md", "repo/agents/deep-reviewer.md",
+                    "repo/hooks/hooks.json", "repo/hooks/autopilot.py",
                     "repo/README.md", "repo/skills/repo-setup/SKILL.md", "repo/skills/repo-setup/standard/VERSION",
                     "repo/skills/code-review/SKILL.md", "repo/skills/web-improve/scripts/deliver_git.py",
                     "repo/skills/docs-review/SKILL.md", "release/repo-setup.zip", "release/code-review.zip",
@@ -1506,6 +1509,25 @@ def cmd_selftest() -> int:
                 failures.append(f"migrated repository still fails: {run_check(messy).errors}")
             else:
                 print("positive case passed: migrated repository passes the check")
+
+        sys.path.insert(0, str(STANDARD_ROOT / "hooks"))
+        import autopilot
+        pilot = root / "pilot"
+        (pilot / ".git").mkdir(parents=True)
+        (pilot / "docs").mkdir()
+        write_text(pilot / "docs" / "improvement-plan.md", "- [x] done\n- [ ] BLOCKED: question\n- [ ] next item\n")
+        hook_input = {"cwd": str(pilot), "session_id": "selftest-autopilot"}
+        quiet_without_marker = autopilot.decide(hook_input) is None
+        (pilot / ".git" / "standard-autopilot").write_text("")
+        first = autopilot.decide(hook_input)
+        second = autopilot.decide(hook_input)
+        third = autopilot.decide(hook_input)
+        write_text(pilot / "docs" / "improvement-plan.md", "- [x] done\n- [ ] BLOCKED: question\n- [x] next item\n")
+        finished = autopilot.decide(hook_input)
+        if not quiet_without_marker or not first or "1 pending" not in first["reason"] or not second or third or finished:
+            failures.append(f"autopilot hook decisions are wrong: {[quiet_without_marker, first, second, third, finished]}")
+        else:
+            print("positive case passed: autopilot hook")
 
         existing = root / "existing"
         existing.mkdir()

@@ -91,6 +91,7 @@ A breaking change gets a new major tag (`v2`). Each repository moves to it when 
 - `prompts/`: prompts to paste into AI tools that do not have the skills.
 - `skills/`: source of the skills. The published copies live in SVN11X/skills.
 - `agents/`: Claude Code subagents published with the skills, each with a fixed model.
+- `hooks/`: Claude Code hooks published with the skills, such as the autopilot for repo-improve.
 - `scripts/`: `standard.py` (init, agents, check, migrate, templates, package-skills, skills-repo, selftest), and `release`, `publish-templates`, `publish-skills` and `protect-repo`, each in `.sh` and `.ps1`.
 - `settings/`: repository settings as code, such as the branch ruleset.
 - `preferences.md`: the owner's taste, with good and bad examples.

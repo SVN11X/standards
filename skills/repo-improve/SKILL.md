@@ -41,7 +41,24 @@ Follow `references/audit-dimensions.md`. Skip the dimensions that do not apply t
 
 List every finding, not only the top ones. Order them for execution: structure first, because the other findings depend on where files end up, then security and privacy, then build and tests, then the rest. Mark each one green, yellow or red with the traffic light in `AGENTS.md`.
 
-Write the list to `docs/improvement-plan.md`, one line per finding with its status (pending, done, skipped), so any later session continues where the last one stopped. The owner approves the list once. After that, do not ask again for approved items. Stop only for red items and for decisions the list left open.
+Write the list to `docs/improvement-plan.md` as a Markdown task list, so any later session continues where the last one stopped:
+
+- `- [ ] text` pending
+- `- [x] text` done
+- `- [x] SKIPPED: reason` skipped
+- `- [ ] BLOCKED: question` waiting for the owner
+
+The owner approves the list once. After that, do not ask again for approved items.
+
+## Autopilot
+
+When the owner approves the list, turn autopilot on by creating the empty file `.git/standard-autopilot`. It lives inside `.git`, so it is never committed. While it exists, the plugin's Stop hook keeps the session working until no item is pending.
+
+- Work through the list without pausing between items. After each item: run the check, commit, push the branch, keep one pull request updated, and mark the item done.
+- When an item needs the owner (a red change or a decision the list left open), mark it `- [ ] BLOCKED: <question>` and continue with the next one. Do not stop to ask.
+- Never merge, deploy, publish secrets or rewrite history during autopilot. Those always wait for the owner.
+- When nothing is pending, delete `.git/standard-autopilot` and give one final summary with every BLOCKED question together.
+- If the owner asks to pause or stop, delete the file at once.
 
 ## 5. Apply everything, in order
 
@@ -53,7 +70,7 @@ Hand each topic to the skill that owns it:
 - Theses, reports and documentation: docs-review.
 - Interface slop, accessibility, mobile layout and copy: the antislop skills, when installed.
 
-Each improvement is its own commit, verified with the check before the next one starts, so any of them can be reverted alone. Open the pull request with a Conventional Commits title (for example `refactor: adopt the repository standard`) and a body that copies `.github/pull_request_template.md` with every section filled: Task, What I understood, Assumptions, Decisions, Not done, How to verify. Write the body to a file outside the repository and use `gh pr create --title "..." --body-file <file>`. Then wait for the check and fix it if it fails. Group them in one pull request, or one per improvement if the owner prefers. In a chat without repository access, deliver one patch for `git am` instead, and a ZIP only when the owner asks. Never paste whole files or logs in the reply. Record decisions in `docs/decisions/` and surviving assumptions in `docs/assumptions.md`. Update the status in `docs/improvement-plan.md` as you go.
+Each improvement is its own commit, verified with the check before the next one starts, so any of them can be reverted alone. Open the pull request with a Conventional Commits title (for example `refactor: adopt the repository standard`) and a body that copies `.github/pull_request_template.md` with every section filled: Task, What I understood, Assumptions, Decisions, Not done, How to verify. Write the body to a file outside the repository and use `gh pr create --title "..." --body-file <file>`. Then wait for the check and fix it if it fails. Group them in one pull request, or one per improvement if the owner prefers. In a chat without repository access, deliver one patch for `git am` instead, and a ZIP only when the owner asks. Never paste whole files or logs in the reply. Record decisions in `docs/decisions/` and surviving assumptions in `docs/assumptions.md`. Update the task list in `docs/improvement-plan.md` as you go.
 
 ## Models in Claude Code
 

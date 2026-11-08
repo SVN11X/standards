@@ -1,0 +1,16 @@
+{
+  "description": "Keeps repo-improve working through docs/improvement-plan.md while autopilot is on.",
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/autopilot.py\" 2>/dev/null || python \"${CLAUDE_PLUGIN_ROOT}/hooks/autopilot.py\"",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}

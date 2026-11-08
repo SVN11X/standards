@@ -21,6 +21,8 @@ The plugin also installs two subagents with a fixed model, so Claude Code picks 
 
 Set the main model to `opusplan` to plan on Opus and execute on Sonnet.
 
+The plugin also installs a Stop hook for repo-improve's autopilot: once the owner approves the improvement list, the session keeps working until every item is done or blocked, instead of stopping after each one.
+
 ## Install in claude.ai (once)
 
 1. Open Customize, then Plugins. Click +, then Add marketplace, and sync from the GitHub repository `SVN11X/skills`.

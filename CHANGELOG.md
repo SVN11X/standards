@@ -2,6 +2,16 @@
 
 All notable changes to this standard are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/2.0.0/) and versions follow [Semantic Versioning](https://semver.org/).
 
+## [1.9.0] - 2026-11-07
+
+### Added
+
+- Autopilot for repo-improve: a Stop hook published with the plugin keeps the session working through `docs/improvement-plan.md` while `.git/standard-autopilot` exists. Items that need the owner are marked BLOCKED and collected for the final summary.
+
+### Changed
+
+- `docs/improvement-plan.md` is a Markdown task list with pending, done, skipped and blocked items.
+
 ## [1.8.2] - 2026-11-07
 
 ### Fixed
