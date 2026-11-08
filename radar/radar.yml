@@ -121,3 +121,14 @@ entries:
     expression: []
     notes: Finds Claude Code and Codex sessions on the machine. The Windows installer is not signed yet.
     evaluated: 2026-11-08
+  - name: Google Developer Knowledge MCP
+    url: https://developers.google.com/knowledge/mcp
+    status: trial
+    profiles: [data-ai, software, docs, infra]
+    kind: tool
+    license: Google hosted service, terms of service apply
+    cost: no price stated in the docs, needs a Google Cloud project, quotas apply
+    privacy: queries and the API key are sent to Google, no repository content
+    expression: []
+    notes: Official remote MCP server in public preview that searches and reads public Google developer docs (Cloud, Firebase, Android, Maps). Use it only to verify facts against current docs, never as a runtime dependency. Keep the API key out of repositories, restrict it to this API and give each repository its own project quota. Re-check pricing and preview status before relying on it.
+    evaluated: 2026-11-08
