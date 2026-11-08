@@ -1,0 +1,123 @@
+# Evaluated tools. Keep one entry per tool, newest evaluation date wins. See README.md for the fields.
+entries:
+  - name: CSS scroll-driven animations
+    url: https://developer.mozilla.org/en-US/docs/Web/CSS/animation-timeline
+    status: adopt
+    profiles: [web]
+    kind: reference
+    license: web standard
+    cost: free
+    privacy: nothing leaves the browser
+    expression: [balanced, expressive]
+    notes: Supported in all modern browsers. Use only when motion explains something, animate transform and opacity, wrap in @supports with a static fallback, and respect prefers-reduced-motion.
+    evaluated: 2026-11-08
+  - name: Pele
+    url: https://github.com/obsidianmd/pele
+    status: trial
+    profiles: [web, docs]
+    kind: library
+    license: MIT
+    cost: free
+    privacy: renders in the browser
+    expression: [sober, balanced, expressive]
+    notes: Renders Mermaid syntax to SVG, small and synchronous, themed with CSS variables. Use it in sites that render diagrams. README files keep plain Mermaid, which GitHub renders.
+    evaluated: 2026-11-08
+  - name: runonweb
+    url: https://github.com/midudev/runonweb.ai
+    status: trial
+    profiles: [web, data-ai]
+    kind: library
+    license: MIT for the code, each model keeps its own license
+    cost: free
+    privacy: runs in the browser, but downloads the models to the device
+    expression: [sober, balanced, expressive]
+    notes: Speech to text, object detection, image embeddings and more with open-weight models. Useful where downloading models is allowed. Credit each model used.
+    evaluated: 2026-11-08
+  - name: anatomy
+    url: https://github.com/wheresryan22/anatomy
+    status: trial
+    profiles: [web, docs]
+    kind: skill
+    license: MIT
+    cost: free
+    privacy: local, no API keys
+    expression: [balanced, expressive]
+    notes: Interactive isometric figures that explain a concept through a physical metaphor. Label metaphors as illustrative and show the real model next to them.
+    evaluated: 2026-11-08
+  - name: HyperFrames
+    url: https://github.com/heygen-com/hyperframes
+    status: trial
+    profiles: [web, docs]
+    kind: skill
+    license: Apache-2.0
+    cost: free
+    privacy: local rendering
+    expression: [balanced, expressive]
+    notes: Videos written as HTML, CSS and JavaScript. Check that the export is an H.264 MP4 that plays everywhere.
+    evaluated: 2026-11-08
+  - name: better-claude
+    url: https://github.com/midudev/better-claude
+    status: trial
+    profiles: [web, software, data-ai, hardware, docs, infra]
+    kind: plugin
+    license: MIT
+    cost: free
+    privacy: local
+    expression: []
+    notes: Install only Sub Meter (usage), Context Meter (when to compact) and Time Machine (a snapshot per turn). Commit overlaps with the autopilot, and Image Preview is untested on Windows.
+    evaluated: 2026-11-08
+  - name: antislop
+    url: https://github.com/miqdadbadjuber/anti-slop
+    status: adopt
+    profiles: [web, docs, software]
+    kind: skill
+    license: MIT
+    cost: free
+    privacy: local
+    expression: [sober, balanced, expressive]
+    notes: Filters generic interface, copy and code patterns. Install from its own marketplace so it keeps updating.
+    evaluated: 2026-11-08
+  - name: React Bits
+    url: https://reactbits.dev
+    status: hold
+    profiles: [web]
+    kind: library
+    license: see its repository
+    cost: free
+    privacy: local
+    expression: [expressive]
+    notes: Decorative animated React components. Only for expressive repositories that already use React, with a decision record per component.
+    evaluated: 2026-11-08
+  - name: DSH SuperAgent
+    url: https://github.com/deepseek-ai/dsh-superagent-prototype
+    status: assess
+    profiles: [software]
+    kind: reference
+    license: MIT
+    cost: needs the DeepSeek platform
+    privacy: sends repository content to the provider
+    expression: []
+    notes: Research prototype of an agent that turns GitHub events into pull requests. Learn from its numbered docs and authorization model. Event-driven agents on public repositories can be steered by anyone who opens an issue.
+    evaluated: 2026-11-08
+  - name: ThinkRail
+    url: https://github.com/JetBrains/thinkrail
+    status: assess
+    profiles: [software]
+    kind: app
+    license: see its repository
+    cost: free
+    privacy: depends on the configured agent
+    expression: []
+    notes: Agentic IDE with isolated worktrees, living specs and skills. Ideas adopted by the standard. No need to switch tools.
+    evaluated: 2026-11-08
+  - name: SeshDock
+    url: https://github.com/Avoiptv/seshdock
+    status: assess
+    profiles: [software]
+    kind: app
+    license: MIT
+    cost: free
+    privacy: local and read-only
+    expression: []
+    notes: Finds Claude Code and Codex sessions on the machine. The Windows installer is not signed yet.
+    evaluated: 2026-11-08

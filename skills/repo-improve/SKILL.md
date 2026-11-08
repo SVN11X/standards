@@ -48,16 +48,21 @@ Write the list to `docs/improvement-plan.md` as a Markdown task list, so any lat
 - `- [x] SKIPPED: reason` skipped
 - `- [ ] BLOCKED: question` waiting for the owner
 
+Keep each item to one line of at most 240 characters, so the plan stays cheap to reread. The check enforces the format.
+
+Before the owner approves, have the `deep-reviewer` subagent review the plan when it is available. It answers BUILD, BUILD WITH CUTS or REFUSE for every item. Apply the cuts, drop the refusals, and show the owner the list with the verdicts.
+
 The owner approves the list once. After that, do not ask again for approved items.
 
 ## Autopilot
 
 When the owner approves the list, turn autopilot on by creating the empty file `.git/standard-autopilot`. It lives inside `.git`, so it is never committed. While it exists, the plugin's Stop hook keeps the session working until no item is pending.
 
-- Work through the list without pausing between items. After each item: run the check, commit, push the branch, keep one pull request updated, and mark the item done.
+- Work through the list without pausing between items. Hand each item to the `item-worker` subagent when it is available, so every item starts with a clean context and the main session only keeps the list. After each item: the check passes, the commit is pushed, the pull request is updated, and the item is marked done.
+- If the owner wants to keep working in the same folder, run the autopilot in a separate worktree: `git worktree add ../<repository>-autopilot -b improve/<topic>`.
 - When an item needs the owner (a red change or a decision the list left open), mark it `- [ ] BLOCKED: <question>` and continue with the next one. Do not stop to ask.
 - Never merge, deploy, publish secrets or rewrite history during autopilot. Those always wait for the owner.
-- When nothing is pending, delete `.git/standard-autopilot` and give one final summary with every BLOCKED question together.
+- When nothing is pending, close the run in three steps. Reconcile: reread the commits and the pull request, and update `docs/assumptions.md`, `docs/decisions/` and `docs/goals.md` where the work changed them. Retrospective: list what the owner had to correct during the run and propose the matching lines for `preferences.md` or `AGENTS.md`, for the owner to approve. Then delete `.git/standard-autopilot` and give one final summary with every BLOCKED question together.
 - If the owner asks to pause or stop, delete the file at once.
 
 ## 5. Apply everything, in order
@@ -69,6 +74,7 @@ Hand each topic to the skill that owns it:
 - Website UX, interactive explanations, GitHub Pages: web-improve.
 - Theses, reports and documentation: docs-review.
 - Interface slop, accessibility, mobile layout and copy: the antislop skills, when installed.
+- A new tool, library or skill: check the radar of the standard first. If it is not there, evaluate it with tool-radar before using it.
 
 Each improvement is its own commit, verified with the check before the next one starts, so any of them can be reverted alone. Open the pull request with a Conventional Commits title (for example `refactor: adopt the repository standard`) and a body that copies `.github/pull_request_template.md` with every section filled: Task, What I understood, Assumptions, Decisions, Not done, How to verify. Write the body to a file outside the repository and use `gh pr create --title "..." --body-file <file>`. Then wait for the check and fix it if it fails. Group them in one pull request, or one per improvement if the owner prefers. In a chat without repository access, deliver one patch for `git am` instead, and a ZIP only when the owner asks. Never paste whole files or logs in the reply. Record decisions in `docs/decisions/` and surviving assumptions in `docs/assumptions.md`. Update the task list in `docs/improvement-plan.md` as you go.
 

@@ -8,7 +8,8 @@
 | New informational site that needs SEO | Static site generator (for example Astro) with TypeScript | Prerendered React or Next only for concrete needs |
 | A few dynamic components | Islands or plain JavaScript | A full single-page app only for real app navigation |
 | Static interactive app | React or similar with Vite, static build | Plan SEO for routes that are not prerendered |
-| Complex scroll animation | GSAP with ScrollTrigger, loaded on demand | CSS scroll-driven animations when target browsers support them |
+| Scroll-linked animation | CSS scroll-driven animations (`animation-timeline`), now in all modern browsers, inside `@supports` with a static fallback | GSAP with ScrollTrigger only for complex sequences |
+| Diagrams | Mermaid syntax, rendered by Pele or Mermaid in the site | An image only when the diagram cannot be written as text |
 | Microinteractions | CSS, Motion for advanced coordination | Never two animation libraries for the same job |
 | Useful interactive 3D | Three.js or React Three Fiber, loaded lazily with a 2D fallback | Nothing for decorative spinning icons |
 | Character or diagram animation | SVG and CSS, or Rive | Justify the runtime and asset cost |

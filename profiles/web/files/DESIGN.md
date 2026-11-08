@@ -10,6 +10,10 @@ TODO(owner): What the product is, and the one impression it should leave.
 
 TODO(owner): Who uses it, on which devices, and in what situation.
 
+## Expression
+
+TODO(owner): sober, balanced or expressive. It depends on the audience, and it decides which animated or decorative tools from the radar fit this site.
+
 ## Personality
 
 TODO(owner): Three words it should feel like, and three it must not.

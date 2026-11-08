@@ -9,6 +9,7 @@ Skills for working with [SVN11X/standards](https://github.com/SVN11X/standards),
 | `code-review` | Review code or a pull request against the standard, with a deep mode for security and maintainability. | all |
 | `web-improve` | Audit and improve a website: UX, interactive explanations, accessibility, performance, GitHub Pages, verified delivery. | web |
 | `docs-review` | Review a thesis, paper, report or documentation for purpose, consistency, evidence, citations, figures and build. | docs |
+| `tool-radar` | Evaluate a new tool, library or skill and record it in the radar with a status. | all |
 
 The skills read the rules from SVN11X/standards at the version each repository pins, so most changes to the standard reach them without reinstalling anything. This repository is also a plugin marketplace, so changes to the skills themselves arrive through automatic sync.
 
@@ -21,7 +22,14 @@ The plugin also installs two subagents with a fixed model, so Claude Code picks 
 
 Set the main model to `opusplan` to plan on Opus and execute on Sonnet.
 
-The plugin also installs a Stop hook for repo-improve's autopilot: once the owner approves the improvement list, the session keeps working until every item is done or blocked, instead of stopping after each one.
+The plugin also installs `item-worker` on Sonnet, which applies one plan item with a clean context, and these hooks:
+
+- Ask the owner before merges, deploys, force pushes, history rewrites, mass deletions, publishing and secrets.
+- Block a commit while the standard check fails.
+- Stop the agent when a written file contains a credential.
+- Restore the key rules of `AGENTS.md` after a compaction.
+- Play a sound when Claude Code needs the owner.
+- Keep repo-improve's autopilot working until every item is done or blocked.
 
 ## Install in claude.ai (once)
 

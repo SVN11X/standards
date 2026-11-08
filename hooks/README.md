@@ -1,5 +1,9 @@
 # hooks
 
-Claude Code hooks published with the skills plugin.
+Claude Code hooks published with the skills plugin. Hooks are scripts that Claude Code runs at fixed moments, so these rules hold even when the agent forgets them.
 
-- `autopilot.py` (Stop hook): while `.git/standard-autopilot` exists in a repository, the session keeps working through the pending items of `docs/improvement-plan.md` instead of stopping after each one. It stops by itself when nothing is pending, or after two stops in a row without any change to the plan. Delete the marker file to turn autopilot off.
+- `guard.py` (before every shell command): asks the owner before merging, deploying, force pushing, rewriting history, mass deletions, publishing packages or changing secrets. Blocks `git commit` while the standard check of the repository fails.
+- `secret_scan.py` (after every file write): stops the agent when the file now contains a credential, so it moves it to an environment variable.
+- `reinject.py` (after a compaction): puts the key rules of `AGENTS.md` and the plan status back in context.
+- `notify.py` (when Claude Code needs the owner): plays a short sound.
+- `autopilot.py` (when the agent is about to stop): while `.git/standard-autopilot` exists, keeps the session working through `docs/improvement-plan.md`. Delete the file to turn autopilot off.

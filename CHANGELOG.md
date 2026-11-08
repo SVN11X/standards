@@ -2,6 +2,25 @@
 
 All notable changes to this standard are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/2.0.0/) and versions follow [Semantic Versioning](https://semver.org/).
 
+## [1.10.0] - 2026-11-08
+
+### Added
+
+- Hooks as guardrails: ask before merges, deploys, force pushes, history rewrites, mass deletions, publishing and secrets. Block commits while the check fails. Stop on secrets written to files. Restore the rules of `AGENTS.md` after a compaction. Notify the owner with a sound.
+- `item-worker` subagent: one plan item per clean context, so the autopilot session does not fill up.
+- Plan review by `deep-reviewer` (build, build with cuts or refuse) before the owner approves.
+- Closing a run reconciles assumptions, decisions and goals, and proposes preference changes from the owner's corrections.
+- Radar of evaluated tools (`radar/`) and the `tool-radar` skill.
+- `SETUP.md` for setting up the standard with any AI tool, and `docs/` in reading order.
+- Concise output style for Claude Code in `settings/`.
+- Expression level (sober, balanced, expressive) in `DESIGN.md`.
+- Base rules: credit third-party assets and models, and write diagrams as Mermaid text.
+
+### Changed
+
+- The check validates the format of `docs/improvement-plan.md` and warns on items over 240 characters.
+- The web stack reference uses CSS scroll-driven animations and Mermaid-compatible diagrams.
+
 ## [1.9.0] - 2026-11-07
 
 ### Added

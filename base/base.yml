@@ -1,5 +1,5 @@
 # Rules and files shared by every profile.
-version: 1.9.0
+version: 1.10.0
 
 required_files:
   - README.md
@@ -21,7 +21,7 @@ required_files:
   - .github/workflows/standard.yml
 
 # Skills every repository lists, before the profile's own skills.
-skills: [repo-improve, code-review]
+skills: [repo-improve, code-review, tool-radar]
 
 gitignore:
   - .standards/
@@ -40,6 +40,8 @@ fixed:
   - Commit small, focused changes with Conventional Commits messages (feat, fix, docs, refactor, test, chore).
   - Never commit secrets, tokens, personal data, executables, or files over 5 MB outside Git LFS.
   - Leave the repository passing the standard check.
+  - Credit every third-party asset, model, dataset, font or icon set with its source, author and license, in LICENSES/ or docs/credits.md.
+  - Write diagrams as text in Mermaid syntax, so GitHub and sites render the same source. Use an image only when that is not possible.
 
 anti_slop:
   - No comments that restate the code, narrate steps or decorate (banners, emoji).
@@ -158,3 +160,4 @@ hidden_folders: [.github, .gemini, .vscode, .devcontainer, .husky, .claude, .age
 
 max_file_mb: 5
 max_agents_lines: 150
+max_plan_item_chars: 240

@@ -10,3 +10,5 @@ Apply both with `python scripts/standard.py github <repo> --apply --protect`, wh
 Rulesets and some security features work on public repositories with GitHub Free, and on private ones only with a paid plan. Do not apply the ruleset to generated repositories (standards, skills, template-*), because their publish scripts push directly to the default branch.
 
 Two things have no API and are set by hand once per repository: the social preview image (Settings) and which sections the home page shows (the gear next to About: Releases, Packages, Deployments).
+
+- `output-style-concise.md`: a Claude Code output style that keeps answers short. Copy it to `~/.claude/output-styles/` and choose it in `/config`.

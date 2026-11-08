@@ -821,6 +821,23 @@ def check_content(repo: Path, files: list[str], report: Report) -> None:
                 report.warn(rel, f"{dashes} em dashes. Use periods and commas.")
 
 
+def check_plan(repo: Path, report: Report) -> None:
+    path = repo / "docs" / "improvement-plan.md"
+    if not path.exists():
+        return
+    limit = base_config().get("max_plan_item_chars", 240)
+    for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
+        stripped = line.strip()
+        if not re.match(r"^[-*]\s+\[", stripped):
+            continue
+        match = re.match(r"^[-*]\s+\[( |x|X)\]\s+(\S.*)$", stripped)
+        where = f"docs/improvement-plan.md:{number}"
+        if not match:
+            report.error(where, "Plan items use '- [ ] text' or '- [x] text'.")
+        elif len(match.group(2)) > limit:
+            report.warn(where, f"Plan item has {len(match.group(2))} characters. Keep it under {limit}. Details go in the commit or a spec.")
+
+
 def check_pull_request(report: Report) -> None:
     title = os.environ.get("PR_TITLE", "")
     body = os.environ.get("PR_BODY", "") or ""
@@ -854,6 +871,7 @@ def run_check(repo: Path, pull_request: bool = False) -> Report:
         check_generated(repo, config, report)
         check_content(repo, files, report)
         check_github(config, report)
+        check_plan(repo, report)
     if pull_request:
         check_pull_request(report)
     return report
@@ -1272,8 +1290,10 @@ def cmd_package_skills(out_dir: Path) -> None:
     setup_dir = out_dir / "repo-setup"
     shutil.copytree(STANDARD_ROOT / "skills" / "repo-setup", setup_dir, ignore=ignore)
     snapshot = setup_dir / "standard"
-    for name in ("base", "profiles", "patterns", "prompts"):
-        shutil.copytree(STANDARD_ROOT / name, snapshot / name, ignore=ignore)
+    for name in ("base", "profiles", "patterns", "prompts", "radar", "docs"):
+        if (STANDARD_ROOT / name).exists():
+            shutil.copytree(STANDARD_ROOT / name, snapshot / name, ignore=ignore)
+    shutil.copy2(STANDARD_ROOT / "SETUP.md", snapshot / "SETUP.md")
     (snapshot / "scripts").mkdir()
     shutil.copy2(STANDARD_ROOT / "scripts" / "standard.py", snapshot / "scripts" / "standard.py")
     shutil.copy2(STANDARD_ROOT / "preferences.md", snapshot / "preferences.md")
@@ -1516,7 +1536,8 @@ def cmd_selftest() -> int:
         (pilot / ".git").mkdir(parents=True)
         (pilot / "docs").mkdir()
         write_text(pilot / "docs" / "improvement-plan.md", "- [x] done\n- [ ] BLOCKED: question\n- [ ] next item\n")
-        hook_input = {"cwd": str(pilot), "session_id": "selftest-autopilot"}
+        import uuid
+        hook_input = {"cwd": str(pilot), "session_id": f"selftest-{uuid.uuid4().hex}"}
         quiet_without_marker = autopilot.decide(hook_input) is None
         (pilot / ".git" / "standard-autopilot").write_text("")
         first = autopilot.decide(hook_input)
@@ -1528,6 +1549,47 @@ def cmd_selftest() -> int:
             failures.append(f"autopilot hook decisions are wrong: {[quiet_without_marker, first, second, third, finished]}")
         else:
             print("positive case passed: autopilot hook")
+
+        radar = load_yaml(STANDARD_ROOT / "radar" / "radar.yml").get("entries") or []
+        fields = {"name", "url", "status", "profiles", "kind", "license", "cost", "privacy", "expression", "notes", "evaluated"}
+        bad = [entry.get("name") for entry in radar
+               if fields - set(entry) or entry.get("status") not in {"adopt", "trial", "assess", "hold"}
+               or not set(entry.get("profiles") or []) <= set(profile_names())]
+        names = [entry.get("name") for entry in radar]
+        if bad or len(names) != len(set(names)):
+            failures.append(f"radar entries are incomplete or repeated: {bad}")
+        else:
+            print(f"positive case passed: radar ({len(radar)} entries)")
+
+        import guard, reinject, secret_scan
+        asked = guard.decide({"tool_input": {"command": "gh pr merge 1 --rebase"}, "cwd": str(first_repo)})
+        allowed = guard.decide({"tool_input": {"command": "git status"}, "cwd": str(first_repo)})
+        os.environ["STANDARD_PY"] = str(STANDARD_ROOT / "scripts" / "standard.py")
+        (first_repo / "loose_file.py").write_text("x = 1\n", encoding="utf-8")
+        gate = guard.decide({"tool_input": {"command": "git commit -m 'feat: x'"}, "cwd": str(first_repo)})
+        (first_repo / "loose_file.py").unlink()
+        open_gate = guard.decide({"tool_input": {"command": "git commit -m 'feat: x'"}, "cwd": str(first_repo)})
+        decisions = [(asked or {}).get("hookSpecificOutput", {}).get("permissionDecision"), allowed,
+                     (gate or {}).get("hookSpecificOutput", {}).get("permissionDecision"), open_gate]
+        if decisions != ["ask", None, "deny", None]:
+            failures.append(f"guard hook decisions are wrong: {decisions}")
+        else:
+            print("positive case passed: guard hook")
+        leaked = first_repo / "src" / "config.js"
+        leaked.write_text('const key = "gsk_' + "A" * 45 + '";\n', encoding="utf-8")
+        caught = secret_scan.decide({"tool_input": {"file_path": str(leaked)}})
+        leaked.unlink()
+        restored = reinject.context(first_repo) or ""
+        if not caught or "Traffic light" not in restored:
+            failures.append(f"secret scan or reinjection failed: {bool(caught)}, {restored[:80]!r}")
+        else:
+            print("positive case passed: secret scan and rules after compaction")
+        write_text(first_repo / "docs" / "improvement-plan.md", "# Plan\n\n- [ ] fine item\n- [?] broken item\n")
+        if not any("Plan items use" in message for _, message in run_check(first_repo).errors):
+            failures.append("a malformed plan item should be an error")
+        else:
+            print("negative case passed: malformed plan item")
+        (first_repo / "docs" / "improvement-plan.md").unlink()
 
         existing = root / "existing"
         existing.mkdir()

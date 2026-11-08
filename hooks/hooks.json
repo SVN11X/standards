@@ -1,6 +1,53 @@
 {
-  "description": "Keeps repo-improve working through docs/improvement-plan.md while autopilot is on.",
+  "description": "Guardrails and autopilot for SVN11X/standards: ask before irreversible actions, block commits while the check fails, stop on written secrets, restore rules after compaction, notify the owner, and keep the autopilot going.",
   "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/guard.py\" 2>/dev/null || python \"${CLAUDE_PLUGIN_ROOT}/hooks/guard.py\"",
+            "timeout": 120
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/secret_scan.py\" 2>/dev/null || python \"${CLAUDE_PLUGIN_ROOT}/hooks/secret_scan.py\"",
+            "timeout": 15
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "matcher": "compact",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/reinject.py\" 2>/dev/null || python \"${CLAUDE_PLUGIN_ROOT}/hooks/reinject.py\"",
+            "timeout": 15
+          }
+        ]
+      }
+    ],
+    "Notification": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/notify.py\" 2>/dev/null || python \"${CLAUDE_PLUGIN_ROOT}/hooks/notify.py\"",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
     "Stop": [
       {
         "hooks": [
