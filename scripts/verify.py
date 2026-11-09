@@ -18,6 +18,7 @@ from __future__ import annotations
 import argparse
 import datetime as dt
 import json
+import os
 import py_compile
 import re
 import shutil
@@ -164,7 +165,8 @@ def check_ruff(repo: Path, required: bool) -> dict:
 
 def check_powershell(repo: Path) -> dict:
     """Parse every .ps1 with the real parser. On Windows this is Windows PowerShell 5.1."""
-    shell = shutil.which("powershell") or shutil.which("pwsh")
+    builtin = Path(os.environ.get("WINDIR", r"C:\Windows")) / "System32" / "WindowsPowerShell" / "v1.0" / "powershell.exe"
+    shell = shutil.which("powershell") or (str(builtin) if os.name == "nt" and builtin.exists() else None) or shutil.which("pwsh")
     files = sorted((repo / "scripts").glob("*.ps1"))
     if not shell or not files:
         return R("S.powershell-parse", "build", "SKIP", severity="medium", required=False,
@@ -243,8 +245,9 @@ def live_checks(repo: Path) -> list[dict]:
     if shells:
         ok = shells["powershell_on_path"] or not shells["powershell_exists"]
         results.append(R("L.windows-shell", "environment", "PASS" if ok else "FAIL", severity="low", required=False,
-                         evidence=f"powershell.exe on PATH: {shells['powershell_on_path']}, exists: {shells['powershell_exists']}, pwsh: {shells['pwsh']}",
-                         fix="orchestrate.py adds it to the PATH of the executors it starts. Other tools may still miss it."))
+                         evidence=f"powershell.exe on PATH: {shells['powershell_on_path']}, exists: {shells['powershell_exists']}, pwsh: {shells['pwsh']}. "
+                                  "orchestrate.py adds its folder to the PATH of every executor it starts",
+                         fix="add %WINDIR%\\System32\\WindowsPowerShell\\v1.0 to your user PATH so other tools find it too"))
     conf = orchestrate.policy()
     if caps["ollama"]["up"]:
         model, note = orchestrate.pick_ollama_model(conf["executors"]["ollama"], caps["ollama"])

@@ -94,8 +94,26 @@ def tail(text: str, size: int) -> str:
 # Processes
 
 
+def resolve(cmd):
+    """Windows only finds opencode.cmd or npx.cmd through PATHEXT, which CreateProcess ignores. Give it the full path."""
+    if isinstance(cmd, (list, tuple)) and cmd and not os.path.dirname(str(cmd[0])):
+        found = shutil.which(str(cmd[0]))
+        if found:
+            return [found, *cmd[1:]]
+    return cmd
+
+
+def windows_launch(launch: list[str]) -> list[str]:
+    """npx and uvx are .cmd files on Windows. MCP clients start them through cmd /c there."""
+    if os.name == "nt" and launch and launch[0] in {"npx", "uvx"}:
+        return ["cmd", "/c", *launch]
+    return list(launch)
+
+
 def run(cmd, cwd=None, timeout=60, env=None, shell=False) -> dict:
     started = time.monotonic()
+    if not shell:
+        cmd = resolve(cmd)
     try:
         result = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True, encoding="utf-8", errors="replace",
                                 timeout=timeout, env=env, shell=shell, check=False)
@@ -803,7 +821,7 @@ def mcp_config(name: str, client: str) -> dict:
     server = next((s for s in mcp_catalog() if s["name"] == name), None)
     if server is None:
         raise SystemExit(f"{name} is not in settings/mcp/catalog.yml")
-    launch = server["launch"]
+    launch = windows_launch(server["launch"])
     if client == "claude":
         return {"mcpServers": {name: {"command": launch[0], "args": launch[1:], **({"env": server["env"]} if server.get("env") else {})}}}
     return {"mcp": {name: {"type": "local", "command": launch, "enabled": True,
@@ -817,7 +835,7 @@ def mcp_inspect(name: str, timeout: int = 180) -> dict:
     if not shutil.which("npx"):
         return {"status": "SKIP", "error": "npx is not installed"}
     inspector = load_yaml(MCP_CATALOG).get("inspector", "@modelcontextprotocol/inspector")
-    result = run(["npx", "-y", inspector, "--cli", "--connect-timeout", "90000", *server["launch"], "--method", "tools/list"],
+    result = run(["npx", "-y", inspector, "--cli", "--connect-timeout", "90000", *windows_launch(server["launch"]), "--method", "tools/list"],
                  timeout=timeout, env=child_env())
     if result["exit"] != 0:
         return {"status": "FAIL", "error": tail(result["stderr"] or result["stdout"], 600)}

@@ -99,6 +99,19 @@ class Route(Base):
         self.assertEqual(orchestrate.privacy_class(self.tmp, orchestrate.policy(), self.local("restricted"))[0], "restricted")
 
 
+class WindowsLaunch(Base):
+    def test_bare_names_get_their_full_path(self):
+        python = Path(sys.executable).name
+        self.assertTrue(os.path.isabs(orchestrate.resolve([python, "-V"])[0]))
+        self.assertEqual(orchestrate.resolve(["no-such-tool-xyz"]), ["no-such-tool-xyz"])
+        self.assertIsNone(orchestrate.run(["no-such-tool-xyz"])["exit"])
+
+    def test_mcp_launch_on_windows(self):
+        launch = ["npx", "-y", "pkg@1.0.0"]
+        expected = ["cmd", "/c", *launch] if os.name == "nt" else launch
+        self.assertEqual(orchestrate.windows_launch(launch), expected)
+
+
 class OpenCodeMerge(Base):
     def test_merge_keeps_keys_and_is_idempotent(self):
         target = self.tmp / "oc"

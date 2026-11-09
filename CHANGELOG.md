@@ -27,6 +27,7 @@ All notable changes to this standard are documented here. The format follows [Ke
 
 - Autopilot and the rules after compaction work in linked worktrees, where `.git` is a file. The switch lives at `git rev-parse --git-path standard-autopilot`.
 - Workflows pin every third-party action to a commit and no longer leave the token in the checkout (16 zizmor findings).
+- On Windows the scripts start `opencode`, `npx` and other `.cmd` programs by their full path, MCP servers launched with npx or uvx go through `cmd /c`, and the PowerShell parse check finds Windows PowerShell even when its folder is missing from the PATH.
 
 ## [1.11.0] - 2026-11-08
 
