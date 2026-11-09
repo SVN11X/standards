@@ -2,6 +2,12 @@
 
 All notable changes to this standard are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/2.0.0/) and versions follow [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Fixed
+
+- The link check retries each URL up to 5 times with a 10 second wait, uses at most 8 parallel requests and a 30 second timeout. Without this, runs failed on random `docs.cloud.google.com` pages with connection errors while every link was valid.
+
 ## [1.12.0] - 2026-11-09
 
 ### Added
