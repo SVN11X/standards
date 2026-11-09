@@ -6,7 +6,9 @@
       "*": "allow",
       "*AGENTS.md": "deny",
       "*.standard.yml": "ask",
-      "*goals.md": "ask"
+      "*goals.md": "ask",
+      "*preservation.yml": "ask",
+      "*.github/workflows/*": "ask"
     },
     "bash": {
       "*": "allow",
@@ -24,7 +26,13 @@
       "*deploy*": "ask",
       "*publish*": "ask",
       "rm *": "ask",
-      "Remove-Item *": "ask"
+      "Remove-Item *": "ask",
+      "ollama pull*": "ask",
+      "ollama rm*": "ask",
+      "*orchestrate.py consent*": "ask",
+      "*orchestrate.py merge-opencode*": "ask",
+      "*npm i -g*": "ask",
+      "*npm install -g*": "ask"
     }
   }
 }
