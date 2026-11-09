@@ -48,6 +48,8 @@ STATES = ("planned", "approved", "running", "blocked", "failed", "verified", "in
 SECRET_ENV = re.compile(r"(TOKEN|SECRET|PASSWORD|PASSWD|API_?KEY|PRIVATE|CREDENTIAL)", re.IGNORECASE)
 KEEP_ENV = {"OPENCODE_API_KEY", "OPENROUTER_API_KEY", "ANTHROPIC_API_KEY"}
 TASK_FILE = ".delegate-task.md"
+# Which route task types each bench task measures.
+BENCH_TASKS = {"fix-bug": {"edit-small", "fix-test", "docs-small"}, "classify": {"classify", "summarize-short", "extract-short"}}
 RANK = {"allow": 0, "ask": 1, "deny": 2}
 
 
@@ -356,16 +358,16 @@ def route(task: str, repo: Path, risk: str = "green", files: int = 1, input_char
     if files > limits["edit_small_max_files"] and "opencode" in candidates:
         decision["rejected"].append({"executor": "opencode", "why": f"{files} files is more than {limits['edit_small_max_files']}"})
         candidates.remove("opencode")
-    measured = {(s["executor"], s["task"]): s for s in summarize_bench(bench_rows())
-                if s["runs"] >= limits["bench_min_runs"] and s["pass_rate"] >= limits["bench_min_pass_rate"]}
+    measured = measured_models(task, conf)
     for candidate in candidates:
-        ok, why, model = eligible(candidate, task, repo, input_chars, conf, local, caps)
+        ok, why, model = eligible(candidate, task, repo, input_chars, conf, local, caps, measured)
         if ok:
             decision.update(executor=candidate, model=model)
             decision["reasons"].append(why)
-            stats = measured.get((candidate, task))
+            stats = measured.get((candidate, model))
             if stats:
-                decision["reasons"].append(f"measured: {stats['runs']} runs, pass rate {stats['pass_rate']}, p50 {stats['p50_s']}s")
+                decision["reasons"].append(f"measured on this machine: {stats['runs']} runs, pass rate {stats['pass_rate']}, "
+                                           f"p50 {stats['p50_s']}s, p90 {stats['p90_s']}s")
             break
         decision["rejected"].append({"executor": candidate, "why": why})
     if decision["executor"] is None:
@@ -388,7 +390,16 @@ def pick_ollama_model(oconf: dict, info: dict) -> tuple[str | None, str]:
     return None, "no preferred chat model is installed, or it runs partly on the CPU"
 
 
-def eligible(candidate, task, repo, input_chars, conf, local, caps) -> tuple[bool, str, str | None]:
+def measured_models(task: str, conf: dict) -> dict:
+    """Bench results that count for this task type: enough runs and a high enough pass rate."""
+    limits = conf["limits"]
+    bench_tasks = {name for name, covers in BENCH_TASKS.items() if task in covers}
+    return {(s["executor"], s["model"]): s for s in summarize_bench(bench_rows())
+            if s["task"] in bench_tasks and s["runs"] >= limits["bench_min_runs"]
+            and s["pass_rate"] >= limits["bench_min_pass_rate"] and s["p50_s"] is not None}
+
+
+def eligible(candidate, task, repo, input_chars, conf, local, caps, measured=None) -> tuple[bool, str, str | None]:
     if candidate == "claude":
         ok, why = may_send("remote_claude", repo, conf, local)
         return ok, why, None
@@ -416,7 +427,11 @@ def eligible(candidate, task, repo, input_chars, conf, local, caps) -> tuple[boo
         pool = models if ok else local_models
         order = conf["executors"]["opencode"].get("prefer_match", [])
         pool.sort(key=lambda m: next((i for i, k in enumerate(order) if k in m.lower()), len(order)))
-        return True, f"{why}. Free model checked by the owner", pool[0]
+        timed = [m for m in pool if ("opencode", m) in (measured or {})]
+        if timed:
+            fastest = min(timed, key=lambda m: measured[("opencode", m)]["p50_s"])
+            return True, f"{why}. Fastest verified free model in the bench history", fastest
+        return True, f"{why}. Free model checked by the owner, not measured yet", pool[0]
     return False, f"unknown executor {candidate}", None
 
 

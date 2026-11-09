@@ -83,6 +83,17 @@ class Route(Base):
         decision = orchestrate.route("edit-small", self.tmp, local=self.local(), caps=self.caps)
         self.assertEqual((decision["executor"], decision["model"]), ("opencode", "opencode/glm-free"))
 
+    def test_bench_history_picks_the_model(self):
+        local = self.local()
+        local["free_models"].append({"id": "opencode/deepseek-free", "checked": dt.date.today().isoformat()})
+        rows = [{"task": "fix-bug", "executor": "opencode", "model": m, "seconds": s, "verified": True}
+                for m, s in (("opencode/glm-free", 24), ("opencode/deepseek-free", 21))] * 3
+        rows.append({"task": "fix-bug", "executor": "opencode", "model": "opencode/glm-free", "seconds": 5, "verified": True})
+        orchestrate.bench_file().write_text("\n".join(json.dumps(r) for r in rows) + "\n", encoding="utf-8")
+        decision = orchestrate.route("fix-test", self.tmp, local=local, caps=self.caps)
+        self.assertEqual(decision["model"], "opencode/deepseek-free")
+        self.assertIn("measured on this machine", " ".join(decision["reasons"]))
+
     def test_risk_and_size_keep_it_with_claude(self):
         self.assertEqual(orchestrate.route("edit-small", self.tmp, risk="yellow", local=self.local(), caps=self.caps)["executor"], "claude")
         self.assertEqual(orchestrate.route("edit-small", self.tmp, files=9, local=self.local(), caps=self.caps)["executor"], "claude")
