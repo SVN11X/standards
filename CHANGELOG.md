@@ -2,6 +2,24 @@
 
 All notable changes to this standard are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/2.0.0/) and versions follow [Semantic Versioning](https://semver.org/).
 
+## [1.11.0] - 2026-11-08
+
+### Added
+
+- OpenCode as a second agent for small work on free models: `settings/opencode/` with a global config that asks before commits, pushes, merges, deploys and deletions and blocks edits to `AGENTS.md`, limits for small models, and the `/next-item` and `/fix-check` commands.
+- `scripts/setup-opencode.ps1` and `.sh` install it for every repository and link the standard's skills into `~/.agents/skills`.
+- OpenCode in the radar as trial.
+
+- `settings/claude-managed-settings.json` makes `opusplan` the default model of Claude Code on the machine.
+
+### Changed
+
+- repo-improve hands approved plan items to OpenCode by default. Autopilot runs only when the owner asks, or in repositories with work or client code.
+
+### Fixed
+
+- A Material Design link in web-improve that returned 404 now points to the Android Developers page on window size classes.
+
 ## [1.10.0] - 2026-11-08
 
 ### Added

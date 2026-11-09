@@ -24,7 +24,7 @@ Without a browser, read the CSS: container `max-width`, grids, breakpoints, font
 | People scan in patterns such as the F pattern. Headings, the first words of lines and the left edge carry the most weight. | Nielsen Norman Group, F-shaped pattern: https://www.nngroup.com/articles/f-shaped-pattern-reading-web-content/ |
 | Related elements sit closer to each other than to unrelated ones. Space groups, it is not filler. | Nielsen Norman Group, proximity principle: https://www.nngroup.com/articles/gestalt-proximity/ |
 | Show the essential first and reveal advanced options on demand. | Nielsen Norman Group, progressive disclosure: https://www.nngroup.com/articles/progressive-disclosure/ |
-| Layouts adapt by window width class, and wide windows can show two panes side by side, such as input and result. | Material Design 3, window size classes: https://m3.material.io/foundations/layout/applying-layout/window-size-classes |
+| Layouts adapt by window width class, and wide windows can show two panes side by side, such as input and result. | Android Developers, window size classes, the Material 3 breakpoints: https://developer.android.com/develop/ui/compose/layouts/adaptive/window-size-classes |
 
 ## How to apply them
 

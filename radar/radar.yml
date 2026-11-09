@@ -132,3 +132,14 @@ entries:
     expression: []
     notes: Official remote MCP server in public preview that searches and reads public Google developer docs (Cloud, Firebase, Android, Maps). Use it only to verify facts against current docs, never as a runtime dependency. Keep the API key out of repositories, restrict it to this API and give each repository its own project quota. Re-check pricing and preview status before relying on it.
     evaluated: 2026-11-08
+  - name: OpenCode
+    url: https://github.com/anomalyco/opencode
+    status: trial
+    profiles: [web, software, data-ai, hardware, docs, infra]
+    kind: tool
+    license: MIT
+    cost: free, its free models have rate limits, other providers bill separately
+    privacy: free models keep prompts and code, other providers receive repository content, only a local model through Ollama keeps everything on the machine
+    expression: []
+    notes: Second coding agent for small, verified work on a free model, so Claude usage goes to planning and reviews. Reads AGENTS.md and the skills in ~/.agents/skills. Set it up with scripts/setup-opencode.ps1. Never run /init, it rewrites the generated AGENTS.md. Never sign in with a Claude subscription, Anthropic allows it only in Claude Code and claude.ai. Use free models only in personal repositories, never with work or client code. Hooks and Claude Code subagents do not run there, so repo-improve and deep reviews stay in Claude Code.
+    evaluated: 2026-11-08
