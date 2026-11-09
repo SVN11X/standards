@@ -54,11 +54,13 @@ Before the owner approves, have the `deep-reviewer` subagent review the plan whe
 
 The owner approves the list once. After that, do not ask again for approved items.
 
-## Autopilot
+## Hand-off and autopilot
 
-When the owner approves the list, turn autopilot on by creating the empty file `.git/standard-autopilot`. It lives inside `.git`, so it is never committed. While it exists, the plugin's Stop hook keeps the session working until no item is pending.
+By default, hand the approved list to OpenCode to save Claude usage. Commit the plan on the work branch and tell the owner in one line to run `/next-item` in OpenCode once per item (see `settings/opencode/` in the standard), and to come back for a code-review of the branch. Keep every item green, small and concrete, so a small model can do it. Mark the items that need judgment yellow or red, so OpenCode leaves them BLOCKED for Claude.
 
-To save Claude usage, the owner can leave autopilot off and apply the approved items in OpenCode with `/next-item` (see `settings/opencode/` in the standard), then come back to review the branch with code-review.
+Turn autopilot on only when the owner asks for it, or when the repository holds work or client code that must not reach a free model. To turn it on, create the empty file `.git/standard-autopilot`. It lives inside `.git`, so it is never committed. While it exists, the plugin's Stop hook keeps the session working until no item is pending.
+
+When the owner comes back after a hand-off, review the branch with code-review, take the BLOCKED items, and close the run as the last steps below describe.
 
 - Work through the list without pausing between items. Hand each item to the `item-worker` subagent when it is available, so every item starts with a clean context and the main session only keeps the list. After each item: the check passes, the commit is pushed, the pull request is updated, and the item is marked done.
 - If the owner wants to keep working in the same folder, run the autopilot in a separate worktree: `git worktree add ../<repository>-autopilot -b improve/<topic>`.
