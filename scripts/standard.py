@@ -1280,6 +1280,11 @@ def skill_names() -> list[str]:
     return sorted(p.name for p in (STANDARD_ROOT / "skills").iterdir() if (p / "SKILL.md").exists())
 
 
+# Scripts the skills call from the bundled copy of the standard, next to standard.py.
+BUNDLED_SCRIPTS = ("standard.py", "orchestrate.py", "verify.py", "evidence.py", "preserve.py", "adversarial.py",
+                   "safe_patch.py", "memory.py")
+
+
 def cmd_package_skills(out_dir: Path) -> None:
     if out_dir.exists():
         shutil.rmtree(out_dir)
@@ -1295,7 +1300,16 @@ def cmd_package_skills(out_dir: Path) -> None:
             shutil.copytree(STANDARD_ROOT / name, snapshot / name, ignore=ignore)
     shutil.copy2(STANDARD_ROOT / "SETUP.md", snapshot / "SETUP.md")
     (snapshot / "scripts").mkdir()
-    shutil.copy2(STANDARD_ROOT / "scripts" / "standard.py", snapshot / "scripts" / "standard.py")
+    for script in BUNDLED_SCRIPTS:
+        shutil.copy2(STANDARD_ROOT / "scripts" / script, snapshot / "scripts" / script)
+    (snapshot / "hooks").mkdir()
+    for hook in ("guard.py", "secret_scan.py", "autopilot.py"):
+        shutil.copy2(STANDARD_ROOT / "hooks" / hook, snapshot / "hooks" / hook)
+    shutil.copytree(STANDARD_ROOT / "schemas", snapshot / "schemas", ignore=ignore)
+    (snapshot / "settings").mkdir()
+    shutil.copy2(STANDARD_ROOT / "settings" / "orchestration.yml", snapshot / "settings" / "orchestration.yml")
+    for name in ("mcp", "opencode"):
+        shutil.copytree(STANDARD_ROOT / "settings" / name, snapshot / "settings" / name, ignore=ignore)
     shutil.copy2(STANDARD_ROOT / "preferences.md", snapshot / "preferences.md")
     write_text(snapshot / "VERSION", version + "\n")
 

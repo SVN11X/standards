@@ -1,26 +1,19 @@
 # Sets up OpenCode for every repository: global config, global rules, commands and the standard's skills.
-# Run it again after pulling the standard. It backs up an existing global config before replacing it.
+# Run it again after pulling the standard. It merges into an existing global config, after a backup.
 # Usage: .\scripts\setup-opencode.ps1
 
 $root = Split-Path -Parent $PSScriptRoot
 $source = Join-Path $root "settings\opencode"
 $config = Join-Path $HOME ".config\opencode"
 $skills = Join-Path $HOME ".agents\skills"
-$stamp = Get-Date -Format "yyyyMMddHHmmss"
 $utf8 = New-Object System.Text.UTF8Encoding $false
 
 New-Item -ItemType Directory -Force -Path (Join-Path $config "commands") | Out-Null
 New-Item -ItemType Directory -Force -Path $skills | Out-Null
 
-$ours = (Get-FileHash (Join-Path $source "opencode.json")).Hash
-foreach ($name in @("opencode.json", "opencode.jsonc")) {
-    $existing = Join-Path $config $name
-    if ((Test-Path $existing) -and (Get-FileHash $existing).Hash -ne $ours) {
-        Move-Item $existing "$existing.bak-$stamp"
-        Write-Host "backed up $existing to $name.bak-$stamp. Copy your own keys, such as model, into the new opencode.json."
-    }
-}
-Copy-Item (Join-Path $source "opencode.json") (Join-Path $config "opencode.json")
+# Merge instead of replacing: your own keys stay, and for each rule the stricter one wins.
+python (Join-Path $root "scripts\orchestrate.py") merge-opencode --target $config
+if ($LASTEXITCODE -ne 0) { throw "Merging opencode.json failed. Nothing else was changed." }
 
 $lines = Get-Content (Join-Path $root "prompts\global-instructions.md") -Encoding UTF8
 $start = [array]::IndexOf($lines, "---")

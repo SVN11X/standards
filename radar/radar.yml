@@ -143,3 +143,201 @@ entries:
     expression: []
     notes: Second coding agent for small, verified work on a free model, so Claude usage goes to planning and reviews. Reads AGENTS.md and the skills in ~/.agents/skills. Set it up with scripts/setup-opencode.ps1. Never run /init, it rewrites the generated AGENTS.md. Never sign in with a Claude subscription, Anthropic allows it only in Claude Code and claude.ai. Use free models only in personal repositories, never with work or client code. Hooks and Claude Code subagents do not run there, so repo-improve and deep reviews stay in Claude Code.
     evaluated: 2026-11-08
+  - name: Ollama
+    url: https://github.com/ollama/ollama
+    status: trial
+    profiles: [software, data-ai, hardware]
+    kind: tool
+    license: MIT
+    cost: free
+    privacy: local, models are downloaded once
+    expression: [sober, balanced, expressive]
+    notes: Called directly through its API by scripts/orchestrate.py for short local work. On a 6 GB card qwen3.5:4b ran fully on the GPU and qwen3.5:9b split with the CPU and was several times slower, one machine, November 2026. Never use embedding models for chat.
+    evaluated: 2026-11-09
+  - name: Context7 MCP
+    url: https://github.com/upstash/context7
+    status: trial
+    profiles: [web, software, data-ai]
+    kind: tool
+    license: MIT
+    cost: free tier with limits
+    privacy: library names and questions go to Upstash
+    expression: [sober, balanced, expressive]
+    notes: Current documentation by library version. Off by default, turned on per task from settings/mcp/catalog.yml at a pinned version.
+    evaluated: 2026-11-09
+  - name: Playwright MCP
+    url: https://github.com/microsoft/playwright-mcp
+    status: trial
+    profiles: [web]
+    kind: tool
+    license: Apache-2.0
+    cost: free
+    privacy: only the pages it opens
+    expression: [sober, balanced, expressive]
+    notes: Explores and reproduces UI bugs in a real browser. The evidence that stays is a Playwright Test case, not the exploration.
+    evaluated: 2026-11-09
+  - name: Serena MCP
+    url: https://github.com/oraios/serena
+    status: assess
+    profiles: [software, data-ai]
+    kind: tool
+    license: GPL-3.0-or-later for the agent, MIT for its language server layer
+    cost: free
+    privacy: local
+    expression: [sober, balanced, expressive]
+    notes: Symbol search through language servers. Overlaps with the agents' own search. Move to trial only after a bench shows fewer reads on a large repository.
+    evaluated: 2026-11-09
+  - name: GitHub MCP Server
+    url: https://github.com/github/github-mcp-server
+    status: assess
+    profiles: [web, software, data-ai, hardware, docs, infra]
+    kind: tool
+    license: MIT
+    cost: free
+    privacy: requests to the GitHub API with a personal token
+    expression: [sober, balanced, expressive]
+    notes: Overlaps with the gh CLI the owner already uses. If ever used, read-only mode with a token limited to the needed repositories.
+    evaluated: 2026-11-09
+  - name: MCP Inspector
+    url: https://github.com/modelcontextprotocol/inspector
+    status: trial
+    profiles: [web, software, data-ai, hardware, docs, infra]
+    kind: tool
+    license: Apache-2.0 for new code, MIT for older parts
+    cost: free
+    privacy: local, stores server secrets in the OS keychain
+    expression: [sober, balanced, expressive]
+    notes: Lists the tools of an MCP server before it is turned on. Used by orchestrate.py mcp inspect.
+    evaluated: 2026-11-09
+  - name: Promptfoo
+    url: https://github.com/promptfoo/promptfoo
+    status: assess
+    profiles: [data-ai, software]
+    kind: tool
+    license: MIT
+    cost: free, the models it calls may not be
+    privacy: sends prompts to the providers under test
+    expression: [sober, balanced, expressive]
+    notes: Prompt and model evaluation and red teaming. The deterministic suite in scripts/adversarial.py covers the controls without it. Consider it for repositories that ship prompts.
+    evaluated: 2026-11-09
+  - name: actionlint
+    url: https://github.com/rhysd/actionlint
+    status: adopt
+    profiles: [web, software, data-ai, hardware, docs, infra]
+    kind: tool
+    license: MIT
+    cost: free
+    privacy: local
+    expression: [sober, balanced, expressive]
+    notes: Validates GitHub Actions workflows. Runs in the selftest workflow at a pinned version with a checksum.
+    evaluated: 2026-11-09
+  - name: zizmor
+    url: https://github.com/zizmorcore/zizmor
+    status: adopt
+    profiles: [web, software, data-ai, hardware, docs, infra]
+    kind: tool
+    license: MIT
+    cost: free
+    privacy: local with --offline
+    expression: [sober, balanced, expressive]
+    notes: Security audit of workflows. Found 16 real problems in this repository (unpinned actions, tokens kept by checkout), all fixed in 1.12.0.
+    evaluated: 2026-11-09
+  - name: Ruff
+    url: https://github.com/astral-sh/ruff
+    status: adopt
+    profiles: [software, data-ai, hardware, infra]
+    kind: tool
+    license: MIT
+    cost: free
+    privacy: local
+    expression: [sober, balanced, expressive]
+    notes: Python linter and formatter. verify.py gates on syntax errors, undefined names and unused imports only, so older code is not flooded with style findings.
+    evaluated: 2026-11-09
+  - name: uv
+    url: https://github.com/astral-sh/uv
+    status: trial
+    profiles: [software, data-ai, hardware, infra]
+    kind: tool
+    license: MIT or Apache-2.0
+    cost: free
+    privacy: downloads packages from PyPI
+    expression: [sober, balanced, expressive]
+    notes: Fast Python environments and tool runs (uvx). Optional, the standard's scripts need only Python and PyYAML.
+    evaluated: 2026-11-09
+  - name: pytest
+    url: https://github.com/pytest-dev/pytest
+    status: adopt
+    profiles: [software, data-ai, hardware, infra]
+    kind: tool
+    license: MIT
+    cost: free
+    privacy: local
+    expression: [sober, balanced, expressive]
+    notes: Default test runner for Python repositories. The standard's own tests use unittest so they need nothing installed.
+    evaluated: 2026-11-09
+  - name: Playwright Test
+    url: https://github.com/microsoft/playwright
+    status: adopt
+    profiles: [web]
+    kind: tool
+    license: Apache-2.0
+    cost: free
+    privacy: local
+    expression: [sober, balanced, expressive]
+    notes: Reproducible browser tests and visual snapshots for websites. See web-improve references/regression-testing.md.
+    evaluated: 2026-11-09
+  - name: ast-grep
+    url: https://github.com/ast-grep/ast-grep
+    status: trial
+    profiles: [software, web, data-ai]
+    kind: tool
+    license: MIT
+    cost: free
+    privacy: local
+    expression: [sober, balanced, expressive]
+    notes: Structural search and rewrite by syntax tree. Use it instead of a model for mechanical code changes across many files.
+    evaluated: 2026-11-09
+  - name: Renovate
+    url: https://github.com/renovatebot/renovate
+    status: hold
+    profiles: [web, software, data-ai, hardware, docs, infra]
+    kind: tool
+    license: AGPL-3.0-only
+    cost: free
+    privacy: reads the repository through its app or runner
+    expression: [sober, balanced, expressive]
+    notes: Dependabot is built into GitHub and covers the need without another app. Revisit only if grouping rules become necessary.
+    evaluated: 2026-11-09
+  - name: SQLite FTS5
+    url: https://www.sqlite.org/fts5.html
+    status: adopt
+    profiles: [software, data-ai]
+    kind: library
+    license: public domain
+    cost: free
+    privacy: local
+    expression: [sober, balanced, expressive]
+    notes: Full-text index behind scripts/memory.py. Included in the official Python builds for Windows. verify.py --live checks it.
+    evaluated: 2026-11-09
+  - name: sqlite-vec
+    url: https://github.com/asg017/sqlite-vec
+    status: assess
+    profiles: [data-ai]
+    kind: library
+    license: MIT or Apache-2.0
+    cost: free
+    privacy: local
+    expression: [sober, balanced, expressive]
+    notes: Vector search inside SQLite. Add it only when a measurement shows FTS5 misses what the agents need.
+    evaluated: 2026-11-09
+  - name: just
+    url: https://github.com/casey/just
+    status: hold
+    profiles: [software, infra]
+    kind: tool
+    license: CC0-1.0
+    cost: free
+    privacy: local
+    expression: [sober, balanced, expressive]
+    notes: A command runner. The standard's scripts and README sections already name every command, so it adds a tool without a gain.
+    evaluated: 2026-11-09

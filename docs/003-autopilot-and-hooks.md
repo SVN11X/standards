@@ -6,7 +6,7 @@ Hooks enforce what text cannot: asking before merges, deploys and deletions, blo
 
 Models by task: plan on Opus and execute on Sonnet (`opusplan`, made the default by `settings/claude-managed-settings.json`), mechanical steps on Haiku (`standard-runner`), deep reviews on Opus (`deep-reviewer`).
 
-By default `repo-improve` hands the approved items to OpenCode on a free model, with the `/next-item` and `/fix-check` commands that `scripts/setup-opencode.ps1` installs. Claude Code plans and reviews, OpenCode applies one plan item at a time. Autopilot in Claude Code runs only when the owner asks, or in repositories with work or client code. No hook runs in OpenCode, so its config asks before commits and pushes instead. Free models keep what you send, so use them only in personal repositories.
+By default `repo-improve` routes each approved item with `scripts/orchestrate.py route` and delegates green ones to OpenCode or Ollama with `orchestrate.py delegate`, which runs the executor in its own worktree and checks the result itself (see `005-verification-and-orchestration.md`). The `/next-item` and `/fix-check` commands that `scripts/setup-opencode.ps1` installs still work by hand. Autopilot in Claude Code runs only when the owner asks, or in repositories with work or client code. No hook runs in OpenCode, so its config asks before commits and pushes instead. Free models keep what you send, so use them only in personal repositories.
 
 Habits that save tokens:
 

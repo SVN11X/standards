@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Sets up OpenCode for every repository: global config, global rules, commands and the standard's skills.
-# Run it again after pulling the standard. It backs up an existing global config before replacing it.
+# Run it again after pulling the standard. It merges into an existing global config, after a backup.
 # Usage: scripts/setup-opencode.sh
 set -euo pipefail
 
@@ -8,17 +8,11 @@ root="$(cd "$(dirname "$0")/.." && pwd)"
 source_dir="$root/settings/opencode"
 config="$HOME/.config/opencode"
 skills="$HOME/.agents/skills"
-stamp="$(date +%Y%m%d%H%M%S)"
 
 mkdir -p "$config/commands" "$skills"
 
-for name in opencode.json opencode.jsonc; do
-  if [ -e "$config/$name" ] && ! cmp -s "$config/$name" "$source_dir/opencode.json"; then
-    mv "$config/$name" "$config/$name.bak-$stamp"
-    echo "backed up $config/$name to $name.bak-$stamp. Copy your own keys, such as model, into the new opencode.json."
-  fi
-done
-cp "$source_dir/opencode.json" "$config/opencode.json"
+# Merge instead of replacing: your own keys stay, and for each rule the stricter one wins.
+python3 "$root/scripts/orchestrate.py" merge-opencode --target "$config"
 
 grep -qx -- '---' "$root/prompts/global-instructions.md" || { echo "prompts/global-instructions.md has no '---' line." >&2; exit 1; }
 {

@@ -2,6 +2,35 @@
 
 All notable changes to this standard are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/2.0.0/) and versions follow [Semantic Versioning](https://semver.org/).
 
+## [1.12.0] - 2026-11-09
+
+### Added
+
+- `scripts/verify.py`: independent verifier with PASS, FAIL, SKIP, ERROR and NOT_RUN, a JSON report validated by `schemas/verify-report.schema.json` and a Markdown report. `--level deep --live` checks everything in one run. `scripts/verify-all.ps1` and `.sh` run it.
+- `scripts/adversarial.py`: adversarial suite in quick, standard and deep levels. Fake executors in real worktrees test prompt injection, edits to tests and protected files, edits outside scope, false success, timeouts, leaked credentials, a broken or absent Ollama, privacy classes, broken patches, lost data and workflow security.
+- `scripts/orchestrate.py`: detects OpenCode, Ollama, GPU and shells, routes each task by type, risk, size, privacy class and measured history, delegates for real to OpenCode in its own worktree or to Ollama by API, verifies the result, records every run, benchmarks executors with hidden acceptance tests, records the owner's consent and merges the OpenCode config.
+- `scripts/preserve.py`, `scripts/safe_patch.py` and `scripts/memory.py`: data snapshots and comparisons, extraction coverage and resume lists, patches proven to apply, and a local SQLite FTS5 memory that refuses secrets.
+- Skills `adversarial-testing`, `safe-patch`, `data-preservation` and `agent-benchmark`. web-improve gains `references/learning-experience.md` and `references/regression-testing.md`.
+- `settings/orchestration.yml` (routing and privacy policy) and `settings/mcp/catalog.yml` (MCP servers at exact versions, off by default).
+- `hooks/session_probe.py`: lists the executors when a session starts in a repository that follows the standard.
+- Unit tests in `tests/`, a `verify` job in CI with actionlint, zizmor and Ruff at pinned versions, and 18 radar entries.
+- `docs/005-verification-and-orchestration.md`.
+
+### Changed
+
+- repo-improve routes and delegates each approved item with `orchestrate.py` instead of asking the owner to run `/next-item` by hand. The command still works.
+- setup-opencode merges the standard's rules into the owner's `opencode.json` (the stricter rule wins, `share` stays disabled) instead of replacing it.
+- The guard hook also asks before pulling or deleting local models, global installs, consent changes and force pushes with a `+` refspec. The OpenCode config asks for the same.
+- The bundled copy of the standard in repo-setup carries the new scripts, schemas, settings and the hooks they use.
+
+### Fixed
+
+- Autopilot and the rules after compaction work in linked worktrees, where `.git` is a file. The switch lives at `git rev-parse --git-path standard-autopilot`.
+- Workflows pin every third-party action to a commit and no longer leave the token in the checkout (16 zizmor findings).
+- Files that running the tests creates (`__pycache__`, `*.pyc` and other caches listed under `generated` in `settings/orchestration.yml`) no longer count as edits outside the allowed files. Real executors run the tests themselves, so every live delegation failed on them.
+- The router now uses the bench history: `fix-bug` results count for `edit-small`, `fix-test` and `docs-small`, and among the free models the owner checked it picks the one with the lowest p50 that has at least three runs and a pass rate of 0.8. Before, the history was looked up under the wrong task name and never changed the choice.
+- On Windows the scripts start `opencode`, `npx` and other `.cmd` programs by their full path, MCP servers launched with npx or uvx go through `cmd /c`, and the PowerShell parse check finds Windows PowerShell even when its folder is missing from the PATH.
+
 ## [1.11.0] - 2026-11-08
 
 ### Added

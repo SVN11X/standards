@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/SVN11X/standards/schemas/verify-report.schema.json",
+  "title": "Verification report of SVN11X/standards",
+  "type": "object",
+  "required": ["schema", "name", "level", "created", "environment", "verdict", "counts", "results"],
+  "properties": {
+    "schema": {"type": "string", "enum": ["standards/verify-report/v1"]},
+    "name": {"type": "string"},
+    "level": {"type": "string", "enum": ["quick", "standard", "deep"]},
+    "created": {"type": "string"},
+    "environment": {"type": "object", "required": ["os", "python"]},
+    "verdict": {"type": "string", "enum": ["PASS", "FAIL"]},
+    "counts": {
+      "type": "object",
+      "required": ["PASS", "FAIL", "SKIP", "ERROR", "NOT_RUN"],
+      "properties": {
+        "PASS": {"type": "integer"}, "FAIL": {"type": "integer"}, "SKIP": {"type": "integer"},
+        "ERROR": {"type": "integer"}, "NOT_RUN": {"type": "integer"}
+      }
+    },
+    "results": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "category", "severity", "status", "required", "evidence", "artifact", "repro", "error", "expected", "fix", "at"],
+        "additionalProperties": false,
+        "properties": {
+          "id": {"type": "string"},
+          "category": {"type": "string"},
+          "severity": {"type": "string", "enum": ["critical", "high", "medium", "low", "info"]},
+          "status": {"type": "string", "enum": ["PASS", "FAIL", "SKIP", "ERROR", "NOT_RUN"]},
+          "required": {"type": "boolean"},
+          "evidence": {"type": "string"},
+          "artifact": {"type": ["string", "null"]},
+          "repro": {"type": ["string", "null"]},
+          "error": {"type": ["string", "null"]},
+          "expected": {"type": ["string", "null"]},
+          "fix": {"type": ["string", "null"]},
+          "at": {"type": "string"}
+        }
+      }
+    }
+  }
+}

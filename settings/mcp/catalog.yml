@@ -1,0 +1,56 @@
+# MCP servers the standard knows. None is on by default. Turn one on for a task with:
+#   python scripts/orchestrate.py mcp config <name> --client claude|opencode
+# and paste the output into the project's .mcp.json or opencode.json. Check it first with:
+#   python scripts/orchestrate.py mcp inspect <name>
+# "Free" covers the server code only. The services behind it can have limits or keep what you send.
+# Versions are exact and at least two weeks old on the day they were pinned. Status matches radar/radar.yml.
+inspector: "@modelcontextprotocol/inspector@2.12.0"
+pinned: 2026-11-09
+
+servers:
+  - name: context7
+    purpose: current library documentation by version
+    status: trial
+    mode: read-only
+    launch: [npx, -y, "@upstash/context7-mcp@4.4.4"]
+    license: MIT
+    leaves_machine: library names and the questions asked, sent to Upstash
+    overlap: web fetch of official docs. Use Context7 when the API changes between versions.
+    profiles: [web, software, data-ai]
+  - name: playwright
+    purpose: drive a real browser to reproduce a UI bug
+    status: trial
+    mode: browser
+    launch: [npx, -y, "@playwright/mcp@0.0.83", --isolated, --headless]
+    license: Apache-2.0
+    leaves_machine: only the pages it opens
+    overlap: Playwright Test. MCP explores, Playwright Test is the evidence that stays in the repository.
+    profiles: [web]
+  - name: serena
+    purpose: symbol search and references through language servers
+    status: assess
+    mode: read-write
+    launch: [uvx, --from, "serena-agent==2.1.0", serena, start-mcp-server]
+    license: GPL-3.0-or-later for the agent, MIT for its language server layer
+    leaves_machine: nothing by itself
+    overlap: grep, ripgrep and the agent's own search. Adopt only if a bench shows fewer reads on a large repository.
+    profiles: [software, data-ai]
+  - name: github
+    purpose: issues, pull requests and CI status
+    status: assess
+    mode: read-only
+    launch: [docker, run, -i, --rm, -e, GITHUB_PERSONAL_ACCESS_TOKEN, -e, GITHUB_READ_ONLY=1, ghcr.io/github/github-mcp-server]
+    pinned_tag: false
+    license: MIT
+    leaves_machine: requests to the GitHub API with your token
+    overlap: the gh CLI, which the owner already has logged in. Prefer gh.
+    profiles: [web, software, data-ai, hardware, docs, infra]
+  - name: filesystem
+    purpose: file access limited to one folder, for clients without their own file tools
+    status: hold
+    mode: read-write
+    launch: [npx, -y, "@modelcontextprotocol/server-filesystem@2.0.1", "."]
+    license: see the package LICENSE
+    leaves_machine: nothing by itself
+    overlap: Claude Code and OpenCode already read and edit files with their own permissions.
+    profiles: [software]

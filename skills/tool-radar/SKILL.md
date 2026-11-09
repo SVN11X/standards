@@ -14,7 +14,8 @@ Turn a tool someone found into a recorded decision. Judge it with evidence, not 
 3. Record the license, the cost, and what leaves the machine (privacy).
 4. Compare it with the radar entries in `<standard>/radar/radar.yml` and with the tools the owner already uses. Name any overlap.
 5. Decide which profiles it serves and, for interface tools, which `DESIGN.md` expression levels it fits: sober, balanced, expressive.
-6. Propose a status. Prototypes, single-maintainer projects and unsigned installers start at assess or trial. Anything that sends repository content to a provider, or acts on events from public repositories, needs an explicit warning.
+6. For an MCP server, list what it exposes before any decision with `python <standard>/scripts/orchestrate.py mcp inspect <name>` (it uses MCP Inspector), name the tools that write or reach outside the machine, and compare them with the tools the agents already have. Add it to `settings/mcp/catalog.yml` with an exact version, off by default, read-only when it can be.
+7. Propose a status. Prototypes, single-maintainer projects and unsigned installers start at assess or trial. Anything that sends repository content to a provider, or acts on events from public repositories, needs an explicit warning.
 
 ## Record
 

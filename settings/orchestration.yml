@@ -1,0 +1,72 @@
+# Policy for scripts/orchestrate.py. These are limits and preferences, not measurements.
+# Measured results live in the owner's bench history (~/.standards/bench.jsonl) and reorder the candidates.
+version: 1
+
+# What may leave the machine for each privacy class. The class of a folder comes from the owner's
+# ~/.standards/local.yml. A repository can make its own class stricter with `privacy:` in .standard.yml,
+# never looser. allow: yes. owner: only when local.yml says so for that folder. deny: never.
+privacy:
+  default: personal-private
+  order: [personal-public, personal-private, work, restricted]
+  classes:
+    personal-public: {local: allow, remote_free: allow, remote_claude: allow}
+    personal-private: {local: allow, remote_free: owner, remote_claude: allow}
+    work: {local: allow, remote_free: deny, remote_claude: owner}
+    restricted: {local: allow, remote_free: deny, remote_claude: deny}
+
+# Candidates per task type, in order. tools means a program without AI (git, grep, a parser, a linter, tests).
+tasks:
+  search: [tools]
+  format: [tools]
+  lint: [tools]
+  test: [tools]
+  hash: [tools]
+  schema: [tools]
+  classify: [ollama, claude]
+  summarize-short: [ollama, claude]
+  extract-short: [ollama, claude]
+  edit-small: [opencode, claude]
+  fix-test: [opencode, claude]
+  docs-small: [opencode, ollama, claude]
+  edit-large: [claude]
+  refactor: [claude]
+  plan: [claude]
+  review-deep: [claude]
+
+limits:
+  edit_small_max_files: 5
+  ollama_max_input_chars: 8000
+  opencode_timeout_s: 600
+  ollama_timeout_s: 120
+  test_timeout_s: 600
+  free_recheck_days: 30
+  bench_min_runs: 3
+  bench_min_pass_rate: 0.8
+  output_tail_chars: 4000
+
+executors:
+  ollama:
+    url: http://127.0.0.1:11434
+    # Chat models in order of preference. A model only counts when it is installed.
+    prefer: [qwen3.5:4b, qwen2.5:7b, qwen3.5:9b]
+    # A model split between GPU and CPU was several times slower on a 6 GB card. Skip it below this share.
+    min_gpu_share: 0.9
+    # Embedding models answer no chat. They serve local search only.
+    never_chat: [qwen3-embedding:0.6b]
+    think: false
+    num_ctx: 4096
+    num_predict: 400
+  opencode:
+    # {model} and {message} are filled in. The message points to a task file in the worktree.
+    command: [opencode, run, --model, "{model}", "{message}"]
+    # Matched against `opencode models`. Only models the owner checked as free in local.yml are used.
+    prefer_match: [glm, deepseek, mimo]
+  claude:
+    # Used by bench only. Claude Code itself is the planner and does not delegate to itself.
+    command: [claude, -p, --permission-mode, acceptEdits, "{message}"]
+
+# Files that running code or tests creates on its own. They never count as a change by the executor.
+generated: ["__pycache__/*", "*/__pycache__/*", "*.pyc", ".pytest_cache/*", ".ruff_cache/*", ".mypy_cache/*", "node_modules/*"]
+
+# Files a delegated executor must never change. Each run can add more with --protect.
+protected: [AGENTS.md, CLAUDE.md, .standard.yml, docs/goals.md, .github/workflows/*]

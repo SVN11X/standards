@@ -30,6 +30,11 @@ ASK = [
     (r"\b(kubectl|helm)\s+(delete|uninstall)\b", "deleting cluster resources"),
     (r"\b(aws|gcloud|az)\b[^\n]*\b(delete|remove|destroy)\b", "deleting cloud resources"),
     (r"\b(DROP|TRUNCATE)\s+(TABLE|DATABASE|SCHEMA)\b", "deleting database data"),
+    (r"\bgit\s+push\b[^\n]*\s\+\S", "a force push with a + refspec"),
+    (r"\bollama\s+(pull|rm|push|create|cp)\b", "downloading, deleting or publishing a local model"),
+    (r"\borchestrate\.py\b[^\n]*\b(consent|merge-opencode)\b", "changing what may leave the machine or the global OpenCode config"),
+    (r"\b(npm|pnpm|yarn)\s+(i|install|add)\b[^\n]*\s(-g|--global)\b", "a global package install"),
+    (r"\b(winget|choco|scoop)\s+install\b", "installing software on the machine"),
 ]
 COMMIT = re.compile(r"\bgit\s+commit\b")
 

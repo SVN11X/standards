@@ -44,6 +44,7 @@ When the site teaches something, such as a diagram, a model, a simulation or tec
 - Show cause and effect: input, then processing, then a visible change. Say what stays fixed so comparisons are fair.
 - Separate measured data, derived calculations and illustrative examples, and label each one.
 - Read `references/interactive-explanations.md` before designing controls, diagrams or simulations.
+- For study sites and explainers (progress, bookmarks, profiles, hotspots, why-it-matters introductions), read `references/learning-experience.md`.
 
 ## 5. Implement
 
@@ -56,6 +57,8 @@ When the site teaches something, such as a diagram, a model, a simulation or tec
 ## 6. Verify with evidence
 
 Follow `references/quality-and-delivery.md`. Check syntax and paths under the repository base path. Test every control at its minimum, maximum, repeated changes and reset. Test mobile at 360 px, desktop, keyboard, touch, reduced motion, dark mode if the site has it, the build and existing tests. Report exactly what ran. Say "verified in a browser" only after a real browser test.
+
+Keep the evidence in the repository: add or update Playwright Test cases with `references/regression-testing.md`, and run adversarial-testing at the standard level before delivering. When the change touches data files, take a data-preservation snapshot before it.
 
 ## 7. Deliver
 

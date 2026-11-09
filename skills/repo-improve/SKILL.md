@@ -56,9 +56,19 @@ The owner approves the list once. After that, do not ask again for approved item
 
 ## Hand-off and autopilot
 
-By default, hand the approved list to OpenCode to save Claude usage. Commit the plan on the work branch and tell the owner in one line to run `/next-item` in OpenCode once per item (see `settings/opencode/` in the standard), and to come back for a code-review of the branch. Keep every item green, small and concrete, so a small model can do it. Mark the items that need judgment yellow or red, so OpenCode leaves them BLOCKED for Claude.
+By default, hand the green items to another executor to save Claude usage, and keep verifying them yourself. For each item:
 
-Turn autopilot on only when the owner asks for it, or when the repository holds work or client code that must not reach a free model. To turn it on, create the empty file `.git/standard-autopilot`. It lives inside `.git`, so it is never committed. While it exists, the plugin's Stop hook keeps the session working until no item is pending.
+1. Ask the router: `python <standard>/scripts/orchestrate.py route <task-type> --repo . --files <n> --risk <green|yellow|red>`. Task types are in `settings/orchestration.yml`. It answers tools, ollama, opencode, claude or blocked, with the reason. It never sends client or work code to a free model, and only uses free models the owner checked recently.
+2. When it says tools, use the program. When it says claude, do the item yourself.
+3. When it says opencode, delegate for real: `python <standard>/scripts/orchestrate.py delegate opencode --task "<item>" --allow <files> --test "<check and tests>"`. It runs OpenCode in its own worktree, then checks the diff, the protected files, the scope and the tests itself, and commits on a `delegate/<id>` branch only when everything passed. Integrate a verified run with `git cherry-pick <commit>` and run the check again. A failed run leaves its worktree for you to read: fix it yourself or mark the item BLOCKED.
+4. When it says ollama, use `delegate ollama` for short local work such as classifying or summarizing, and check the answer.
+5. Never take an executor's own summary as evidence. The run record (`orchestrate.py runs <id>`) holds the exit code, the diff and the test output.
+
+The owner can still run `/next-item` in OpenCode by hand, one item at a time. Keep every item green, small and concrete, so a small model can do it. Mark the items that need judgment yellow or red, so they stay with Claude.
+
+Before closing a run, use adversarial-testing at the level the risk needs, and data-preservation when the repository protects data.
+
+Turn autopilot on only when the owner asks for it, or when the repository holds work or client code that must not reach a free model. To turn it on, create the empty file at the path `git rev-parse --git-path standard-autopilot` prints (`.git/standard-autopilot` in a normal clone, a folder under `.git/worktrees/` in a linked worktree). It lives inside the git folder, so it is never committed. While it exists, the plugin's Stop hook keeps the session working until no item is pending.
 
 When the owner comes back after a hand-off, review the branch with code-review, take the BLOCKED items, and close the run as the last steps below describe.
 
@@ -66,8 +76,8 @@ When the owner comes back after a hand-off, review the branch with code-review, 
 - If the owner wants to keep working in the same folder, run the autopilot in a separate worktree: `git worktree add ../<repository>-autopilot -b improve/<topic>`.
 - When an item needs the owner (a red change or a decision the list left open), mark it `- [ ] BLOCKED: <question>` and continue with the next one. Do not stop to ask.
 - Never merge, deploy, publish secrets or rewrite history during autopilot. Those always wait for the owner.
-- When nothing is pending, close the run in three steps. Reconcile: reread the commits and the pull request, and update `docs/assumptions.md`, `docs/decisions/` and `docs/goals.md` where the work changed them. Retrospective: list what the owner had to correct during the run and propose the matching lines for `preferences.md` or `AGENTS.md`, for the owner to approve. Then delete `.git/standard-autopilot` and give one final summary with every BLOCKED question together.
-- If the owner asks to pause or stop, delete the file at once.
+- When nothing is pending, close the run in three steps. Reconcile: reread the commits and the pull request, and update `docs/assumptions.md`, `docs/decisions/` and `docs/goals.md` where the work changed them. Retrospective: list what the owner had to correct during the run and propose the matching lines for `preferences.md` or `AGENTS.md`, for the owner to approve. Then delete the autopilot file and give one final summary with every BLOCKED question together.
+- If the owner asks to pause or stop, delete the autopilot file at once.
 
 ## 5. Apply everything, in order
 
