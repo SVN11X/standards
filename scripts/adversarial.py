@@ -57,6 +57,13 @@ elif mode == "outside":
     Path("README.md").write_text("rewritten\n")
 elif mode == "tests":
     Path("test_calc.py").write_text("import unittest\nclass T(unittest.TestCase):\n    def test_ok(self):\n        pass\n")
+elif mode == "runs-tests":
+    calc.write_text(fixed)
+    import subprocess
+    subprocess.run([sys.executable, "-m", "unittest", "test_calc"], capture_output=True)
+    cache = Path(".pytest_cache") / "v"
+    cache.mkdir(parents=True)
+    (cache / "lastfailed").write_text("{}")
 elif mode == "liar":
     pass
 elif mode == "slow":
@@ -373,6 +380,12 @@ def run_suite(level: str = "standard", repo: Path = ROOT, only: str | None = Non
                 ok = run["state"] == "verified" and run.get("commit") and run.get("worktree") is None
                 return bool(ok), f"state {run['state']}, commit {str(run.get('commit'))[:12]}"
             add("C.good-change-is-verified", "regression", good, expected="a correct change passes every check and is committed on its own branch")
+
+            def c2():
+                run = fake_run(tmp, "runs-tests", conf)
+                return run["state"] == "verified" and bool(run.get("generated_ignored")), \
+                    f"state {run['state']}, generated files ignored: {run.get('generated_ignored')}"
+            add("C.executor-runs-tests-itself", "regression", c2, expected="caches created by running the tests are not counted as edits")
 
             def f1():
                 run = fake_run(tmp, "slow", conf)

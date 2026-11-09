@@ -65,5 +65,8 @@ executors:
     # Used by bench only. Claude Code itself is the planner and does not delegate to itself.
     command: [claude, -p, --permission-mode, acceptEdits, "{message}"]
 
+# Files that running code or tests creates on its own. They never count as a change by the executor.
+generated: ["__pycache__/*", "*/__pycache__/*", "*.pyc", ".pytest_cache/*", ".ruff_cache/*", ".mypy_cache/*", "node_modules/*"]
+
 # Files a delegated executor must never change. Each run can add more with --protect.
 protected: [AGENTS.md, CLAUDE.md, .standard.yml, docs/goals.md, .github/workflows/*]

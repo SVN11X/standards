@@ -457,11 +457,14 @@ def build_packet(task: str, allowed: list[str], protected: list[str], test: str 
     return "\n".join(lines) + "\n"
 
 
-def changed_files(worktree: Path, base: str) -> list[str]:
+def changed_files(worktree: Path, base: str, generated: list[str] | None = None) -> tuple[list[str], list[str]]:
+    """Changed and new files since base, and apart the files that running code created on its own."""
     names = set(filter(None, git(worktree, "diff", "--name-only", base).splitlines()))
     names |= set(filter(None, git(worktree, "ls-files", "--others", "--exclude-standard").splitlines()))
     names.discard(TASK_FILE)
-    return sorted(names)
+    tracked = set(filter(None, git(worktree, "ls-files").splitlines()))
+    ignored = sorted(n for n in names if n not in tracked and matches(n, generated or []))
+    return sorted(names - set(ignored)), ignored
 
 
 def record(run_data: dict) -> Path:
@@ -529,7 +532,11 @@ def delegate_opencode(repo: Path, task: str, allowed: list[str], test: str | Non
     run_data["executor_result"] = {"exit": result["exit"], "seconds": result["seconds"], "timeout": result["timeout"],
                                    "stdout_tail": tail(result["stdout"], size), "stderr_tail": tail(result["stderr"], size)}
     (worktree / TASK_FILE).unlink(missing_ok=True)
-    changes = changed_files(worktree, base)
+    changes, ignored = changed_files(worktree, base, conf.get("generated"))
+    for rel in ignored:
+        path = worktree / rel
+        if path.is_file():
+            path.unlink()
     after = file_hashes(worktree, protected)
     protected_hit = sorted({p for p in set(before) | set(after) if before.get(p) != after.get(p)})
     outside = [path for path in changes if allowed and not matches(path, allowed)]
@@ -538,7 +545,7 @@ def delegate_opencode(repo: Path, task: str, allowed: list[str], test: str | Non
     checks["changed_something"] = "PASS" if changes else "FAIL"
     checks["protected_untouched"] = "PASS" if not protected_hit else "FAIL"
     checks["inside_scope"] = "PASS" if not outside else "FAIL"
-    run_data.update(changed=changes, protected_changed=protected_hit, outside_scope=outside)
+    run_data.update(changed=changes, protected_changed=protected_hit, outside_scope=outside, generated_ignored=ignored)
     if test:
         tested = run(test, cwd=worktree, timeout=limits["test_timeout_s"], shell=True, env=child_env())
         checks["tests"] = "PASS" if tested["exit"] == 0 else "FAIL"
@@ -693,6 +700,7 @@ def make_bench_repo(root: Path) -> Path:
     (root / "calc.py").write_text(BUGGY, encoding="utf-8")
     (root / "test_calc.py").write_text(VISIBLE_TESTS, encoding="utf-8")
     (root / "README.md").write_text("# calc\n\nSmall helpers.\n", encoding="utf-8")
+    (root / ".gitignore").write_text("__pycache__/\n*.pyc\n", encoding="utf-8")
     git(root, "init", "-q")
     git(root, "add", "-A")
     git(root, "-c", "user.name=bench", "-c", "user.email=bench@localhost", "commit", "-q", "-m", "init")
