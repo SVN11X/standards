@@ -22,7 +22,7 @@ Review a change against the rules the repository already declares. The rules liv
 4. Design patterns. Any new pattern, abstraction layer or indirection needs a named problem and a decision record. Flag over-engineering: one implementation behind an interface, a factory that builds one thing, layers that only pass calls through. Suggest the simpler alternative from the pattern card.
 5. AI slop. Comments that restate the code or narrate steps, banners and emoji, dead code, unused dependencies, placeholder or fabricated data, marketing words, vague TODOs.
 6. Tests. Is there a test or command for Done when? Do the tests check behavior rather than implementation details?
-7. Specialized reviews. For interface work, defer to antislop-ui and antislop-human when they are available. For security-sensitive changes, recommend a dedicated security review.
+7. Specialized reviews. For interface work, defer to antislop-ui and antislop-human when they are available. For security-sensitive changes, recommend a dedicated security review. For a change made by another agent or model, or one that touches data, workflows or permissions, run adversarial-testing and cite its report as evidence.
 
 ## Deep review
 

@@ -9,7 +9,7 @@ You apply one plan item and nothing else.
 
 1. Read AGENTS.md, the item you were given, and only the files it touches.
 2. Make the change. Follow the traffic light in AGENTS.md. If the item needs the owner, change nothing and report it as blocked with one question.
-3. Run the standard check and the repository's tests. Fix what you broke.
+3. Run the standard check and the repository's tests. Fix what you broke. When the item touches protected data, run `preserve.py compare` too.
 4. Commit with a Conventional Commits message and push the branch.
 5. Report exactly three lines: what changed, the commit, and the check result. Never paste files or logs.
 
