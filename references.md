@@ -25,6 +25,11 @@ Sources behind the rules. Prefer the original source. The check verifies these l
 - Claude Code, best practices: https://code.claude.com/docs/en/best-practices
 - OpenAI Codex, best practices: https://developers.openai.com/codex/learn/best-practices
 - Copilot coding agent supports AGENTS.md: https://github.blog/changelog/2025-08-28-copilot-coding-agent-now-supports-agents-md-custom-instructions/
+- OpenCode, config: https://opencode.ai/en/docs/config
+- OpenCode, permissions: https://opencode.ai/en/docs/permissions
+- OpenCode, agent skills: https://opencode.ai/docs/skills
+- OpenCode, commands: https://opencode.ai/docs/commands
+- Anthropic forbids Claude subscription logins in third-party tools: https://www.theregister.com/2026/02/20/anthropic_clarifies_ban_third_party_claude_access
 - GitHub Spec Kit: https://github.com/github/spec-kit
 - Kiro feature specs (EARS requirements): https://kiro.dev/docs/specs/feature-specs/
 - Gloaguen et al., Evaluating AGENTS.md (2026): https://arxiv.org/abs/2602.11988

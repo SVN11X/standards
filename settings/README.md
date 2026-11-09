@@ -11,4 +11,5 @@ Rulesets and some security features work on public repositories with GitHub Free
 
 Two things have no API and are set by hand once per repository: the social preview image (Settings) and which sections the home page shows (the gear next to About: Releases, Packages, Deployments).
 
+- `opencode/`: OpenCode as a second agent for small work on free models, so Claude usage goes to planning and reviews. `scripts/setup-opencode.ps1` (or `.sh`) installs `opencode.json` (asks before commits, pushes, merges, deploys and deletions, and blocks edits to `AGENTS.md`), the global rules, the `/next-item` and `/fix-check` commands, and links the skills. Run it again after pulling the standard. Never run `/init` in a repository, because it rewrites the generated `AGENTS.md`. Never sign in with a Claude subscription there, because Anthropic allows it only in Claude Code and claude.ai. Free models keep what you send, so use them only in personal repositories.
 - `output-style-concise.md`: a Claude Code output style that keeps answers short. Copy it to `~/.claude/output-styles/` and choose it in `/config`.

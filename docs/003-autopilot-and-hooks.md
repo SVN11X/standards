@@ -6,6 +6,8 @@ Hooks enforce what text cannot: asking before merges, deploys and deletions, blo
 
 Models by task: plan on Opus and execute on Sonnet (`opusplan`), mechanical steps on Haiku (`standard-runner`), deep reviews on Opus (`deep-reviewer`).
 
+To save Claude usage, small and well defined work can run in OpenCode on a free model, with the `/next-item` and `/fix-check` commands that `scripts/setup-opencode.ps1` installs. Claude Code plans and reviews, OpenCode applies one plan item at a time. No hook runs in OpenCode, so its config asks before commits and pushes instead. Free models keep what you send, so use them only in personal repositories.
+
 Habits that save tokens:
 
 - When an answer goes wrong, go back and rewrite the message (Esc twice in Claude Code) instead of correcting it in a new one.

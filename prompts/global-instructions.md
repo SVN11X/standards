@@ -5,6 +5,7 @@ Paste the text below the line into the global instructions of each tool, so ever
 - Claude Code: `~/.claude/CLAUDE.md`
 - Codex: `~/.codex/AGENTS.md`
 - Gemini CLI: `~/.gemini/GEMINI.md`
+- OpenCode: run `scripts/setup-opencode.ps1` (or `.sh`). It writes these lines to `~/.config/opencode/AGENTS.md` with the limits for small models in `settings/opencode/small-model-rules.md`.
 - Chat apps (claude.ai, ChatGPT, Gemini): the personal or custom instructions in their settings.
 
 On Windows, `~` is your user folder, for example `C:\Users\<you>`.

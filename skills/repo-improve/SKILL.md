@@ -58,6 +58,8 @@ The owner approves the list once. After that, do not ask again for approved item
 
 When the owner approves the list, turn autopilot on by creating the empty file `.git/standard-autopilot`. It lives inside `.git`, so it is never committed. While it exists, the plugin's Stop hook keeps the session working until no item is pending.
 
+To save Claude usage, the owner can leave autopilot off and apply the approved items in OpenCode with `/next-item` (see `settings/opencode/` in the standard), then come back to review the branch with code-review.
+
 - Work through the list without pausing between items. Hand each item to the `item-worker` subagent when it is available, so every item starts with a clean context and the main session only keeps the list. After each item: the check passes, the commit is pushed, the pull request is updated, and the item is marked done.
 - If the owner wants to keep working in the same folder, run the autopilot in a separate worktree: `git worktree add ../<repository>-autopilot -b improve/<topic>`.
 - When an item needs the owner (a red change or a decision the list left open), mark it `- [ ] BLOCKED: <question>` and continue with the next one. Do not stop to ask.

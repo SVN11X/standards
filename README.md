@@ -98,7 +98,7 @@ A breaking change gets a new major tag (`v2`). Each repository moves to it when 
 - `hooks/`: Claude Code hooks published with the skills: guardrails, secret scan, rules after compaction, notifications and the autopilot.
 - `radar/`: evaluated tools with their status.
 - `docs/`: the standard explained in reading order.
-- `scripts/`: `standard.py` (init, agents, check, migrate, templates, package-skills, skills-repo, selftest), and `release`, `publish-templates`, `publish-skills` and `protect-repo`, each in `.sh` and `.ps1`.
-- `settings/`: repository settings as code, such as the branch ruleset.
+- `scripts/`: `standard.py` (init, agents, check, migrate, templates, package-skills, skills-repo, selftest), and `release`, `publish-templates`, `publish-skills`, `protect-repo` and `setup-opencode`, each in `.sh` and `.ps1`.
+- `settings/`: repository and tool settings as code, such as the branch ruleset and the OpenCode setup.
 - `preferences.md`: the owner's taste, with good and bad examples.
 - `references.md`: the sources behind the rules.

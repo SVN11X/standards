@@ -1,0 +1,30 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "share": "disabled",
+  "permission": {
+    "edit": {
+      "*": "allow",
+      "*AGENTS.md": "deny",
+      "*.standard.yml": "ask",
+      "*goals.md": "ask"
+    },
+    "bash": {
+      "*": "allow",
+      "git commit*": "ask",
+      "git push*": "ask",
+      "git push --force*": "deny",
+      "git push -f*": "deny",
+      "git merge*": "ask",
+      "git rebase*": "ask",
+      "git reset --hard*": "ask",
+      "git filter-*": "deny",
+      "gh pr merge*": "deny",
+      "gh release*": "ask",
+      "gh secret*": "ask",
+      "*deploy*": "ask",
+      "*publish*": "ask",
+      "rm *": "ask",
+      "Remove-Item *": "ask"
+    }
+  }
+}
