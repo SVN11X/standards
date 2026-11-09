@@ -4,6 +4,10 @@ All notable changes to this standard are documented here. The format follows [Ke
 
 ## [Unreleased]
 
+### Added
+
+- Radar entries for Manim Community and Mermaid CLI, both in trial, from their use in GCP_Data_Engineer_Fieldnotes.
+
 ### Fixed
 
 - The link check retries each URL up to 5 times with a 10 second wait, uses at most 8 parallel requests and a 30 second timeout. Without this, runs failed on random `docs.cloud.google.com` pages with connection errors while every link was valid.

@@ -341,3 +341,25 @@ entries:
     expression: [sober, balanced, expressive]
     notes: A command runner. The standard's scripts and README sections already name every command, so it adds a tool without a gain.
     evaluated: 2026-11-09
+  - name: Manim Community
+    url: https://github.com/ManimCommunity/manim
+    status: trial
+    profiles: [web, docs]
+    kind: tool
+    license: MIT
+    cost: free
+    privacy: local, renders on your machine and sends nothing out
+    expression: [balanced, expressive]
+    notes: Python animation engine. Used in GCP_Data_Engineer_Fieldnotes for three silent 23 to 30 second WebM clips of 0.4 to 0.6 MB each, rendered at 480p15 and shipped with a poster and WebVTT captions. Render time only, so it is not a dependency of the site. Needs ffmpeg and a Python 3.11 virtual environment outside the repository. Use plain text labels, because Tex needs a LaTeX install. Register the open font with manimpango so the labels match the site. Credit the font used in the video.
+    evaluated: 2026-11-09
+  - name: Mermaid CLI
+    url: https://github.com/mermaid-js/mermaid-cli
+    status: trial
+    profiles: [web, docs]
+    kind: tool
+    license: MIT
+    cost: free
+    privacy: local, renders with a browser on your machine and sends nothing out
+    expression: [sober, balanced, expressive]
+    notes: Renders Mermaid text to SVG. Used in GCP_Data_Engineer_Fieldnotes as a dev dependency with puppeteer_skip_download=true in .npmrc, so npm ci in CI downloads no browser. Render by hand with a local Chrome or Edge through PUPPETEER_EXECUTABLE_PATH and commit the SVG. Set a fixed width and height on the image from the viewBox. Labels in foreignObject use a fallback font inside an img tag, so check them. Pele is the in-browser alternative.
+    evaluated: 2026-11-09
