@@ -26,7 +26,7 @@ jobs:
       - name: Links
         uses: lycheeverse/lychee-action@8646ba30535128ac92d33dfc9133794bfdd9b411 # v2.8.0
         with:
-          args: --no-progress --exclude-loopback --accept 200,206,403,429 './**/*.md'
+          args: --no-progress --exclude-loopback --accept 200,206,403,429 --max-concurrency 8 --max-retries 5 --retry-wait-time 10 --timeout 30 './**/*.md'
           fail: true
 
   verify:
