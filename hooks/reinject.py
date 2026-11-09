@@ -6,6 +6,9 @@ import re
 import sys
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import autopilot  # noqa: E402
+
 SECTIONS = ("How to work", "Traffic light", "When sources disagree (highest first)")
 
 
@@ -42,7 +45,8 @@ def context(cwd: Path) -> str | None:
         text = plan.read_text(encoding="utf-8", errors="ignore")
         pending = re.findall(r"^\s*[-*]\s+\[ \]\s+(?!BLOCKED)(.+)$", text, re.MULTILINE)
         lines.append(f"Improvement plan: {len(pending)} pending items." + (f" Next: {pending[0][:200]}" if pending else ""))
-    if (root / ".git" / "standard-autopilot").exists():
+    marker = autopilot.marker_path(root)
+    if marker is not None and marker.exists():
         lines.append("Autopilot is on. Keep working through the plan.")
     return "\n".join(lines)
 
