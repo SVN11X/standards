@@ -9,6 +9,7 @@ Instructions for any AI agent that sets up SVN11X/standards in a repository toge
 5. Show the whole plan once: files to create, files to move and why, and what the owner still has to write. Wait for one approval.
 6. Apply it with `python scripts/standard.py init` for a new repository, or `migrate` and then `init --existing` for an existing one. Moves use `git mv`.
 7. Run `python scripts/standard.py check <repository>` until it has no errors.
-8. Deliver on a branch with Conventional Commits and one pull request whose body fills every section of the template.
+8. Run `python scripts/verify.py` from the standard on the repository (`--repo <path>`) and fix every FAIL and NOT_RUN.
+9. Deliver on a branch with Conventional Commits and one pull request whose body fills every section of the template.
 
 Never merge, deploy, publish secrets or rewrite history. Those always wait for the owner.

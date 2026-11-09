@@ -4,7 +4,7 @@ How SVN11X repositories are organized, documented and reviewed. One source of tr
 
 ## Read first
 
-`SETUP.md` sets up the standard with any AI tool. The `docs/` folder explains it in order: `000-philosophy.md`, `001-profiles.md`, `002-intent.md`, `003-autopilot-and-hooks.md` and `004-radar.md`.
+`SETUP.md` sets up the standard with any AI tool. The `docs/` folder explains it in order: `000-philosophy.md`, `001-profiles.md`, `002-intent.md`, `003-autopilot-and-hooks.md`, `004-radar.md` and `005-verification-and-orchestration.md`.
 
 ## How a repository uses it
 
@@ -78,6 +78,24 @@ The check warns when the About panel on GitHub differs from `.standard.yml`. Pus
 python scripts/standard.py check ../my-site
 ```
 
+## Verify everything in one run
+
+```bash
+python scripts/verify.py --level deep --live
+```
+
+It runs the selftest, the unit tests, the adversarial suite, the linters it finds and, with `--live`, the executors of this machine: Ollama, OpenCode with the free models you checked, and the MCP servers in trial. It installs nothing. The verdict and a JSON and Markdown report go inside the git folder. On Windows, `scripts/verify-all.ps1` runs the same. Without `--live`, nothing outside the machine is touched. See `docs/005-verification-and-orchestration.md`.
+
+## Hand work to other models
+
+`scripts/orchestrate.py` decides who does a task (a program without AI, Ollama, OpenCode on a free model, or Claude) and runs it with its own checks. Record once which folders may use free remote models and which free models you checked:
+
+```bash
+python scripts/orchestrate.py consent --path C:/my_drive/Portafolio --class personal-public --free-model <id from opencode models>
+python scripts/orchestrate.py doctor --full
+python scripts/orchestrate.py route edit-small --repo ../my-site
+```
+
 ## Change the standard
 
 1. Edit the YAML files, templates or skills here.
@@ -95,10 +113,12 @@ A breaking change gets a new major tag (`v2`). Each repository moves to it when 
 - `prompts/`: prompts to paste into AI tools that do not have the skills.
 - `skills/`: source of the skills. The published copies live in SVN11X/skills.
 - `agents/`: Claude Code subagents published with the skills, each with a fixed model.
-- `hooks/`: Claude Code hooks published with the skills: guardrails, secret scan, rules after compaction, notifications and the autopilot.
+- `hooks/`: Claude Code hooks published with the skills: guardrails, secret scan, executors at startup, rules after compaction, notifications and the autopilot.
 - `radar/`: evaluated tools with their status.
 - `docs/`: the standard explained in reading order.
-- `scripts/`: `standard.py` (init, agents, check, migrate, templates, package-skills, skills-repo, selftest), and `release`, `publish-templates`, `publish-skills`, `protect-repo` and `setup-opencode`, each in `.sh` and `.ps1`.
-- `settings/`: repository and tool settings as code, such as the branch ruleset and the OpenCode setup.
+- `scripts/`: `standard.py` (init, agents, check, migrate, templates, package-skills, skills-repo, selftest), `verify.py`, `adversarial.py`, `orchestrate.py`, `preserve.py`, `safe_patch.py`, `memory.py`, and `release`, `publish-templates`, `publish-skills`, `protect-repo`, `setup-opencode` and `verify-all`, each in `.sh` and `.ps1`.
+- `schemas/`: JSON Schema of the verification report.
+- `tests/`: unit tests of the scripts, run with `python -m unittest discover -s tests`.
+- `settings/`: repository and tool settings as code, such as the branch ruleset, the OpenCode setup, the routing policy (`orchestration.yml`) and the MCP catalog.
 - `preferences.md`: the owner's taste, with good and bad examples.
 - `references.md`: the sources behind the rules.
