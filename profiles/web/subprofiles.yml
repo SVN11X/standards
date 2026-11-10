@@ -11,7 +11,7 @@ subprofiles:
       Scenes that advance with the scroll. Each scene has a start, middle states, an end, and works forward and back.
       Long sequences give direct access to each stage or to the result. Decide per scene whether motion follows the
       scroll position or plays once on entry. With reduced motion, show the stages as still steps.
-    signals: [scroll, stage, stages, step by step, assemble, assembly, assembled, exploded, sequence, timeline, history, piece by piece,
+    signals: [scroll, scrolls, scrolling, stage, stages, step by step, assemble, assembly, assembled, exploded, sequence, timeline, history, piece by piece,
               etapas, montaje, despiece, recorrido, paso a paso, baja, bajar]
     examples:
       - Explain how the device is assembled, piece by piece, as the reader scrolls

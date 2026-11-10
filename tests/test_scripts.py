@@ -13,12 +13,14 @@ sys.path.insert(0, str(ROOT / "scripts"))
 sys.path.insert(0, str(ROOT / "hooks"))
 
 import autopilot  # noqa: E402
+import bench_tasks  # noqa: E402
 import evidence  # noqa: E402
 import memory  # noqa: E402
 import orchestrate  # noqa: E402
 import preserve  # noqa: E402
 import safe_patch  # noqa: E402
 import session_probe  # noqa: E402
+import standard  # noqa: E402
 
 
 def git(repo, *args):
@@ -345,6 +347,66 @@ class Probe(Base):
         text = session_probe.context(repo)
         self.assertIn("route", text)
         self.assertIn("privacy of this folder", text)
+
+
+class WebSubprofiles(Base):
+    def web_repo(self, **options):
+        repo = self.tmp / "site"
+        standard.init_repo(repo, {"profile": "web", "name": "site", "options": options, "setup_done": True,
+                                  "description": "Test site."})
+        return repo
+
+    def test_requests_reach_their_subprofile(self):
+        cases = {"Explain how the device is assembled as the reader scrolls": "scroll-storytelling",
+                 "Let people change the bandwidth with sliders and see the estimated time": "interactive-data",
+                 "An orb that reacts to the microphone signal": "reactive-object",
+                 "A portfolio with expressive typography": "editorial",
+                 "An exercise with a tutor character that reacts": "characters"}
+        for request, expected in cases.items():
+            choice = standard.choose_subprofile(request)
+            self.assertEqual(choice["subprofile"], expected, request)
+            self.assertTrue(choice["summary"])
+        self.assertIsNone(standard.choose_subprofile("Make this page more dynamic")["subprofile"])
+
+    def test_the_owner_choice_wins_and_a_named_one_wins_over_it(self):
+        repo = self.web_repo(experience="editorial")
+        stored = standard.choose_subprofile("Compare two plans with sliders and a chart", repo)
+        self.assertEqual((stored["subprofile"], "owner" in stored["why"]), ("editorial", True))
+        named = standard.choose_subprofile("Use web/personajes for this exercise", repo)
+        self.assertEqual(named["subprofile"], "characters")
+
+    def test_rules_reach_agents_and_old_configs_still_work(self):
+        repo = self.web_repo(experience="reactive-object")
+        agents = (repo / "AGENTS.md").read_text(encoding="utf-8")
+        self.assertIn("experience = reactive-object", agents)
+        self.assertIn("stays still when the pointer moves", agents)
+        self.assertLess(len(agents.splitlines()), 150)
+        old = standard.resolve(standard.load_profile("web"), {"motion": "subtle", "theme": "both"})
+        self.assertEqual(old["problems"], [])
+        self.assertFalse([rule for rule in old["option_rules"] if rule.startswith("experience")])
+
+    def test_summaries_fit_a_small_model(self):
+        limit = orchestrate.policy()["limits"]["ollama_max_input_chars"]
+        specs = bench_tasks.subprofiles()
+        self.assertEqual(len(specs), 5)
+        self.assertLess(sum(len(spec["summary"]) for spec in specs.values()), limit // 2)
+        choices = set(standard.load_profile("web")["options"]["experience"]["choices"])
+        self.assertEqual(choices, set(specs) | {"standard"})
+
+    def test_static_design_measures(self):
+        sys.path.insert(0, str(ROOT / "skills" / "web-improve" / "scripts"))
+        import audit_site
+        site = self.tmp / "bad"
+        site.mkdir()
+        (site / "DESIGN.md").write_text("## Tokens\n\n`--duration-fast: 150ms`\n", encoding="utf-8")
+        (site / "index.html").write_text('<html><body><h1>A</h1><h3>B</h3><img src="a.png"></body></html>', encoding="utf-8")
+        (site / "site.css").write_text("h1{font-family:Georgia}p{font-family:'Fira Code'}a{font-family:Inter;transition:color 333ms}", encoding="utf-8")
+        (site / "orb.js").write_text("function tick(){requestAnimationFrame(tick)}", encoding="utf-8")
+        found = {item["check"] for item in audit_site.design_measures(site)["findings"]}
+        self.assertEqual(found, {"font-families", "duration-outside-tokens", "script-ignores-reduced-motion", "missing-lang",
+                                 "image-without-alt", "image-without-size", "heading-order", "no-reduced-motion-rule"})
+        clean = audit_site.design_measures(ROOT / "skills" / "web-improve" / "gallery")
+        self.assertEqual(clean["findings"], [])
 
 
 if __name__ == "__main__":

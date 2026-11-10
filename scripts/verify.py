@@ -207,6 +207,22 @@ def check_explanation(repo: Path) -> dict:
              expected="the explanation of how the repository works is present and true to the files")
 
 
+def check_gallery(repo: Path) -> dict:
+    """The pattern gallery of web-improve in a real browser. It needs Node and Playwright, and is skipped without them."""
+    script = repo / "tests" / "web" / "gallery.test.mjs"
+    if not script.exists() or not shutil.which("node"):
+        return R("S.gallery", "web", "SKIP", severity="info", evidence="Node is not installed" if script.exists() else "no gallery test here")
+    ran = sh(["node", str(script)], repo, 300)
+    lines = [line for line in (ran["stdout"] or "").splitlines() if line.strip()]
+    if ran["exit"] == 77:
+        return R("S.gallery", "web", "SKIP", severity="info", evidence="Playwright is not installed for Node. Run it where a browser is available.")
+    failed = [line for line in lines if line.startswith("FAIL")]
+    return R("S.gallery", "web", "PASS" if ran["exit"] == 0 else "FAIL", severity="medium",
+             evidence="; ".join(failed)[:800] or f"{len(lines)} browser checks passed: keyboard, touch, language, states, reduced motion, contrast",
+             repro="node tests/web/gallery.test.mjs",
+             expected="every pattern works with keyboard and touch, keeps its state across languages and stays still with reduced motion")
+
+
 def check_ruff(repo: Path, required: bool) -> dict:
     if not shutil.which("ruff"):
         status = "NOT_RUN" if required else "SKIP"
@@ -383,6 +399,7 @@ def main(argv: list[str] | None = None) -> int:
                                          [sys.executable, "-m", "unittest", "discover", "-s", "tests"],
                                          repo, "the unit tests of the scripts pass"))
             results.append(check_ruff(repo, args.ci))
+            results.append(check_gallery(repo))
             results.append(check_powershell(repo))
     else:
         results += check_repository(repo)

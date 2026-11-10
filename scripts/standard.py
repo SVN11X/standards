@@ -11,6 +11,7 @@ Commands:
   migrate PATH --profile NAME   propose a move plan for an existing repository, then apply it with --apply
   github PATH [--apply]      show or apply the GitHub settings: About panel, features, security, labels
   notes PATH VERSION         print the CHANGELOG.md section of a version, for release notes
+  subprofile "REQUEST"       name the web sub-profile a request calls for, and the summary to load
   selftest                   run every profile through init and check
 """
 from __future__ import annotations
@@ -155,6 +156,31 @@ def resolve(profile: dict, answers: dict) -> dict:
     subfolders = {parent: children for parent, children in subfolders.items() if parent in folders}
     return {"folders": folders, "subfolders": subfolders, "files": files, "root_files": root_files,
             "topics": list(dict.fromkeys(topics)), "option_rules": option_rules, "problems": problems}
+
+
+# Web sub-profiles
+
+def choose_subprofile(text: str, repo: Path | None = None) -> dict:
+    """The web sub-profile for a request: named in the request, then the owner's stored choice, then keywords, else unsure."""
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    import bench_tasks
+    specs = bench_tasks.subprofiles()
+    low = text.lower()
+    named = [name for name, spec in specs.items() if name in low or str(spec.get("alias", "")).lower() in low]
+    stored = None
+    if repo and (repo / ".standard.yml").exists():
+        stored = (read_config(repo).get("options") or {}).get("experience")
+    if len(named) == 1:
+        chosen, why = named[0], "the request names it"
+    elif stored in specs:
+        chosen, why = stored, "the owner chose it in .standard.yml (experience)"
+    else:
+        chosen, signals = bench_tasks.suggest_subprofile(text)
+        why = f"the request mentions {', '.join(signals)}" if chosen else "no clear signal in the request"
+    spec = specs.get(chosen) or {}
+    return {"subprofile": chosen, "why": why, "summary": " ".join(str(spec.get("summary", "")).split()),
+            "guide": "skills/web-improve/references/subprofiles.md",
+            "choices": {name: item["choose_when"] for name, item in specs.items()}}
 
 
 # Rendering
@@ -1407,7 +1433,8 @@ def cmd_selftest() -> int:
     failures: list[str] = []
     cases = [(name, {}, {}) for name in profile_names()]
     cases += [
-        ("web", {"three_d": "core", "flows": "multi-step", "build": "npm", "motion": "rich"}, {"api": "software"}),
+        ("web", {"three_d": "core", "flows": "multi-step", "build": "npm", "motion": "rich",
+                 "experience": "reactive-object"}, {"api": "software"}),
         ("data-ai", {"kind": "ml", "personal_data": "present", "platform": "databricks"}, {}),
         ("hardware", {"firmware": "none", "mechanical": "cad", "power": "battery"}, {"app": "software"}),
         ("docs", {"format": "typst", "citation": "none"}, {}),
@@ -1733,6 +1760,11 @@ def main(argv: list[str] | None = None) -> int:
     skills_repo = commands.add_parser("skills-repo", help="build the public skills repository")
     skills_repo.add_argument("out_dir")
 
+    subprofile = commands.add_parser("subprofile", help="name the web sub-profile a request calls for")
+    subprofile.add_argument("request")
+    subprofile.add_argument("--repo", help="repository whose stored choice counts")
+    subprofile.add_argument("--json", action="store_true")
+
     commands.add_parser("selftest", help="run every profile through init and check")
 
     args = parser.parse_args(argv)
@@ -1748,6 +1780,16 @@ def main(argv: list[str] | None = None) -> int:
             print("\n".join(f"created {rel}" for rel in created) or "Nothing to add.")
             print("\nNext: write docs/goals.md (and DESIGN.md for web), then run agents and check.")
             return 0
+        if args.command == "subprofile":
+            choice = choose_subprofile(args.request, Path(args.repo).resolve() if args.repo else None)
+            if args.json:
+                print(json.dumps(choice, indent=2, ensure_ascii=False))
+            elif choice["subprofile"]:
+                print(f"{choice['subprofile']}: {choice['why']}.\n{choice['summary']}\nFull guide: {choice['guide']}")
+            else:
+                print("unsure: " + choice["why"] + ". Decide from this list, say why in one line and continue:")
+                print("\n".join(f"  {name}: {when}" for name, when in choice["choices"].items()))
+            return 0 if choice["subprofile"] else 3
         if args.command == "agents":
             repo = Path(args.path).resolve()
             written = write_instruction_files(repo, read_config(repo))

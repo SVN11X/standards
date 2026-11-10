@@ -146,14 +146,14 @@ entries:
   - name: Ollama
     url: https://github.com/ollama/ollama
     status: trial
-    profiles: [software, data-ai, hardware]
+    profiles: [web, software, data-ai, hardware]
     kind: tool
     license: MIT
     cost: free
-    privacy: local, models are downloaded once
+    privacy: local, models are downloaded once. A tag that ends in cloud runs on Ollama's servers and counts as remote
     expression: [sober, balanced, expressive]
-    notes: Called directly through its API by scripts/orchestrate.py for short local work. On a 6 GB card qwen3.5:4b ran fully on the GPU and qwen3.5:9b split with the CPU and was several times slower, one machine, November 2026. Never use embedding models for chat.
-    evaluated: 2026-11-09
+    notes: Called directly through its API by scripts/orchestrate.py for short local work. On a 6 GB card qwen3.5:4b ran fully on the GPU and qwen3.5:9b split with the CPU and was several times slower, one machine, November 2026. Never use embedding models for chat. In web work it classifies a request into a sub-profile and writes alt text and microcopy. It reviews a screenshot only with a model that reads images and passed the design-judge bench. It never sets visual direction.
+    evaluated: 2026-11-10
   - name: Context7 MCP
     url: https://github.com/upstash/context7
     status: trial
