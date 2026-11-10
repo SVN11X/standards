@@ -6,7 +6,47 @@ All notable changes to this standard are documented here. The format follows [Ke
 
 ### Added
 
+- Cost modes `local-only`, `free-strict` and `existing-subscription` in `settings/orchestration.yml`. The owner's mode lives in `~/.standards/local.yml` (`orchestrate.py consent --cost-mode`). A run can ask for a stricter mode with `--mode` or `STANDARDS_COST_MODE`, never a looser one.
+- `settings/models.yml`: model candidates with cost category, data use, stated capabilities, source, date and evidence level. An entry enables nothing.
+- Data use per privacy class (`remote_data`). Public code may go to a free model that trains. Private code goes only to one that keeps nothing. A model with no recorded data policy is never used. `consent --free-model <id> --data-use none|stores|trains` records what the owner read.
+- One gate for every model call (`orchestrate.gate`): cost mode, privacy class, the owner's free check, the catalog and the data use. Route, delegate, bench and the analyzer all pass through it.
+- `orchestrate.py route --all` and `doctor` print who does each task type on the machine, with the exact model and the reason. `doctor` also names the catalog entries, owner checks and measurements that are due again.
+- Bench classes `extract`, `summarize`, `web-subprofile`, `tool-call`, `vision`, `design-judge`, `fix-multi` and `docs-small` in `scripts/bench_tasks.py`, each graded by a program. The design judge uses the owner's pairs of screens, and a made-up sample that never counts when there are none.
+- `scripts/analyze.py` with `prepare`, `plan`, `run` and `report`, and the wrappers `analyze-models.ps1` and `analyze-models.sh`. It tests the candidates that are installed and allowed, one local model at a time, with a session budget per remote model, stops a model or provider that reports its limit, continues after an interruption and writes the report outside the repository. It never downloads a model.
+- `docs/how-it-works.md` in every repository, from a new template. The check warns when it is missing, names a path that does not exist or is still a draft. The missing file becomes an error in version 2.0.0. The standard has its own.
+- Web sub-profiles as the `experience` option: `scroll-storytelling`, `interactive-data`, `reactive-object`, `editorial` and `characters`. `standard.py subprofile "<request>"` names the one a request calls for. `profiles/web/subprofiles.yml` holds a short summary of each for small models.
+- web-improve: `references/subprofiles.md`, `interaction-patterns.md`, `motion-and-foundations.md` and `design-judgment.md`, a gallery of six patterns and a reactive object in `gallery/index.html`, and `scripts/measure_page.mjs`, which measures contrast, touch targets, line length, overflow and font families in a browser. `audit_site.py` lists design findings measured from the files.
+- Web task types in the router: `web-direction`, `web-pattern`, `web-test`, `web-copy`, `web-classify`, `web-visual-review` and `fix-check`.
+- `DESIGN.md` sections for tokens, first visit, states, audience evidence and commented examples.
+- `/who-does-what` for OpenCode, where no startup hook runs.
+- `memory.py export` and `memory.py expire`. Entries older than 90 days are marked old.
+- `docs/006-model-analyzer.md`, with the cost modes and the night guide.
+- Six policy scenarios in the adversarial suite, checks of the cost policy, the model catalog, the explanation and the gallery in `verify.py`, and tests of the analyzer with a fake Ollama and a fake agent.
+- 20 radar entries at `assess` for tools named by the owner, with the check that decides each trial. Their license, cost and privacy say `not verified`.
 - Radar entries for Manim Community and Mermaid CLI, both in trial, from their use in GCP_Data_Engineer_Fieldnotes.
+
+### Changed
+
+- Web fixed rules, by the owner's decision of 2026-11-10: tokens from `DESIGN.md`, native CSS before a library, font loading, a first screen a new visitor understands, empty and loading states that say what happened, and reduced motion honored in JavaScript too.
+- Risk no longer names a brand. Yellow and red work needs the owner's review, and a model other than the planner needs measured passes in the bench class of the task. With the default cost mode Claude still goes first.
+- `edit-large` and `refactor` accept OpenCode after it passes `fix-multi`. An edit over five files asks for the same proof.
+- A local model split with the CPU is used when its own bench history passes for the task, instead of never.
+- Among free models, one that keeps or trains on what it receives sorts after one that does not, whatever its name.
+- `consent` no longer needs `--path` and `--class` to record a free model or the cost mode.
+- Ollama is in the radar for the web profile, limited to classifying, short text and screenshot review by a proven vision model.
+
+### Fixed
+
+- An unknown task type returned Claude before any cost or privacy check, also for a restricted folder. It now passes the same rules as every task.
+- `bench` recorded its own model as checked by the owner. It now uses the owner's real checks.
+- An Ollama cloud tag, a model served from a remote host and an Ollama URL on another machine counted as local. They count as remote.
+- An Ollama reply from a model other than the one asked for now fails the run.
+
+### Migration
+
+- A free model that is not in `settings/models.yml` is no longer used until its data use is recorded with `consent --free-model <id> --data-use ...`. The three models used before (GLM, DeepSeek, MiMo) are in the catalog. MiMo may train on what it receives, so it is no longer used for private folders.
+- Existing web repositories need no change. `experience` defaults to `standard`, which adds no rule. Run `agents` to pick up the new fixed rules.
+- Run `init --existing` to add `docs/how-it-works.md`. Until then the check only warns.
 
 ### Fixed
 

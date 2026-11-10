@@ -15,9 +15,11 @@ The best executor is the one that reaches verified, correct code soonest, includ
 
 - Fixing code: `python <standard>/scripts/orchestrate.py bench --task fix-bug --executors opencode:<model> opencode:<other> --runs 3`. Each run starts from an identical synthetic repository, the executor works in its own worktree, and hidden acceptance tests it never saw decide whether the result counts.
 - Short local work: `python <standard>/scripts/orchestrate.py bench --task classify --executors tools ollama:qwen3.5:4b --runs 3`. The keyword baseline without AI is always in the comparison.
+- Other classes: `--task` also takes `extract`, `summarize`, `web-subprofile`, `tool-call`, `vision` and `design-judge` on Ollama, and `fix-multi` and `docs-small` on a coding agent. A program grades every one.
+- Many models at once: `python <standard>/scripts/analyze.py prepare`, then `plan`, then `run`. It tests every candidate of `settings/models.yml` that is installed and allowed, one local model at a time, and can be stopped and continued. `analyze.py report` writes the report with a proposed split.
 - Report: `python <standard>/scripts/orchestrate.py bench --report` prints runs, pass rate, p50 and p90 per task, executor and model.
 
-Use only models the owner checked as free on the day (`orchestrate.py consent --free-model <id>`). Never switch to a paid model on your own.
+Use only models the owner checked as free on the day (`orchestrate.py consent --free-model <id>`). Never switch to a paid model on your own. The bench passes the same gate as the router, so it cannot run a model the cost mode or the privacy class refuses.
 
 ## Interpret
 

@@ -363,3 +363,225 @@ entries:
     expression: [sober, balanced, expressive]
     notes: Renders Mermaid text to SVG. Used in GCP_Data_Engineer_Fieldnotes as a dev dependency with puppeteer_skip_download=true in .npmrc, so npm ci in CI downloads no browser. Render by hand with a local Chrome or Edge through PUPPETEER_EXECUTABLE_PATH and commit the SVG. Set a fixed width and height on the image from the viewBox. Labels in foreignObject use a fallback font inside an img tag, so check them. Pele is the in-browser alternative.
     evaluated: 2026-11-09
+  # Candidates from the owner's notes of 2026-11-10. None was opened or run from the session that added them:
+  # license, cost and privacy stay "not verified" until someone reads the source. assess means do not install yet.
+  - name: FreeLLMAPI
+    url: https://github.com/tashfeenahmed/freellmapi
+    status: assess
+    profiles: [software, data-ai, web]
+    kind: tool
+    license: not verified
+    cost: not verified
+    privacy: not verified
+    expression: []
+    notes: "Optional gateway that routes requests among free providers. First candidate to evaluate as a backend. Listening on localhost does not make it local: the requests go to remote providers, so orchestrate.py counts any gateway as remote. Before trial: prove with a fake server that it can be limited to an allowed list of provider and model before anything is sent, that its internal fallback stays inside that list, which provider answered, and that no charge is possible. Keep fusion and caching of private data off."
+    evaluated: 2026-11-10
+  - name: Paperclip
+    url: https://github.com/paperclipai/paperclip
+    status: assess
+    profiles: [software, web, data-ai]
+    kind: app
+    license: not verified
+    cost: not verified
+    privacy: not verified
+    expression: []
+    notes: "Optional board to follow several agents and projects: goals, tasks, roles and budgets. It organizes work, it does not decide cost or privacy. Before trial: one stable id across the board task, the run, the worktree and the evidence, one writer per worktree, no delegation loop with the router, and a local deployment without an account. A budget based on reported spend arrives late, so free-strict still needs the gate before each request."
+    evaluated: 2026-11-10
+  - name: Taste Skill
+    url: https://github.com/Leonxlnx/taste-skill
+    status: assess
+    profiles: [web]
+    kind: skill
+    license: not verified
+    cost: not verified
+    privacy: not verified
+    expression: []
+    notes: "Candidate for web-improve, on demand. Before trial: check that it does not contradict DESIGN.md, antislop, the stack of the project and the accessibility rules."
+    evaluated: 2026-11-10
+  - name: Vercel Agent Skills
+    url: https://github.com/vercel-labs/agent-skills
+    status: assess
+    profiles: [web]
+    kind: skill
+    license: not verified
+    cost: not verified
+    privacy: not verified
+    expression: []
+    notes: "Holds the Web Design Guidelines, a candidate reference for reviews. Before trial: list the rules that add something and the ones that repeat or contradict the web profile."
+    evaluated: 2026-11-10
+  - name: Awesome DESIGN.md
+    url: https://github.com/VoltAgent/awesome-design-md
+    status: assess
+    profiles: [web]
+    kind: reference
+    license: not verified
+    cost: not verified
+    privacy: not verified
+    expression: []
+    notes: "Examples of visual systems written as DESIGN.md. Read them to learn the format, adapt to the project's own identity, and never present a brand's file as endorsed by that brand."
+    evaluated: 2026-11-10
+  - name: Imagegen Skills
+    url: https://github.com/Leonxlnx/imagegen-skills
+    status: assess
+    profiles: [web]
+    kind: skill
+    license: not verified
+    cost: not verified
+    privacy: not verified
+    expression: []
+    notes: "Holds image-to-code, an optional pipeline from reference images to an implementation. Before trial: which image generator it needs and the cost of the whole flow. A free skill can depend on a paid generator."
+    evaluated: 2026-11-10
+  - name: Playwright CLI
+    url: https://github.com/microsoft/playwright-cli
+    status: assess
+    profiles: [web]
+    kind: tool
+    license: not verified
+    cost: not verified
+    privacy: not verified
+    expression: []
+    notes: "Candidate to explore a page from the terminal. Before trial: what it adds over Playwright MCP and Playwright Test, its versions and the evidence it leaves."
+    evaluated: 2026-11-10
+  - name: pixelslop
+    url: https://github.com/gabelul/pixelslop
+    status: assess
+    profiles: [web]
+    kind: skill
+    license: not verified
+    cost: not verified
+    privacy: not verified
+    expression: []
+    notes: "Candidate for the measured layer of the design judgment. The owner's notes say Apache 2.0 and that it measures with Playwright at three screen sizes. Before trial: confirm the license, the overlap with antislop and with measure_page.mjs, and that it runs in OpenCode."
+    evaluated: 2026-11-10
+  - name: Colibri
+    url: https://github.com/JustVugg/colibri
+    status: assess
+    profiles: [software, data-ai]
+    kind: tool
+    license: not verified
+    cost: not verified
+    privacy: not verified
+    expression: []
+    notes: "Local inference engine that spreads a model across GPU, RAM and disk. It is not a router of providers. Before trial: start with a small compatible model and a budget of disk and time. Never download its large example model on a 6 GB card."
+    evaluated: 2026-11-10
+  - name: TwIL-8B
+    url: https://huggingface.co/webAI-Official/TwIL-8B
+    status: assess
+    profiles: [software, data-ai]
+    kind: tool
+    license: not verified
+    cost: not verified
+    privacy: not verified
+    expression: []
+    notes: "A local model, experimental here. The owner's notes say a quantized variant of about 5 GiB, a non-commercial license and limited evaluation of tool use. Before trial: confirm the license fits the use, and measure it with the analyzer. Weight size does not include context and run-time memory."
+    evaluated: 2026-11-10
+  - name: claude-mem
+    url: https://github.com/thedotmack/claude-mem
+    status: assess
+    profiles: [software, web, data-ai]
+    kind: plugin
+    license: not verified
+    cost: not verified
+    privacy: not verified
+    expression: []
+    notes: "Memory plugin for Claude Code. Evaluate it only after scripts/memory.py falls short. Before trial: where the observer, the summaries, the sync and the captures run, which provider writes the summaries and what that costs. Local storage does not mean local processing."
+    evaluated: 2026-11-10
+  - name: Agent-Reach
+    url: https://github.com/Panniantong/Agent-Reach
+    status: assess
+    profiles: [software, docs, data-ai]
+    kind: tool
+    license: not verified
+    cost: not verified
+    privacy: not verified
+    expression: []
+    notes: "Optional read connector for outside channels. Some channels need a login or a transcription key. Before trial: the channels, accounts, keys, permissions and limits. Never copy a browser session or connect an account without the owner."
+    evaluated: 2026-11-10
+  - name: Archify
+    url: https://github.com/tt-a1i/archify
+    status: assess
+    profiles: [software, web, docs]
+    kind: tool
+    license: not verified
+    cost: not verified
+    privacy: not verified
+    expression: []
+    notes: "Optional architecture diagrams. Before trial: that the diagram matches the code, its labels and the export. The standard keeps Mermaid as the diagram source."
+    evaluated: 2026-11-10
+  - name: text-to-cad
+    url: https://github.com/earthtojake/text-to-cad
+    status: assess
+    profiles: [hardware]
+    kind: tool
+    license: not verified
+    cost: not verified
+    privacy: not verified
+    expression: []
+    notes: "Optional CAD from a description. Before trial: a parametric format, correct dimensions, validation and export. A convincing picture does not prove measurements or that a part can be made."
+    evaluated: 2026-11-10
+  - name: MoneyPrinterTurbo
+    url: https://github.com/harry0703/MoneyPrinterTurbo
+    status: assess
+    profiles: [docs]
+    kind: app
+    license: not verified
+    cost: not verified
+    privacy: not verified
+    expression: []
+    notes: "Optional short video generation. Before trial: the chain of models, voices, stock assets and rendering, and whether all of it stays inside the free rules."
+    evaluated: 2026-11-10
+  - name: learn
+    url: https://github.com/amosblomqvist/learn
+    status: assess
+    profiles: [docs, web]
+    kind: reference
+    license: not verified
+    cost: not verified
+    privacy: not verified
+    expression: []
+    notes: "Configuration for the Pi agent with skills and extensions for tutoring. It is not a Claude Code skill. Take the ideas that help (explain in parts, ask for recall, check understanding) and rebuild quizzes with the tools the agent really has."
+    evaluated: 2026-11-10
+  - name: i-have-adhd
+    url: https://github.com/ayghri/i-have-adhd
+    status: assess
+    profiles: [web, software, data-ai, hardware, docs, infra]
+    kind: skill
+    license: not verified
+    cost: not verified
+    privacy: not verified
+    expression: []
+    notes: "Optional answer style: clear and with concrete actions. Before trial: compare it with settings/output-style-concise.md and the owner's preferences. Using it says nothing about the person who uses it."
+    evaluated: 2026-11-10
+  - name: OpenCut
+    url: https://github.com/OpenCut-app/OpenCut
+    status: assess
+    profiles: [docs, web]
+    kind: app
+    license: not verified
+    cost: not verified
+    privacy: not verified
+    expression: []
+    notes: "Video editor under watch. Its documents announced a rewrite with an API, an MCP server and a headless mode. Before trial: confirm which of those exist today. Never plan automation on an announced interface."
+    evaluated: 2026-11-10
+  - name: Ghidra
+    url: https://github.com/NationalSecurityAgency/ghidra
+    status: assess
+    profiles: [software, hardware]
+    kind: tool
+    license: not verified
+    cost: not verified
+    privacy: not verified
+    expression: []
+    notes: "Reverse engineering suite, for a specialized profile. Before trial: the interface an agent can drive, the authorized scope of each analysis and the evidence it leaves."
+    evaluated: 2026-11-10
+  - name: Perchance
+    url: https://perchance.org/ai-text-to-image-generator
+    status: assess
+    profiles: [web, docs]
+    kind: app
+    license: not verified
+    cost: not verified
+    privacy: not verified
+    expression: []
+    notes: "Image generator used by hand in the browser. No official interface for automation was confirmed. Never build scraping, an unofficial proxy or a way around its CAPTCHA. Use images prepared by hand, with their credit."
+    evaluated: 2026-11-10

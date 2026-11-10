@@ -56,6 +56,10 @@ Sources behind the rules. Prefer the original source. The check verifies these l
 - Core Web Vitals: https://web.dev/articles/vitals
 - Nielsen Norman Group, 10 usability heuristics: https://www.nngroup.com/articles/ten-usability-heuristics/
 - MDN, prefers-reduced-motion: https://developer.mozilla.org/en-US/docs/Web/CSS/@media/prefers-reduced-motion
+- WCAG 2.2, target size (minimum): https://www.w3.org/WAI/WCAG22/Understanding/target-size-minimum.html
+- MDN, View Transition API: https://developer.mozilla.org/en-US/docs/Web/API/View_Transition_API
+- UICrit, a dataset of interface critiques by designers (2024): https://arxiv.org/abs/2407.08850
+- DesignPref, agreement among designers and personal preference (2025): https://arxiv.org/html/2511.20513v1
 - Python packaging, src layout: https://packaging.python.org/en/latest/discussions/src-layout-vs-flat-layout/
 - Databricks, medallion architecture: https://docs.databricks.com/gcp/en/lakehouse/medallion
 - Cookiecutter Data Science: https://github.com/drivendataorg/cookiecutter-data-science

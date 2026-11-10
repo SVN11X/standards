@@ -5,15 +5,20 @@ Commands:
   add      store one entry (kind, text, repository, reference, source)
   search   full-text search, newest first
   list     the latest entries of one repository
-  forget   delete one entry by id
+  forget   delete one entry by id. To correct an entry, forget it and add the right one
+  export   print every entry as JSON lines, to keep or move the memory
+  expire   delete agent hints older than a number of days. Facts from the owner and from tools stay
 
 Each entry says where it came from. owner and tool entries are facts with a reference. agent entries
-are hints: check them against the files and tests before acting on them. Secrets are refused.
+are hints: check them against the files and tests before acting on them. An entry older than 90 days
+is marked old, because the code may have changed since. Secrets are refused.
 The database lives in STANDARDS_HOME (default ~/.standards/memory.db), outside every repository.
 """
 from __future__ import annotations
 
 import argparse
+import datetime as dt
+import json
 import os
 import re
 import sqlite3
@@ -82,6 +87,28 @@ def search(db, query: str, repo: str | None = None, limit: int = 10) -> list[tup
     return db.execute(sql, params).fetchall()
 
 
+OLD_DAYS = 90
+
+
+def age_days(created: str) -> int:
+    try:
+        return (dt.datetime.now(dt.timezone.utc).replace(tzinfo=None) - dt.datetime.fromisoformat(created)).days
+    except ValueError:
+        return 0
+
+
+def expire(db, days: int) -> int:
+    """Delete agent hints older than the given days. A hint is never promoted to a fact by staying in the database."""
+    cursor = db.execute("DELETE FROM entries WHERE source = 'agent' AND created < datetime('now', ?)", (f"-{int(days)} days",))
+    db.commit()
+    return cursor.rowcount
+
+
+def export(db) -> list[dict]:
+    names = ("id", "kind", "source", "repo", "ref", "created", "text")
+    return [dict(zip(names, row)) for row in db.execute("SELECT id, kind, source, repo, ref, created, text FROM entries ORDER BY id")]
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = parser.add_subparsers(dest="command", required=True)
@@ -100,6 +127,9 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--limit", type=int, default=20)
     p = sub.add_parser("forget")
     p.add_argument("id", type=int)
+    sub.add_parser("export")
+    p = sub.add_parser("expire")
+    p.add_argument("--days", type=int, default=180)
     args = parser.parse_args(argv)
     db = connect()
     if args.command == "add":
@@ -113,11 +143,18 @@ def main(argv: list[str] | None = None) -> int:
         db.execute("DELETE FROM entries WHERE id = ?", (args.id,))
         db.commit()
         return 0
+    if args.command == "export":
+        for entry in export(db):
+            print(json.dumps(entry, ensure_ascii=False))
+        return 0
+    if args.command == "expire":
+        print(f"deleted {expire(db, args.days)} agent hints older than {args.days} days")
+        return 0
     rows = (search(db, args.query, args.repo, args.limit) if args.command == "search" else
             db.execute("SELECT id, kind, source, repo, ref, created, text FROM entries WHERE (? IS NULL OR repo = ?) "
                        "ORDER BY id DESC LIMIT ?", (args.repo, args.repo, args.limit)).fetchall())
     for row in rows:
-        label = "hint" if row[2] == "agent" else row[2]
+        label = ("hint" if row[2] == "agent" else row[2]) + (", old: check it against the files" if age_days(row[5]) > OLD_DAYS else "")
         print(f"#{row[0]} {row[1]} [{label}] {row[3] or '-'} {row[4] or '-'} {row[5]}: {row[6][:200]}")
     return 0
 

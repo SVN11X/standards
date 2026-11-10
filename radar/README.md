@@ -15,4 +15,4 @@ Every entry in `radar.yml` has: `name`, `url`, `status`, `profiles`, `kind` (lib
 
 ## Criteria
 
-An entry needs evidence, not hype: the repository exists, its README says what it does, the license allows the use, the cost fits "free tools" when a repository requires it, and it serves a goal in the repository's `docs/goals.md`. Prototypes and single-maintainer projects start at `assess` or `trial`.
+An entry needs evidence, not hype: the repository exists, its README says what it does, the license allows the use, the cost fits "free tools" when a repository requires it, and it serves a goal in the repository's `docs/goals.md`. Prototypes and single-maintainer projects start at `assess` or `trial`. A candidate that nobody has opened yet may be listed at `assess` with `not verified` in the fields that are unknown and the check that decides its trial written in `notes`.

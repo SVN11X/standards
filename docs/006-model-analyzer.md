@@ -109,6 +109,16 @@ The router already uses the history: among the models you allowed, it takes the 
 
 `scripts\analyze-models.ps1` and `scripts/analyze-models.sh` run the same commands, for example `.\scripts\analyze-models.ps1 prepare`.
 
+## Gateways and boards, not connected
+
+No gateway or agent board is integrated. Two candidates are in the radar at `assess`, with the checks that decide a trial: FreeLLMAPI (one endpoint in front of several free providers) and Paperclip (a board for several agents). The rules for any of them are already in the code and the policy:
+
+- The router of the standard stays the only authority on cost and privacy. A gateway chooses only inside the list of providers and models it was given.
+- Any executor that is not a program, the local Ollama or Claude counts as remote, wherever it listens.
+- A gateway is usable for a class of data only if it can refuse a provider before sending. A check after the answer finds a detour, it does not undo it.
+- The model that answered is recorded. A different one fails the run.
+- Everything works with the adapter off or down.
+
 ## Limits
 
 - The analyzer cannot send an image through OpenCode, so remote vision models are not tested on `vision` or `design-judge`.

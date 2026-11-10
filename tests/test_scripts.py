@@ -320,6 +320,20 @@ class Memory(Base):
         memory.add(db, "decision", "Use FTS5 first", ref="docs/005", source="owner")
         self.assertEqual(len(memory.search(db, "fts5")), 1)
 
+    def test_hints_expire_and_facts_stay(self):
+        db = memory.connect(self.tmp / "m.db")
+        memory.add(db, "decision", "Keep the scroll scenes", ref="docs/decisions/0003", source="owner")
+        hint = memory.add(db, "note", "The router probably prefers GLM")
+        db.execute("UPDATE entries SET created = datetime('now', '-200 days')")
+        db.commit()
+        self.assertEqual({e["source"] for e in memory.export(db)}, {"owner", "agent"})
+        self.assertGreater(memory.age_days(memory.export(db)[0]["created"]), memory.OLD_DAYS)
+        self.assertEqual(memory.expire(db, 180), 1)
+        left = memory.export(db)
+        self.assertEqual([e["source"] for e in left], ["owner"])
+        self.assertNotIn(hint, [e["id"] for e in left])
+        self.assertEqual(memory.search(db, "router"), [])
+
 
 class Evidence(Base):
     def test_report_matches_schema(self):
