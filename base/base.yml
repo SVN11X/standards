@@ -20,6 +20,12 @@ required_files:
   - .github/ISSUE_TEMPLATE/task.yml
   - .github/workflows/standard.yml
 
+# The explanation of how the repository works inside. The check warns when it is missing, keeps a broken path
+# or is still a draft, and makes the missing file an error from the version in required_from.
+how_it_works:
+  path: docs/how-it-works.md
+  required_from: 2.0.0
+
 # Skills every repository lists, before the profile's own skills.
 skills: [repo-improve, code-review, tool-radar]
 
@@ -42,6 +48,7 @@ fixed:
   - Leave the repository passing the standard check.
   - Credit every third-party asset, model, dataset, font or icon set with its source, author and license, in LICENSES/ or docs/credits.md.
   - Write diagrams as text in Mermaid syntax, so GitHub and sites render the same source. Use an image only when that is not possible.
+  - Keep docs/how-it-works.md true. A change to the main flow updates it in the same change, and every path it names exists.
 
 anti_slop:
   - No comments that restate the code, narrate steps or decorate (banners, emoji).

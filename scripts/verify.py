@@ -192,6 +192,21 @@ def check_settings(repo: Path) -> list[dict]:
     return results
 
 
+def check_explanation(repo: Path) -> dict:
+    """The standard follows its own rule: docs/how-it-works.md exists, is confirmed and names only real paths."""
+    import standard
+    path = repo / "docs" / "how-it-works.md"
+    if not path.exists():
+        return R("S.how-it-works", "contract", "FAIL", severity="medium", evidence="docs/how-it-works.md is missing")
+    text = path.read_text(encoding="utf-8")
+    problems = [f"names {token}, which does not exist" for token in standard.missing_doc_paths(repo, text)]
+    problems += ["still has TODO(owner) lines"] if standard.OWNER_TODO in text else []
+    problems += ["README.md does not link it"] if "docs/how-it-works.md" not in (repo / "README.md").read_text(encoding="utf-8") else []
+    return R("S.how-it-works", "contract", "FAIL" if problems else "PASS", severity="medium",
+             evidence="; ".join(problems) or "docs/how-it-works.md exists, README.md links it and every path it names exists",
+             expected="the explanation of how the repository works is present and true to the files")
+
+
 def check_ruff(repo: Path, required: bool) -> dict:
     if not shutil.which("ruff"):
         status = "NOT_RUN" if required else "SKIP"
@@ -362,6 +377,7 @@ def main(argv: list[str] | None = None) -> int:
                                      "every profile passes init and check, hooks behave"))
         results.append(check_skills(repo))
         results += check_settings(repo)
+        results.append(check_explanation(repo))
         if args.level != "quick":
             results.append(check_command("S.unit-tests", "regression",
                                          [sys.executable, "-m", "unittest", "discover", "-s", "tests"],

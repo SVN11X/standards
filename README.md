@@ -4,7 +4,7 @@ How SVN11X repositories are organized, documented and reviewed. One source of tr
 
 ## Read first
 
-`SETUP.md` sets up the standard with any AI tool. The `docs/` folder explains it in order: `000-philosophy.md`, `001-profiles.md`, `002-intent.md`, `003-autopilot-and-hooks.md`, `004-radar.md` and `005-verification-and-orchestration.md`.
+`SETUP.md` sets up the standard with any AI tool. `docs/how-it-works.md` explains how this repository works inside. The `docs/` folder explains the standard in order: `000-philosophy.md`, `001-profiles.md`, `002-intent.md`, `003-autopilot-and-hooks.md`, `004-radar.md`, `005-verification-and-orchestration.md` and `006-model-analyzer.md`.
 
 ## How a repository uses it
 

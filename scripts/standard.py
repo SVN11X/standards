@@ -821,6 +821,40 @@ def check_content(repo: Path, files: list[str], report: Report) -> None:
                 report.warn(rel, f"{dashes} em dashes. Use periods and commas.")
 
 
+DOC_PATH = re.compile(r"`([\w.@-]+(?:/[\w.@-]+)*/?)`")
+
+
+def version_tuple(text: str) -> tuple[int, ...]:
+    return tuple(int(part) for part in re.findall(r"\d+", str(text))[:3])
+
+
+def missing_doc_paths(repo: Path, text: str) -> list[str]:
+    """Paths written in backticks that do not exist. A token counts as a path when it has a slash: a bare name could live anywhere."""
+    return [token for token in dict.fromkeys(DOC_PATH.findall(text))
+            if "/" in token and not token.startswith(("http", "~", ".standards/")) and not (repo / token).exists()]
+
+
+def check_how_it_works(repo: Path, report: Report) -> None:
+    base = base_config()
+    spec = base.get("how_it_works") or {}
+    rel = spec.get("path")
+    if not rel:
+        return
+    path = repo / rel
+    if not path.exists():
+        message = "Missing. It explains how the repository works inside. Run init --existing to add the template, then fill it in."
+        if version_tuple(base["version"]) >= version_tuple(spec.get("required_from", "999")):
+            report.error(rel, message)
+        else:
+            report.warn(rel, message + f" It becomes an error in version {spec.get('required_from')}.")
+        return
+    text = path.read_text(encoding="utf-8")
+    for token in missing_doc_paths(repo, text):
+        report.warn(rel, f"Names `{token}`, which does not exist. Fix the path or the explanation.")
+    if re.search(r"^Status:\s*draft", text, re.I | re.M) and OWNER_TODO not in text:
+        report.warn(rel, "Still marked as a draft. The owner confirms it by removing the Status line.")
+
+
 def check_plan(repo: Path, report: Report) -> None:
     path = repo / "docs" / "improvement-plan.md"
     if not path.exists():
@@ -872,6 +906,7 @@ def run_check(repo: Path, pull_request: bool = False) -> Report:
         check_content(repo, files, report)
         check_github(config, report)
         check_plan(repo, report)
+        check_how_it_works(repo, report)
     if pull_request:
         check_pull_request(report)
     return report
@@ -1485,6 +1520,20 @@ def cmd_selftest() -> int:
             failures.append("an empty About description should be an error once setup is done")
         else:
             print("negative case passed: empty About description")
+
+        explanation = first_repo / "docs" / "how-it-works.md"
+        template = explanation.read_text(encoding="utf-8")
+        write_text(explanation, "# How it works\n\nStatus: draft.\n\nThe entry point is `src/missing-file.py`. Rules are in `AGENTS.md`.\n")
+        found = [message for where, message in run_check(first_repo).warnings if where == "docs/how-it-works.md"]
+        explanation.unlink()
+        gone = run_check(first_repo)
+        absent = [message for where, message in gone.warnings if where == "docs/how-it-works.md"]
+        write_text(explanation, template)
+        if (len(found) != 2 or "src/missing-file.py" not in found[0] or "draft" not in found[1] or len(absent) != 1
+                or "Missing" not in absent[0] or gone.errors):
+            failures.append(f"how-it-works check is wrong: {found} {absent} {gone.errors}")
+        else:
+            print("negative case passed: how-it-works with a broken path, as a draft, and missing")
 
         skills_out = root / "skills-out"
         cmd_skills_repo(skills_out)

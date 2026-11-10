@@ -13,6 +13,7 @@ Check the dimensions that apply to the repository's profile. Record evidence for
 
 - `README.md` says what the project is, for whom, how to use it, its status, its layout and its license.
 - `docs/goals.md`, `docs/glossary.md` and the decision records exist and are filled.
+- `docs/how-it-works.md` exists, is confirmed by the owner, matches the code and names only paths that exist.
 - Repository documentation is in English. Content for end users stays in their language.
 
 ## 3. Build and reproducibility
