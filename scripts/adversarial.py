@@ -92,7 +92,7 @@ def fake_run(tmp: Path, mode: str, conf: dict, **kwargs) -> dict:
     script = tmp / "fake_executor.py"
     script.write_text(FAKE_EXECUTOR, encoding="utf-8")
     local = {"folders": [{"path": str(tmp), "class": "personal-public"}],
-             "free_models": [{"id": f"fake/{mode}", "checked": dt.date.today().isoformat()}]}
+             "free_models": [{"id": f"fake/{mode}", "checked": dt.date.today().isoformat(), "data_use": "none"}]}
     return orchestrate.delegate_opencode(
         repo, "Fix sum_even in calc.py.", ["calc.py"], f'"{sys.executable}" -m unittest test_calc',
         model=f"fake/{mode}", protect=kwargs.get("protect", ["test_*.py"]), untrusted=kwargs.get("untrusted"),
