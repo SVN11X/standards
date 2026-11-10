@@ -15,7 +15,11 @@ Progress of the free routing, model analyzer and web design work of November 202
 - [ ] BLOCKED: owner provides pairs of screens in `~/.standards/design-pairs/` for the design judge
 - [ ] BLOCKED: owner decides whether a free model may plan or do deep review, and with which bench class
 - [ ] BLOCKED: owner decides whether to publish the gallery with GitHub Pages. The workflow needs pinned action commits
-- [ ] Send an image through OpenCode so remote vision models can take the vision and design-judge classes
+- [x] Discovery of every installed Ollama model, with kind, capabilities, cloud or local and a memory check
+- [x] Transport for OpenAI-compatible providers with settings per provider, and coverage with one state per model
+- [ ] BLOCKED: run each provider adapter against its real service with the owner's key. Only a fake server was used
+- [ ] BLOCKED: open each provider's pages and confirm what `settings/providers.yml` says. It came from a search of their sites
+- [ ] Confirm that `opencode run --file` sends an image, then test vision models served only through OpenCode
 - [ ] Adapter for a gateway such as FreeLLMAPI, after the trial checks in the radar pass with a fake server
 - [ ] Locate the official repository and license of the impeccable detector before adding it to the radar
 - [ ] Second web change: site performance budget, chart palette for color blindness, form pattern, link preview

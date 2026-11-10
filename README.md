@@ -101,7 +101,7 @@ python scripts/orchestrate.py route --all --repo ../my-site
 
 ## Find the best model for each task
 
-`scripts/analyze.py` tests the model candidates of `settings/models.yml` that are installed and allowed, on synthetic tasks graded by a program, and writes a report with a proposed split. It never downloads a model or uses a paid endpoint.
+`scripts/analyze.py` finds every model the local Ollama has installed and every model the providers of `settings/providers.yml` list, tests the ones that are allowed on synthetic tasks graded by a program, and writes a report with a proposed split. It never downloads a model or uses a paid endpoint. `prepare` shows each model found with its state and the reason.
 
 ```bash
 python scripts/analyze.py prepare
@@ -132,9 +132,9 @@ A breaking change gets a new major tag (`v2`). Each repository moves to it when 
 - `hooks/`: Claude Code hooks published with the skills: guardrails, secret scan, executors at startup, rules after compaction, notifications and the autopilot.
 - `radar/`: evaluated tools with their status.
 - `docs/`: the standard explained in reading order.
-- `scripts/`: `standard.py` (init, agents, check, migrate, subprofile, templates, package-skills, skills-repo, selftest), `verify.py`, `adversarial.py`, `orchestrate.py`, `analyze.py`, `bench_tasks.py`, `preserve.py`, `safe_patch.py`, `memory.py`, and `release`, `publish-templates`, `publish-skills`, `protect-repo`, `setup-opencode`, `verify-all` and `analyze-models`, each in `.sh` and `.ps1`.
+- `scripts/`: `standard.py` (init, agents, check, migrate, subprofile, templates, package-skills, skills-repo, selftest), `verify.py`, `adversarial.py`, `orchestrate.py`, `analyze.py`, `providers.py`, `bench_tasks.py`, `preserve.py`, `safe_patch.py`, `memory.py`, and `release`, `publish-templates`, `publish-skills`, `protect-repo`, `setup-opencode`, `verify-all` and `analyze-models`, each in `.sh` and `.ps1`.
 - `schemas/`: JSON Schema of the verification report.
 - `tests/`: unit tests of the scripts with fake executors, run with `python -m unittest discover -s tests`, and `tests/web/gallery.test.mjs`, which checks the pattern gallery in a browser.
-- `settings/`: repository and tool settings as code, such as the branch ruleset, the OpenCode setup, the routing, privacy and cost policy (`orchestration.yml`), the model candidates (`models.yml`) and the MCP catalog.
+- `settings/`: repository and tool settings as code, such as the branch ruleset, the OpenCode setup, the routing, privacy and cost policy (`orchestration.yml`), the settings of models (`models.yml`), the remote providers (`providers.yml`) and the MCP catalog.
 - `preferences.md`: the owner's taste, with good and bad examples.
 - `references.md`: the sources behind the rules.

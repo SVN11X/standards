@@ -13,6 +13,11 @@ All notable changes to this standard are documented here. The format follows [Ke
 - `orchestrate.py route --all` and `doctor` print who does each task type on the machine, with the exact model and the reason. `doctor` also names the catalog entries, owner checks and measurements that are due again.
 - Bench classes `extract`, `summarize`, `web-subprofile`, `tool-call`, `vision`, `design-judge`, `fix-multi` and `docs-small` in `scripts/bench_tasks.py`, each graded by a program. The design judge uses the owner's pairs of screens, and a made-up sample that never counts when there are none.
 - `scripts/analyze.py` with `prepare`, `plan`, `run` and `report`, and the wrappers `analyze-models.ps1` and `analyze-models.sh`. It tests the candidates that are installed and allowed, one local model at a time, with a session budget per remote model, stops a model or provider that reports its limit, continues after an interruption and writes the report outside the repository. It never downloads a model.
+- Discovery instead of a fixed list. The analyzer takes every model the local Ollama lists, in the catalog or not, and classifies it from `/api/tags` and `/api/show`: chat or embedding, images, tools, local or cloud, and whether it fits the memory of the machine.
+- `scripts/providers.py` and `settings/providers.yml`: one transport for providers with an OpenAI-compatible API, with settings for OpenRouter, Groq, Mistral, Google Gemini API and Cloudflare Workers AI. It lists models, checks the account, sends text, images and tools, and names every failure. Tested against a fake server only. No adapter was run against its real service.
+- `api` as an executor: `bench --executors api:<provider>/<model>`, `delegate api --model <provider>/<model>`, and a route candidate for short tasks that a provider model may take only after it passed the bench class.
+- `consent --free-provider <id>` records the owner's check that an account is on the free plan with no billing attached.
+- Coverage in `analyze.py prepare`: every model found, by provider, model and endpoint, with one state and its reason. `--all` and `--json` print each one.
 - `docs/how-it-works.md` in every repository, from a new template. The check warns when it is missing, names a path that does not exist or is still a draft. The missing file becomes an error in version 2.0.0. The standard has its own.
 - Web sub-profiles as the `experience` option: `scroll-storytelling`, `interactive-data`, `reactive-object`, `editorial` and `characters`. `standard.py subprofile "<request>"` names the one a request calls for. `profiles/web/subprofiles.yml` holds a short summary of each for small models.
 - web-improve: `references/subprofiles.md`, `interaction-patterns.md`, `motion-and-foundations.md` and `design-judgment.md`, a gallery of six patterns and a reactive object in `gallery/index.html`, and `scripts/measure_page.mjs`, which measures contrast, touch targets, line length, overflow and font families in a browser. `audit_site.py` lists design findings measured from the files.
@@ -26,6 +31,11 @@ All notable changes to this standard are documented here. The format follows [Ke
 - Radar entries for Manim Community and Mermaid CLI, both in trial, from their use in GCP_Data_Engineer_Fieldnotes.
 
 ### Changed
+
+- `settings/models.yml` no longer decides which models exist. It holds settings and limits, and `blocked: <reason>` keeps a model out. Its `services` notes moved to `settings/providers.yml`.
+- Cerebras and the NVIDIA API catalog are listed as trials with credits, so they are never called. GitHub Models is listed as retired since 2026-07-30.
+- A task a model was not run on is reported as not evaluated with the reason, never as a failed run. A run that a provider cut short with a limit, a payment request or an outage is not kept.
+- The report separates inference by API from runs of a full agent.
 
 - Web fixed rules, by the owner's decision of 2026-11-10: tokens from `DESIGN.md`, native CSS before a library, font loading, a first screen a new visitor understands, empty and loading states that say what happened, and reduced motion honored in JavaScript too.
 - Risk no longer names a brand. Yellow and red work needs the owner's review, and a model other than the planner needs measured passes in the bench class of the task. With the default cost mode Claude still goes first.
