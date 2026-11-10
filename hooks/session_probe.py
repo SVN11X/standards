@@ -2,7 +2,7 @@
 """SessionStart hook: tell the session which executors this machine has, in about a second.
 
 It only looks: is OpenCode on the PATH, does the local Ollama answer, which free models the owner
-checked, and the privacy class of this folder. It installs nothing, connects to nothing remote and
+checked, the cost mode, and the privacy class of this folder. It installs nothing, connects to nothing remote and
 never blocks the session. Detection is not delegation: the session still runs orchestrate.py route
 and orchestrate.py delegate, which do the work and verify it.
 """
@@ -34,15 +34,15 @@ def ollama_up(host: str = "127.0.0.1", port: int = 11434) -> bool:
         return False
 
 
-def owner_facts(repo: Path) -> tuple[str, int]:
+def owner_facts(repo: Path) -> tuple[str, int, str]:
     path = Path(os.environ.get("STANDARDS_HOME") or Path.home() / ".standards") / "local.yml"
     if not path.exists():
-        return "not set (default personal-private)", 0
+        return "not set (default personal-private)", 0, "not set (default existing-subscription)"
     try:
         import yaml
         data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
     except Exception:  # noqa: BLE001 (the hook never breaks a session)
-        return "unknown", 0
+        return "unknown", 0, "unknown"
     target = str(repo).replace("\\", "/").lower()
     best = ""
     for entry in data.get("folders") or []:
@@ -50,7 +50,8 @@ def owner_facts(repo: Path) -> tuple[str, int]:
         if target.startswith(pattern) and len(pattern) > len(best):
             best = pattern
             cls = entry.get("class")
-    return (cls if best else "not set (default personal-private)"), len(data.get("free_models") or [])
+    return ((cls if best else "not set (default personal-private)"), len(data.get("free_models") or []),
+            str(data.get("cost_mode") or "not set (default existing-subscription)"))
 
 
 def context(cwd: Path) -> str | None:
@@ -58,16 +59,17 @@ def context(cwd: Path) -> str | None:
     if root is None or not (root / ".standard.yml").exists():
         return None
     script = orchestrate_path()
-    privacy, free = owner_facts(root)
+    privacy, free, cost = owner_facts(root)
     parts = [f"OpenCode {'found' if shutil.which('opencode') else 'not installed'}",
              f"Ollama {'answering' if ollama_up() else 'off'}",
-             f"free models checked by the owner: {free}", f"privacy of this folder: {privacy}"]
+             f"free models checked by the owner: {free}", f"privacy of this folder: {privacy}", f"cost mode: {cost}"]
     command = f'python "{script}"' if script else "python <standard>/scripts/orchestrate.py"
     return ("Executors on this machine: " + ", ".join(parts) + ". "
             "Use a program without AI first for search, lint, tests and hashes. Before handing a task to another model, run "
             f"`{command} route <task-type> --repo . --files <n> --risk <green|yellow|red>` and, when it names opencode or "
             f"ollama, `{command} delegate ...`. That command checks the diff, the protected files and the tests itself. "
-            "Never treat an executor's own summary as evidence.")
+            f"`{command} route --all --repo .` lists who does each task type here and why. A blocked task is reduced or goes "
+            "to the owner, never to a paid model. Never treat an executor's own summary as evidence.")
 
 
 def main() -> int:

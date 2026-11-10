@@ -1282,7 +1282,7 @@ def skill_names() -> list[str]:
 
 # Scripts the skills call from the bundled copy of the standard, next to standard.py.
 BUNDLED_SCRIPTS = ("standard.py", "orchestrate.py", "verify.py", "evidence.py", "preserve.py", "adversarial.py",
-                   "safe_patch.py", "memory.py")
+                   "safe_patch.py", "memory.py", "bench_tasks.py", "analyze.py")
 
 
 def cmd_package_skills(out_dir: Path) -> None:
@@ -1307,7 +1307,8 @@ def cmd_package_skills(out_dir: Path) -> None:
         shutil.copy2(STANDARD_ROOT / "hooks" / hook, snapshot / "hooks" / hook)
     shutil.copytree(STANDARD_ROOT / "schemas", snapshot / "schemas", ignore=ignore)
     (snapshot / "settings").mkdir()
-    shutil.copy2(STANDARD_ROOT / "settings" / "orchestration.yml", snapshot / "settings" / "orchestration.yml")
+    for name in ("orchestration.yml", "models.yml"):
+        shutil.copy2(STANDARD_ROOT / "settings" / name, snapshot / "settings" / name)
     for name in ("mcp", "opencode"):
         shutil.copytree(STANDARD_ROOT / "settings" / name, snapshot / "settings" / name, ignore=ignore)
     shutil.copy2(STANDARD_ROOT / "preferences.md", snapshot / "preferences.md")
