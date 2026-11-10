@@ -1,0 +1,72 @@
+# The five web sub-profiles. One source for the selector (standard.py subprofile), the web-improve skill and the
+# web-subprofile bench class. The binding rules of each one live in profile.yml under the `experience` option.
+# alias: the name the owner used in Spanish. summary: short enough for a small local model to read whole.
+# signals: words that point to it in a request, in English and Spanish. examples: labeled requests used as tests.
+guide: skills/web-improve/references/subprofiles.md
+subprofiles:
+  scroll-storytelling:
+    alias: web/scroll-narrativo
+    choose_when: The page explains a transformation or a process in stages.
+    summary: >-
+      Scenes that advance with the scroll. Each scene has a start, middle states, an end, and works forward and back.
+      Long sequences give direct access to each stage or to the result. Decide per scene whether motion follows the
+      scroll position or plays once on entry. With reduced motion, show the stages as still steps.
+    signals: [scroll, scrolls, scrolling, stage, stages, step by step, assemble, assembly, assembled, exploded, sequence, timeline, history, piece by piece,
+              etapas, montaje, despiece, recorrido, paso a paso, baja, bajar]
+    examples:
+      - Explain how the device is assembled, piece by piece, as the reader scrolls
+      - Show the history of the project as a sequence of stages the visitor moves through
+      - Explica el montaje del dispositivo por etapas mientras se baja por la página
+  interactive-data:
+    alias: web/datos-interactivos
+    choose_when: The visitor explores how a variable changes a result.
+    summary: >-
+      Controls change parameters and a result or chart answers. Every value keeps its unit and label. The calculation
+      lives apart from the animation and has its own tests. Sample or simulated data is labeled as such. Offer a reset.
+      A confidence or prediction figure needs a stated method.
+    signals: [slider, sliders, chart, charts, graph, parameter, parameters, calculate, calculator, compare, estimate, estimated, bandwidth, data volume,
+              parámetros, calcular, comparar, gráfico, estimado, simular, resultado]
+    examples:
+      - Let people change the data volume and the bandwidth and see the estimated transfer time
+      - Compare two pricing plans with sliders and a chart that updates
+      - Quiero probar parámetros de transferencia y ver cómo cambia el resultado
+  reactive-object:
+    alias: web/objeto-reactivo
+    choose_when: The visitor handles a volume, or an object shows a live signal.
+    summary: >-
+      One object answers the pointer, touch, drag, progress or a real signal. Name its states (idle, listening,
+      working, answering, error) and tie every visual change to one of them. Say why DOM, CSS, SVG, Canvas or Three.js.
+      Keep the controls usable without the object, and show a still image when WebGL is missing. With reduced motion
+      and no task running, the object stays still even when the pointer moves.
+    signals: [orb, sphere, object, rotate, rotated, drag, microphone, signal, reacts, reacting, 3d, tap, spin,
+              objeto, señal, reaccione, girar, esfera, micrófono, arrastrar]
+    examples:
+      - An orb that reacts to the microphone level while the tool listens
+      - A chip the visitor can rotate and tap to see each connection
+      - Un objeto que reaccione a una señal y muestre sus estados
+  editorial:
+    alias: web/editorial
+    choose_when: The page presents projects, an identity or a visual narrative.
+    summary: >-
+      Typography, hierarchy and reading rhythm carry the page. The real content sets the size and structure of each
+      section. Text revealed by lines or words stays readable by a screen reader once, with no duplicated layers.
+      Plan for line breaks that change with the language, late fonts and narrow screens.
+    signals: [portfolio, typography, headline, headlines, editorial, studio, gallery, identity, magazine, projects, narrative,
+              portafolio, tipografía, identidad, narrativa, titulares, galería]
+    examples:
+      - A portfolio with expressive typography where each project opens with its images
+      - A studio page with large headlines and image reveals between sections
+      - Una página de identidad con mucha tipografía y narrativa visual
+  characters:
+    alias: web/personajes
+    choose_when: A figure accompanies a task.
+    summary: >-
+      A character or illustration looks at, points to or reacts to what happens in the task. Name the event behind
+      each reaction. The character never gates the task: every action and every piece of information is also in
+      controls and text. Reactions are short and stop on reduced motion.
+    signals: [character, characters, tutor, mascot, expression, expressions, avatar, companion, points at, figure,
+              personaje, personajes, mascota, expresión, acompañe, tutor]
+    examples:
+      - A tutor character that points at the diagram when the student asks for a hint
+      - A mascot that reacts when the exercise is completed
+      - Un personaje que acompañe el ejercicio y reaccione al resultado

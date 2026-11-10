@@ -11,6 +11,7 @@ Review a change against the rules the repository already declares. The rules liv
 
 - `.standard.yml`, `AGENTS.md`, and the nested `AGENTS.md` of every folder the change touches.
 - `docs/goals.md` and the decision records in `docs/decisions/` that the change mentions.
+- `docs/how-it-works.md`. A change to the main flow that leaves it untouched is a finding.
 - The task or the pull request description.
 - For any pattern the change introduces, its card. Read the cards from the pinned standard: clone `https://github.com/SVN11X/standards` at the tag in `.standard.yml` into a temporary folder and open `patterns/`. Without network access, use the copies in `references/patterns/`.
 

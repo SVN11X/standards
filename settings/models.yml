@@ -1,0 +1,106 @@
+# Settings and limits for models, one entry per provider, model and endpoint. Read by scripts/orchestrate.py and
+# scripts/analyze.py. This file does not decide which models exist: the analyzer finds every model the local Ollama
+# lists and every model a provider of settings/providers.yml lists. An entry here adds what discovery cannot know:
+# data use, a daily limit, a note, or `blocked: <reason>` to keep a model out.
+# An entry enables nothing. A local model counts when it is installed. A remote model counts when the owner
+# checked it as free (orchestrate.py consent --free-model) and the cost and privacy rules of
+# settings/orchestration.yml allow it. Measurements never live here: they go to ~/.standards/bench.jsonl.
+#
+# cost: local, free-quota, free-promo, subscription, trial, paid or unknown.
+# data: what the provider does with what it receives. stores and trains are "yes", "no" or "unknown".
+# evidence: declared (read on the provider's page on the `checked` date) or candidate (named by a guide or a
+#   list, not read on an official page). Nothing here was measured.
+# capabilities: only what a source states (code, tools, vision, embedding). Any model that is not an
+#   embedding model is assumed to chat. What Ollama reports for an installed model wins over this list.
+# review_by: optional date after which a free offer no longer counts until someone checks it again.
+# A field nobody confirmed stays null. Do not fill one in from memory.
+version: 1
+noted: 2026-11-10
+# Where the entries come from. They were not opened from the session that wrote this file.
+noted_from: the owner's notes of 2026-11-10
+
+models:
+  # Local models in Ollama. Sizes and capabilities are read from the installed model, not from this file.
+  - {id: "qwen3.5:4b", executor: ollama, provider: ollama-local, source: "https://ollama.com/library/qwen3.5", cost: local,
+     data: {stores: "no", trains: "no"}, capabilities: [], try_first: [classify, extract, vision],
+     evidence: candidate, checked: null, license: null, size_gb: null, context: null,
+     notes: "Baseline. Ran fully on a 6 GB GPU with a 4096 context. A guide says it accepts images, confirm it with the model's own information."}
+  - {id: "qwen2.5:7b", executor: ollama, provider: ollama-local, source: "https://ollama.com/library/qwen2.5", cost: local,
+     data: {stores: "no", trains: "no"}, capabilities: [], try_first: [],
+     evidence: candidate, checked: null, license: null, size_gb: null, context: null, notes: "Comparison."}
+  - {id: "qwen3.5:9b", executor: ollama, provider: ollama-local, source: "https://ollama.com/library/qwen3.5", cost: local,
+     data: {stores: "no", trains: "no"}, capabilities: [], try_first: [],
+     evidence: candidate, checked: null, license: null, size_gb: null, context: null,
+     notes: "Split between GPU and CPU on a 6 GB card. Compare it under a time limit per task."}
+  - {id: "qwen3-embedding:0.6b", executor: ollama, provider: ollama-local, source: "https://ollama.com/library/qwen3-embedding", cost: local,
+     data: {stores: "no", trains: "no"}, capabilities: [embedding], try_first: [],
+     evidence: candidate, checked: null, license: null, size_gb: null, context: null, notes: "Search only, never chat."}
+  - {id: "qwen2.5-coder:3b", executor: ollama, provider: ollama-local, source: "https://ollama.com/library/qwen2.5-coder", cost: local,
+     data: {stores: "no", trains: "no"}, capabilities: [code], try_first: [fix-bug],
+     evidence: candidate, checked: null, license: null, size_gb: null, context: null, notes: "Code."}
+  - {id: "granite4.1:3b", executor: ollama, provider: ollama-local, source: "https://ollama.com/library/granite4.1", cost: local,
+     data: {stores: "no", trains: "no"}, capabilities: [tools], try_first: [classify, extract, tool-call],
+     evidence: candidate, checked: null, license: null, size_gb: null, context: null,
+     notes: "Tool use. A guide says Apache 2.0, confirm the license on the model page."}
+  - {id: "phi4-mini", executor: ollama, provider: ollama-local, source: "https://ollama.com/library/phi4-mini", cost: local,
+     data: {stores: "no", trains: "no"}, capabilities: [], try_first: [],
+     evidence: candidate, checked: null, license: null, size_gb: null, context: null, notes: "General use."}
+  - {id: "gemma4:e2b-it-qat", executor: ollama, provider: ollama-local, source: "https://ollama.com/library/gemma4", cost: local,
+     data: {stores: "no", trains: "no"}, capabilities: [vision], try_first: [vision],
+     evidence: candidate, checked: null, license: null, size_gb: null, context: null, notes: "Vision, to review screenshots."}
+  - {id: "functiongemma:270m", executor: ollama, provider: ollama-local, source: "https://ollama.com/library/functiongemma", cost: local,
+     data: {stores: "no", trains: "no"}, capabilities: [], try_first: [classify],
+     evidence: candidate, checked: null, license: null, size_gb: null, context: null, notes: "Classification with fixed options."}
+  - {id: "llama3-groq-tool-use:8b", executor: ollama, provider: ollama-local, source: "https://ollama.com/library/llama3-groq-tool-use", cost: local,
+     data: {stores: "no", trains: "no"}, capabilities: [tools], try_first: [tool-call],
+     evidence: candidate, checked: null, license: null, size_gb: null, context: null,
+     notes: "Tool use. By size it can split with the CPU on a 6 GB card."}
+
+  # Free models served by OpenCode. All were listed as free for a limited time and usable only from OpenCode.
+  # A model that was withdrawn leaves `opencode models`, and the analyzer then reports it as retired.
+  # The id is the last part of the name that `opencode models` prints.
+  - {id: glm-5.3-flash-free, executor: opencode, provider: opencode-zen, source: "https://opencode.ai/docs/console/models/", cost: free-promo,
+     data: {stores: "no", trains: "no"}, capabilities: [], try_first: [fix-bug],
+     evidence: declared, checked: 2026-11-10, requests_per_day: null, review_by: null, notes: "Fixed the synthetic bug once, 3 of 3 tests."}
+  - {id: deepseek-v4.1-flash-free, executor: opencode, provider: opencode-zen, source: "https://opencode.ai/docs/console/models/", cost: free-promo,
+     data: {stores: "no", trains: "no"}, capabilities: [], try_first: [fix-bug],
+     evidence: declared, checked: 2026-11-10, requests_per_day: null, review_by: null, notes: "Fixed the synthetic bug once, 3 of 3 tests."}
+  - {id: mimo-v2.6-flash-free, executor: opencode, provider: opencode-zen, source: "https://opencode.ai/docs/console/models/", cost: free-promo,
+     data: {stores: "unknown", trains: "yes"}, capabilities: [], try_first: [],
+     evidence: declared, checked: 2026-11-10, requests_per_day: null, review_by: null,
+     notes: "Fixed the synthetic bug once. May use what it receives to improve the model, so it never gets private code."}
+  - {id: longcat-2.5-free, executor: opencode, provider: opencode-zen, source: "https://opencode.ai/docs/console/models/", cost: free-promo,
+     data: {stores: "unknown", trains: "no"}, capabilities: [], try_first: [fix-bug],
+     evidence: declared, checked: 2026-11-10, requests_per_day: 100, review_by: null,
+     notes: "States it does not train. 100 requests a day. A search of opencode.ai on 2026-11-10 describes a zero-retention provider hosted in China. Open the page to confirm before raising its data use."}
+  - {id: big-pickle, executor: opencode, provider: opencode-zen, source: "https://opencode.ai/docs/console/models/", cost: free-promo,
+     data: {stores: "unknown", trains: "yes"}, capabilities: [], try_first: [],
+     evidence: declared, checked: 2026-11-10, requests_per_day: null, review_by: null, notes: "May use what it receives to improve the model."}
+  - {id: iceman-free, executor: opencode, provider: opencode-zen, source: "https://opencode.ai/docs/console/models/", cost: free-promo,
+     data: {stores: "yes", trains: "yes"}, capabilities: [], try_first: [],
+     evidence: declared, checked: 2026-11-10, requests_per_day: null, review_by: null, notes: "Keeps and may use what it receives."}
+  - {id: inkling-2-small-free, executor: opencode, provider: opencode-zen, source: "https://opencode.ai/docs/console/models/", cost: free-promo,
+     data: {stores: "yes", trains: "yes"}, capabilities: [], try_first: [],
+     evidence: declared, checked: 2026-11-10, requests_per_day: null, review_by: null, notes: "Keeps and may train. Restricted by region."}
+  - {id: crouton-alpha-free, executor: opencode, provider: opencode-zen, source: "https://opencode.ai/docs/console/models/", cost: free-promo,
+     data: {stores: "yes", trains: "no"}, capabilities: [], try_first: [],
+     evidence: declared, checked: 2026-11-10, requests_per_day: null, review_by: null, notes: "Keeps 30 days, does not train. Restricted by region."}
+  - {id: beam-free, executor: opencode, provider: opencode-zen, source: "https://opencode.ai/docs/console/models/", cost: free-promo,
+     data: {stores: "yes", trains: "no"}, capabilities: [], try_first: [],
+     evidence: declared, checked: 2026-11-10, requests_per_day: null, review_by: null, notes: "Keeps 30 days, does not train. Restricted by region."}
+  - {id: flint-40b-free, executor: opencode, provider: opencode-zen, source: "https://opencode.ai/docs/console/models/", cost: free-promo,
+     data: {stores: "yes", trains: "yes"}, capabilities: [], try_first: [fix-multi],
+     evidence: declared, checked: 2026-11-10, requests_per_day: null, review_by: null, notes: "Keeps 30 days and may use what it receives."}
+  - {id: nemotron-3-ultra-free, executor: opencode, provider: opencode-zen, source: "https://opencode.ai/docs/console/models/", cost: free-promo,
+     data: {stores: "yes", trains: "yes"}, capabilities: [], try_first: [fix-multi],
+     evidence: declared, checked: 2026-11-10, requests_per_day: null, review_by: null, notes: "Trial use, logged to improve products."}
+  - {id: nemotron-3.5-lightning-free, executor: opencode, provider: opencode-zen, source: "https://opencode.ai/docs/console/models/", cost: free-promo,
+     data: {stores: "yes", trains: "yes"}, capabilities: [], try_first: [],
+     evidence: declared, checked: 2026-11-10, requests_per_day: null, review_by: null, notes: "Trial use, logged to improve products."}
+  - {id: nemotron-3.5-super-vl-free, executor: opencode, provider: opencode-zen, source: "https://opencode.ai/docs/console/models/", cost: free-promo,
+     data: {stores: "yes", trains: "yes"}, capabilities: [vision], try_first: [vision],
+     evidence: declared, checked: 2026-11-10, requests_per_day: null, review_by: null,
+     notes: "Trial use, logged to improve products. Accepts images, but the analyzer cannot send one through OpenCode yet."}
+  - {id: jev-1.13-free, executor: opencode, provider: opencode-zen, source: "https://opencode.ai/docs/console/models/", cost: free-promo,
+     data: {stores: "unknown", trains: "unknown"}, capabilities: [], try_first: [],
+     evidence: declared, checked: 2026-11-10, requests_per_day: null, review_by: null, notes: "No data policy published. Blocked until it is known."}

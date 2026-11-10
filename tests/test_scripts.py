@@ -13,12 +13,14 @@ sys.path.insert(0, str(ROOT / "scripts"))
 sys.path.insert(0, str(ROOT / "hooks"))
 
 import autopilot  # noqa: E402
+import bench_tasks  # noqa: E402
 import evidence  # noqa: E402
 import memory  # noqa: E402
 import orchestrate  # noqa: E402
 import preserve  # noqa: E402
 import safe_patch  # noqa: E402
 import session_probe  # noqa: E402
+import standard  # noqa: E402
 
 
 def git(repo, *args):
@@ -74,24 +76,24 @@ class Route(Base):
 
     def local(self, cls="personal-public", **extra):
         return {"folders": [{"path": str(self.tmp), "class": cls, **extra}],
-                "free_models": [{"id": "opencode/glm-free", "checked": dt.date.today().isoformat()}]}
+                "free_models": [{"id": "opencode/glm-5.3-flash-free", "checked": dt.date.today().isoformat()}]}
 
     def test_tools_first(self):
         self.assertEqual(orchestrate.route("lint", self.tmp, local={}, caps=self.caps)["executor"], "tools")
 
     def test_small_edit_goes_to_opencode(self):
         decision = orchestrate.route("edit-small", self.tmp, local=self.local(), caps=self.caps)
-        self.assertEqual((decision["executor"], decision["model"]), ("opencode", "opencode/glm-free"))
+        self.assertEqual((decision["executor"], decision["model"]), ("opencode", "opencode/glm-5.3-flash-free"))
 
     def test_bench_history_picks_the_model(self):
         local = self.local()
-        local["free_models"].append({"id": "opencode/deepseek-free", "checked": dt.date.today().isoformat()})
+        local["free_models"].append({"id": "opencode/deepseek-v4.1-flash-free", "checked": dt.date.today().isoformat()})
         rows = [{"task": "fix-bug", "executor": "opencode", "model": m, "seconds": s, "verified": True}
-                for m, s in (("opencode/glm-free", 24), ("opencode/deepseek-free", 21))] * 3
-        rows.append({"task": "fix-bug", "executor": "opencode", "model": "opencode/glm-free", "seconds": 5, "verified": True})
+                for m, s in (("opencode/glm-5.3-flash-free", 24), ("opencode/deepseek-v4.1-flash-free", 21))] * 3
+        rows.append({"task": "fix-bug", "executor": "opencode", "model": "opencode/glm-5.3-flash-free", "seconds": 5, "verified": True})
         orchestrate.bench_file().write_text("\n".join(json.dumps(r) for r in rows) + "\n", encoding="utf-8")
         decision = orchestrate.route("fix-test", self.tmp, local=local, caps=self.caps)
-        self.assertEqual(decision["model"], "opencode/deepseek-free")
+        self.assertEqual(decision["model"], "opencode/deepseek-v4.1-flash-free")
         self.assertIn("measured on this machine", " ".join(decision["reasons"]))
 
     def test_risk_and_size_keep_it_with_claude(self):
@@ -108,6 +110,152 @@ class Route(Base):
         self.assertEqual(orchestrate.privacy_class(self.tmp, orchestrate.policy(), self.local())[0], "work")
         (self.tmp / ".standard.yml").write_text("privacy: personal-public\n", encoding="utf-8")
         self.assertEqual(orchestrate.privacy_class(self.tmp, orchestrate.policy(), self.local("restricted"))[0], "restricted")
+
+
+class CostAndData(Base):
+    caps = {"ollama": {"up": False}, "opencode": {"path": "/bin/opencode"}}
+    ollama = {"up": True, "models": ["qwen3.5:4b", "qwen3-embedding:0.6b"], "loaded": [], "remote": []}
+
+    def local(self, cls="personal-public", models=("opencode/glm-5.3-flash-free",), **extra):
+        today = dt.date.today().isoformat()
+        return {"folders": [{"path": str(self.tmp), "class": cls, "allow_remote_free": True}],
+                "free_models": [{"id": m, "checked": today} for m in models], **extra}
+
+    def route(self, task, **kwargs):
+        kwargs.setdefault("local", self.local())
+        kwargs.setdefault("caps", self.caps)
+        return orchestrate.route(task, self.tmp, **kwargs)
+
+    def test_unknown_task_never_reaches_claude_in_a_free_mode(self):
+        self.assertEqual(self.route("no-such-task")["executor"], "claude")
+        blocked = self.route("no-such-task", mode="free-strict")
+        self.assertEqual(blocked["executor"], "blocked")
+        self.assertIn("free-strict", blocked["rejected"][0]["why"])
+        self.assertEqual(self.route("no-such-task", local=self.local("restricted"))["executor"], "blocked")
+
+    def test_planner_only_tasks_are_blocked_without_a_subscription(self):
+        for task in ("plan", "review-deep", "web-direction"):
+            self.assertEqual(self.route(task, mode="free-strict")["executor"], "blocked", task)
+            self.assertEqual(self.route(task)["executor"], "claude", task)
+
+    def test_free_strict_keeps_the_free_path(self):
+        decision = self.route("edit-small", mode="free-strict")
+        self.assertEqual((decision["executor"], decision["model"]), ("opencode", "opencode/glm-5.3-flash-free"))
+        self.assertEqual(self.route("lint", mode="local-only")["executor"], "tools")
+
+    def test_local_only_sends_nothing_out(self):
+        self.assertEqual(self.route("edit-small", mode="local-only")["executor"], "blocked")
+        caps = {"ollama": self.ollama, "opencode": {"path": "/bin/opencode"}}
+        decision = self.route("classify", mode="local-only", caps=caps)
+        self.assertEqual((decision["executor"], decision["model"]), ("ollama", "qwen3.5:4b"))
+
+    def test_a_run_cannot_loosen_the_owner_mode(self):
+        local = self.local(cost_mode="free-strict")
+        self.assertEqual(orchestrate.cost_mode(orchestrate.policy(), local, "existing-subscription")[0], "free-strict")
+        self.assertEqual(orchestrate.cost_mode(orchestrate.policy(), local, "local-only")[0], "local-only")
+        self.assertEqual(self.route("plan", local=local, mode="existing-subscription")["executor"], "blocked")
+
+    def test_risk_needs_the_owner_and_a_proven_model_not_a_brand(self):
+        yellow = self.route("edit-small", risk="yellow", mode="free-strict")
+        self.assertEqual((yellow["executor"], yellow["review"]), ("blocked", "owner"))
+        rows = [{"task": "fix-bug", "executor": "opencode", "model": "opencode/glm-5.3-flash-free", "seconds": 20, "verified": True}] * 3
+        orchestrate.bench_file().write_text("\n".join(json.dumps(r) for r in rows) + "\n", encoding="utf-8")
+        proven = self.route("edit-small", risk="yellow", mode="free-strict")
+        self.assertEqual((proven["executor"], proven["review"]), ("opencode", "owner"))
+        self.assertEqual(self.route("edit-small", risk="yellow")["executor"], "claude")
+
+    def test_large_edits_need_the_large_bench(self):
+        rows = [{"task": "fix-bug", "executor": "opencode", "model": "opencode/glm-5.3-flash-free", "seconds": 20, "verified": True}] * 3
+        orchestrate.bench_file().write_text("\n".join(json.dumps(r) for r in rows) + "\n", encoding="utf-8")
+        self.assertEqual(self.route("edit-large", mode="free-strict")["executor"], "blocked")
+        self.assertEqual(self.route("edit-small", files=9, mode="free-strict")["executor"], "blocked")
+        rows = [dict(r, task="fix-multi") for r in rows]
+        orchestrate.bench_file().write_text("\n".join(json.dumps(r) for r in rows) + "\n", encoding="utf-8")
+        self.assertEqual(self.route("edit-large", mode="free-strict")["executor"], "opencode")
+        self.assertEqual(self.route("edit-small", files=9, mode="free-strict")["executor"], "opencode")
+
+    def test_data_use_decides_before_the_name(self):
+        both = ("opencode/mimo-v2.6-flash-free", "opencode/longcat-2.5-free")
+        self.assertEqual(self.route("edit-small", local=self.local(models=both))["model"], "opencode/longcat-2.5-free")
+        private = self.local("personal-private", models=("opencode/mimo-v2.6-flash-free",))
+        refused = self.route("edit-small", local=private, mode="free-strict")
+        self.assertEqual(refused["executor"], "blocked")
+        self.assertIn("may train", refused["rejected"][0]["why"])
+        unknown = self.route("edit-small", local=self.local(models=("opencode/jev-1.13-free",)), mode="free-strict")
+        self.assertIn("no recorded data policy", unknown["rejected"][0]["why"])
+        stranger = self.local(models=("opencode/never-heard-of-it",))
+        self.assertEqual(self.route("edit-small", local=stranger, mode="free-strict")["executor"], "blocked")
+        stranger["free_models"][0]["data_use"] = "none"
+        self.assertEqual(self.route("edit-small", local=stranger, mode="free-strict")["executor"], "opencode")
+
+    def test_the_owner_cannot_soften_what_the_catalog_says(self):
+        private = self.local("personal-private", models=("opencode/mimo-v2.6-flash-free",))
+        private["free_models"][0]["data_use"] = "none"
+        self.assertEqual(self.route("edit-small", local=private, mode="free-strict")["executor"], "blocked")
+
+    def test_paid_unknown_and_expired_offers_are_refused(self):
+        today = dt.date.today()
+        for change, text in (({"cost": "paid"}, "paid cost"), ({"cost": "unknown"}, "unknown cost"), ({"cost": "trial"}, "trial cost"),
+                             ({"review_by": (today - dt.timedelta(days=1)).isoformat()}, "checked again")):
+            entry = {"id": "x-free", "executor": "opencode", "cost": "free-promo", "data": {"stores": "no", "trains": "no"}, **change}
+            decision = self.route("edit-small", local=self.local(models=("opencode/x-free",)), mode="free-strict",
+                                  catalog={"models": [entry]})
+            self.assertEqual(decision["executor"], "blocked", change)
+            self.assertIn(text, decision["rejected"][0]["why"])
+
+    def test_localhost_is_not_proof_of_local(self):
+        conf = orchestrate.policy()
+        work = self.local("work")
+        self.assertTrue(orchestrate.gate("ollama", "qwen3.5:4b", self.tmp, conf, work, "local-only")[0])
+        for model in ("big-model:cloud", "glm-5.3-cloud"):
+            self.assertFalse(orchestrate.gate("ollama", model, self.tmp, conf, work)[0], model)
+        proxied = {"ollama": {"remote": ["qwen3.5:4b"]}}
+        self.assertFalse(orchestrate.gate("ollama", "qwen3.5:4b", self.tmp, conf, work, caps=proxied)[0])
+        conf["executors"]["ollama"]["url"] = "http://gateway.example.com:11434"
+        self.assertFalse(orchestrate.gate("ollama", "qwen3.5:4b", self.tmp, conf, work)[0])
+        self.assertFalse(orchestrate.gate("gateway", "any", self.tmp, orchestrate.policy(), work)[0])
+
+    def test_embedding_and_capabilities(self):
+        oconf = dict(orchestrate.policy()["executors"]["ollama"], prefer=["qwen3-embedding:0.6b", "qwen3.5:4b"])
+        self.assertEqual(orchestrate.pick_ollama_model(oconf, self.ollama)[0], "qwen3.5:4b")
+        self.assertIsNone(orchestrate.pick_ollama_model(oconf, self.ollama, needs=["vision"])[0])
+        seen = dict(self.ollama, capabilities={"qwen3.5:4b": ["completion", "vision"]})
+        self.assertEqual(orchestrate.pick_ollama_model(oconf, seen, needs=["vision"])[0], "qwen3.5:4b")
+        blocked = orchestrate.delegate_ollama("hello", model="qwen3-embedding:0.6b", caps=self.ollama)
+        self.assertEqual(blocked["state"], "blocked")
+
+    def test_split_model_only_with_its_own_history(self):
+        oconf = dict(orchestrate.policy()["executors"]["ollama"], prefer=["qwen3.5:9b"])
+        info = {"models": ["qwen3.5:9b"], "loaded": [{"name": "qwen3.5:9b", "gpu_share": 0.57}], "remote": []}
+        self.assertIsNone(orchestrate.pick_ollama_model(oconf, info)[0])
+        measured = {("ollama", "qwen3.5:9b"): {"p50_s": 9.0}}
+        self.assertEqual(orchestrate.pick_ollama_model(oconf, info, measured)[0], "qwen3.5:9b")
+
+    def test_delegation_is_gated_too(self):
+        repo = self.repo()
+        local = self.local(models=("opencode/glm-5.3-flash-free",))
+        run = orchestrate.delegate_opencode(repo, "Change a.txt", ["a.txt"], None, model="opencode/glm-5.3-flash-free",
+                                            local=local, mode="local-only", command=[sys.executable, "-c", "raise SystemExit(9)"])
+        self.assertEqual(run["state"], "blocked")
+        unchecked = orchestrate.delegate_opencode(repo, "Change a.txt", ["a.txt"], None, model="opencode/big-pickle", local=local,
+                                                  command=[sys.executable, "-c", "raise SystemExit(9)"])
+        self.assertEqual(unchecked["state"], "blocked")
+        self.assertNotIn("worktree", unchecked)
+
+    def test_table_names_every_task(self):
+        rows = orchestrate.route_table(self.tmp, local=self.local(), caps=self.caps, mode="free-strict")
+        by_task = {row["task"]: row for row in rows}
+        self.assertEqual(set(by_task), set(orchestrate.policy()["tasks"]))
+        self.assertEqual(by_task["plan"]["agent"], "blocked")
+        self.assertIn("free-strict", by_task["plan"]["why"])
+        self.assertEqual(by_task["edit-small"]["model"], "opencode/glm-5.3-flash-free")
+
+    def test_stale_notes_point_to_the_source(self):
+        catalog = {"models": [{"id": "old-free", "executor": "opencode", "source": "https://example.com/models", "checked": "2020-01-01"}]}
+        local = {"free_models": [{"id": "opencode/old-free", "checked": "2020-01-01"}]}
+        notes = " ".join(orchestrate.stale_notes(orchestrate.policy(), catalog, local))
+        self.assertIn("https://example.com/models", notes)
+        self.assertIn("opencode/old-free", notes)
 
 
 class WindowsLaunch(Base):
@@ -172,6 +320,20 @@ class Memory(Base):
         memory.add(db, "decision", "Use FTS5 first", ref="docs/005", source="owner")
         self.assertEqual(len(memory.search(db, "fts5")), 1)
 
+    def test_hints_expire_and_facts_stay(self):
+        db = memory.connect(self.tmp / "m.db")
+        memory.add(db, "decision", "Keep the scroll scenes", ref="docs/decisions/0003", source="owner")
+        hint = memory.add(db, "note", "The router probably prefers GLM")
+        db.execute("UPDATE entries SET created = datetime('now', '-200 days')")
+        db.commit()
+        self.assertEqual({e["source"] for e in memory.export(db)}, {"owner", "agent"})
+        self.assertGreater(memory.age_days(memory.export(db)[0]["created"]), memory.OLD_DAYS)
+        self.assertEqual(memory.expire(db, 180), 1)
+        left = memory.export(db)
+        self.assertEqual([e["source"] for e in left], ["owner"])
+        self.assertNotIn(hint, [e["id"] for e in left])
+        self.assertEqual(memory.search(db, "router"), [])
+
 
 class Evidence(Base):
     def test_report_matches_schema(self):
@@ -199,6 +361,66 @@ class Probe(Base):
         text = session_probe.context(repo)
         self.assertIn("route", text)
         self.assertIn("privacy of this folder", text)
+
+
+class WebSubprofiles(Base):
+    def web_repo(self, **options):
+        repo = self.tmp / "site"
+        standard.init_repo(repo, {"profile": "web", "name": "site", "options": options, "setup_done": True,
+                                  "description": "Test site."})
+        return repo
+
+    def test_requests_reach_their_subprofile(self):
+        cases = {"Explain how the device is assembled as the reader scrolls": "scroll-storytelling",
+                 "Let people change the bandwidth with sliders and see the estimated time": "interactive-data",
+                 "An orb that reacts to the microphone signal": "reactive-object",
+                 "A portfolio with expressive typography": "editorial",
+                 "An exercise with a tutor character that reacts": "characters"}
+        for request, expected in cases.items():
+            choice = standard.choose_subprofile(request)
+            self.assertEqual(choice["subprofile"], expected, request)
+            self.assertTrue(choice["summary"])
+        self.assertIsNone(standard.choose_subprofile("Make this page more dynamic")["subprofile"])
+
+    def test_the_owner_choice_wins_and_a_named_one_wins_over_it(self):
+        repo = self.web_repo(experience="editorial")
+        stored = standard.choose_subprofile("Compare two plans with sliders and a chart", repo)
+        self.assertEqual((stored["subprofile"], "owner" in stored["why"]), ("editorial", True))
+        named = standard.choose_subprofile("Use web/personajes for this exercise", repo)
+        self.assertEqual(named["subprofile"], "characters")
+
+    def test_rules_reach_agents_and_old_configs_still_work(self):
+        repo = self.web_repo(experience="reactive-object")
+        agents = (repo / "AGENTS.md").read_text(encoding="utf-8")
+        self.assertIn("experience = reactive-object", agents)
+        self.assertIn("stays still when the pointer moves", agents)
+        self.assertLess(len(agents.splitlines()), 150)
+        old = standard.resolve(standard.load_profile("web"), {"motion": "subtle", "theme": "both"})
+        self.assertEqual(old["problems"], [])
+        self.assertFalse([rule for rule in old["option_rules"] if rule.startswith("experience")])
+
+    def test_summaries_fit_a_small_model(self):
+        limit = orchestrate.policy()["limits"]["ollama_max_input_chars"]
+        specs = bench_tasks.subprofiles()
+        self.assertEqual(len(specs), 5)
+        self.assertLess(sum(len(spec["summary"]) for spec in specs.values()), limit // 2)
+        choices = set(standard.load_profile("web")["options"]["experience"]["choices"])
+        self.assertEqual(choices, set(specs) | {"standard"})
+
+    def test_static_design_measures(self):
+        sys.path.insert(0, str(ROOT / "skills" / "web-improve" / "scripts"))
+        import audit_site
+        site = self.tmp / "bad"
+        site.mkdir()
+        (site / "DESIGN.md").write_text("## Tokens\n\n`--duration-fast: 150ms`\n", encoding="utf-8")
+        (site / "index.html").write_text('<html><body><h1>A</h1><h3>B</h3><img src="a.png"></body></html>', encoding="utf-8")
+        (site / "site.css").write_text("h1{font-family:Georgia}p{font-family:'Fira Code'}a{font-family:Inter;transition:color 333ms}", encoding="utf-8")
+        (site / "orb.js").write_text("function tick(){requestAnimationFrame(tick)}", encoding="utf-8")
+        found = {item["check"] for item in audit_site.design_measures(site)["findings"]}
+        self.assertEqual(found, {"font-families", "duration-outside-tokens", "script-ignores-reduced-motion", "missing-lang",
+                                 "image-without-alt", "image-without-size", "heading-order", "no-reduced-motion-rule"})
+        clean = audit_site.design_measures(ROOT / "skills" / "web-improve" / "gallery")
+        self.assertEqual(clean["findings"], [])
 
 
 if __name__ == "__main__":

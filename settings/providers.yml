@@ -1,0 +1,178 @@
+# Remote providers with a free offer. Read by scripts/providers.py, scripts/orchestrate.py and scripts/analyze.py.
+# A provider here enables nothing. Its models are used only when the cost mode and the privacy class allow remote
+# models, a key is in the environment, and the owner checked the provider or the model as free
+# (orchestrate.py consent --free-provider <id>, or --free-model <id>/<model>).
+#
+# status: adapter (the transport below can call it), no-adapter (nothing here can call it) or retired.
+# protocol: openai means POST {base_url}/chat/completions with a bearer key and GET {base_url}/models.
+# cost: the category of the free offer, as in settings/models.yml. trial, paid and unknown are never called.
+# free_rule: zero-price (a model is free only when its own listing prices everything at 0) or plan (the free plan
+#   covers the listed models, so the owner must confirm the account has no billing attached).
+# preflight: how the account and its quota are checked before a call. owner means no endpoint reports it, so the
+#   owner's check is the only evidence.
+# features: what the adapter may send. A task that needs a feature that is not listed is not evaluated there.
+# data: what the provider does with what it receives, as in settings/models.yml.
+# confirmed: what a search of the provider's own site stated on the `checked` date. No page was opened directly and
+#   no endpoint was called from the session that wrote this file. Nothing here was tested against the service.
+version: 1
+checked: 2026-11-10
+
+providers:
+  openrouter:
+    name: OpenRouter
+    status: adapter
+    protocol: openai
+    base_url: https://openrouter.ai/api/v1
+    key_env: OPENROUTER_API_KEY
+    cost: free-quota
+    free_rule: zero-price
+    preflight: openrouter-key
+    features: [chat, json, tools, vision]
+    # deny keeps routing away from endpoints that store what they receive or may train on it.
+    request_extra: {provider: {data_collection: deny}}
+    data: {stores: "unknown", trains: "no"}
+    limits: {requests_per_day: 50, requests_per_minute: 20}
+    sources:
+      - https://openrouter.ai/docs/api/reference/limits
+      - https://openrouter.ai/docs/api/api-reference/models/list-all-models-and-their-properties
+      - https://openrouter.ai/docs/api/api-reference/api-keys/get-current-api-key
+      - https://openrouter.ai/docs/guides/privacy/provider-logging
+    confirmed: "Models list with a pricing object where 0 means free. Free model ids end in :free. GET /key reports free_model_daily_requests. 50 requests a day and 20 a minute on an account without purchased credits. 402 on a negative balance, 429 on a limit. Images as image_url with a URL or base64."
+    notes: "The limits are for the whole account, not per key or model. Some free models log and train by design: with data_collection deny those requests fail instead of being sent. The openrouter/free router picks a model at random, so it is not listed as a model."
+  groq:
+    name: Groq
+    status: adapter
+    protocol: openai
+    base_url: https://api.groq.com/openai/v1
+    key_env: GROQ_API_KEY
+    cost: free-quota
+    free_rule: plan
+    preflight: owner
+    features: [chat, json, tools, vision]
+    data: {stores: "yes", trains: "no"}
+    limits: {requests_per_day: null, requests_per_minute: null}
+    sources:
+      - https://console.groq.com/docs/openai
+      - https://console.groq.com/docs/rate-limits
+      - https://console.groq.com/docs/your-data
+    confirmed: "OpenAI-compatible base URL and GET /models. A Free plan at 0 dollars. Limits per organization, reported in x-ratelimit headers and retry-after. Inputs and outputs are not used for training. Logs may be kept up to 30 days unless zero data retention is turned on."
+    notes: "The free plan numbers were not found. The account's own limits page has them. A key from an organization on a paid plan is billed, so the owner confirms the plan."
+  mistral:
+    name: Mistral
+    status: adapter
+    protocol: openai
+    base_url: https://api.mistral.ai/v1
+    key_env: MISTRAL_API_KEY
+    cost: free-quota
+    free_rule: plan
+    preflight: owner
+    features: [chat, json, tools, vision]
+    data: {stores: "unknown", trains: "yes"}
+    limits: {requests_per_day: null, requests_per_minute: null}
+    sources:
+      - https://docs.mistral.ai/api
+      - https://help.mistral.ai/en/articles/455207-can-i-opt-out-of-my-input-or-output-data-being-used-for-training
+      - https://docs.mistral.ai/resources/known-limitations
+    confirmed: "POST /v1/chat/completions with a bearer key, messages, image_url parts and a model field in the reply. A free Experiment plan. In free mode the data may be used for training unless the admin turns it off. 429 on a limit."
+    notes: "The request and reply of GET /v1/models were not found, so discovery is unconfirmed. Models in the Labs stage cannot opt out of data collection."
+  gemini:
+    name: Google Gemini API
+    status: adapter
+    protocol: openai
+    base_url: https://generativelanguage.googleapis.com/v1beta/openai
+    key_env: GEMINI_API_KEY
+    cost: free-quota
+    free_rule: plan
+    preflight: owner
+    features: [chat, json, tools, vision]
+    data: {stores: "unknown", trains: "yes"}
+    limits: {requests_per_day: null, requests_per_minute: null}
+    sources:
+      - https://ai.google.dev/gemini-api/docs/openai
+      - https://ai.google.dev/gemini-api/docs/billing
+      - https://ai.google.dev/gemini-api/docs/rate-limits
+    confirmed: "An OpenAI-compatible endpoint at this base URL. New accounts start on a free tier with limits per model and per project. Linking a billing account moves the project to a paid tier, where prompts are not used to improve Google products."
+    notes: "On the free tier the data is used to improve products. A project with billing linked is charged, so the owner confirms the project has none."
+  cloudflare:
+    name: Cloudflare Workers AI
+    status: adapter
+    protocol: openai
+    base_url: "https://api.cloudflare.com/client/v4/accounts/{CLOUDFLARE_ACCOUNT_ID}/ai/v1"
+    key_env: CLOUDFLARE_API_TOKEN
+    cost: free-quota
+    free_rule: plan
+    preflight: owner
+    features: [chat, json]
+    data: {stores: "no", trains: "no"}
+    limits: {requests_per_day: null, requests_per_minute: null}
+    sources:
+      - https://developers.cloudflare.com/workers-ai/configuration/open-ai-compatibility/
+      - https://developers.cloudflare.com/workers-ai/platform/pricing/
+      - https://developers.cloudflare.com/workers-ai/platform/data-usage/
+    confirmed: "OpenAI-compatible chat completions under /ai/v1 of the account. 10,000 Neurons a day at no charge. More needs the Workers Paid plan. Customer content is not used for training and is not kept after the reply. Some models answer 403 on the free plan."
+    notes: "The quota is in Neurons, not requests, and no endpoint was found that reports what is left. A models list under /ai/v1 was not found, so discovery is unconfirmed. Tools and images were not confirmed for this endpoint."
+  cerebras:
+    name: Cerebras
+    status: adapter
+    protocol: openai
+    base_url: https://api.cerebras.ai/v1
+    key_env: CEREBRAS_API_KEY
+    cost: trial
+    free_rule: plan
+    preflight: owner
+    features: [chat, json, tools, vision]
+    data: {stores: "unknown", trains: "unknown"}
+    limits: {requests_per_day: null, requests_per_minute: 5}
+    sources:
+      - https://inference-docs.cerebras.ai/resources/openai
+      - https://inference-docs.cerebras.ai/support/rate-limits
+      - https://inference-docs.cerebras.ai/support/change-log
+    confirmed: "OpenAI-compatible base URL. No free tier that renews: new accounts get 5 dollars of credit after adding a verified payment method, and it expires in 30 days. Access stops when the credit ends. Images only as base64."
+    notes: "A trial with a payment method is outside the free path, so it is never called."
+  nvidia:
+    name: NVIDIA API catalog
+    status: adapter
+    protocol: openai
+    base_url: https://integrate.api.nvidia.com/v1
+    key_env: NVIDIA_API_KEY
+    cost: trial
+    free_rule: plan
+    preflight: owner
+    features: [chat]
+    data: {stores: "unknown", trains: "unknown"}
+    limits: {requests_per_day: null, requests_per_minute: null}
+    sources:
+      - https://docs.api.nvidia.com/nim/docs/product
+    confirmed: "A trial of NVIDIA NIM with a fixed number of free API credits, for evaluation and prototyping only."
+    notes: "Credits that run out are outside the free path, so it is never called. The base URL and its compatibility were not confirmed."
+  github-models:
+    name: GitHub Models
+    status: retired
+    cost: unknown
+    sources:
+      - https://docs.github.com/billing/managing-billing-for-your-products/about-billing-for-github-models
+    confirmed: "Retired on 2026-07-30: the playground, the catalog and the inference API are no longer available."
+  opencode-zen-api:
+    name: OpenCode Zen by API
+    status: no-adapter
+    cost: unknown
+    sources:
+      - https://opencode.ai/docs/zen
+    confirmed: "A models list at opencode.ai/zen/v1/models. Free models are for use from OpenCode and answer 403 to another client."
+    notes: "The free Zen models stay under the opencode executor in settings/models.yml. A free model that was withdrawn leaves the list, and choosing it fails with Model unavailable."
+  ollama-cloud:
+    name: Ollama cloud models
+    status: no-adapter
+    cost: unknown
+    sources:
+      - https://ollama.com/pricing
+    confirmed: "Cloud models are billed per token. The free plan includes a small monthly amount for some starter models."
+    notes: "A cloud tag in the local Ollama runs on Ollama's servers. It is listed as remote and never tested, because nothing here can tell a starter model from a billed one."
+  antigravity-cli:
+    name: Antigravity CLI
+    status: no-adapter
+    cost: unknown
+    sources:
+      - https://developers.googleblog.com/an-important-update-transitioning-gemini-cli-to-antigravity-cli/
+    confirmed: "Replaced Gemini CLI for free individual use on 2026-06-18."
+    notes: "A command line tool, not an API. Its free quota and its use without a person were not confirmed."

@@ -39,9 +39,13 @@ fixed:
   - Meet WCAG 2.2 AA. Text contrast of at least 4.5:1 (3:1 for large text), full keyboard use, visible focus, a label on every field, alt text on every meaningful image.
   - Use native semantic HTML first (button, a, nav, main, headings in order). Every page has lang and a title.
   - Every interactive element has hover, focus, active and disabled states. Async actions show loading, success and error.
-  - Every view that loads or lists data has empty, loading and error states.
+  - Every view that loads or lists data has empty, loading and error states. Each one says what happened and offers the next action.
   - Layouts work from 320 px wide to large screens with no horizontal scroll.
-  - Respect prefers-reduced-motion.
+  - Respect prefers-reduced-motion in CSS and in JavaScript. Loops, pointer tracking, parallax, rotation and programmatic scroll stop too.
+  - Spacing, type sizes, radii, durations and easing come from the tokens in DESIGN.md. A value outside them needs a reason.
+  - Use native CSS first (View Transitions, container queries, clamp() for fluid type, oklch colors). Add an animation library only when the native option cannot do the interaction.
+  - Load fonts with font-display, preload the one used above the fold, and give the fallback font similar metrics.
+  - A first-time visitor can tell what the page offers and what to do within the first screen.
   - Give images and embeds a width and height so nothing jumps while loading. Measure Core Web Vitals before claiming performance (LCP under 2.5 s, INP under 200 ms, CLS under 0.1).
   - No fabricated content. No invented statistics, testimonials, logos, or links to pages that do not exist. Label honest placeholders as placeholders.
   - No control without real behavior.
@@ -55,6 +59,31 @@ with_reason:
   - Third-party scripts (analytics, widgets, embeds, trackers).
 
 options:
+  experience:
+    question: Which kind of experience leads the site? Each one is a web sub-profile, described in web-improve.
+    default: standard
+    choices:
+      standard: {}
+      scroll-storytelling:
+        rules:
+          - Each scroll scene defines its start, middle states and end, and works forward and back. A long sequence links straight to each stage and to the result.
+          - Say per scene whether motion follows the scroll position or plays once on entry. With reduced motion the stages show as still steps.
+      interactive-data:
+        rules:
+          - Every value shows its unit and label. The calculation lives apart from the animation and has its own tests.
+          - Label sample and simulated data, and offer a reset. A confidence or prediction figure states its method.
+      reactive-object:
+        rules:
+          - Name the states of the object (for example idle, listening, working, error) and tie every visual change to one of them.
+          - The controls work without the object, and a still image replaces it when WebGL is missing. With reduced motion and no task running it stays still when the pointer moves.
+      editorial:
+        rules:
+          - The real content sets the size and structure of each section. A screen reader reads animated text once, with no duplicated layers.
+          - Check line breaks in every language of the site, with late fonts and at 320 px.
+      characters:
+        rules:
+          - Name the event behind each reaction of a character. Reactions are short and stop with reduced motion.
+          - A character never gates the task. Every action and every piece of information is also in controls and text.
   hosting:
     question: Where will it be published?
     default: github-pages

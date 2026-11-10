@@ -1,0 +1,331 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Interaction patterns</title>
+<meta name="description" content="Working examples of the interaction patterns of the web-improve skill.">
+<style>
+:root {
+  color-scheme: light dark;
+  --space-1: 0.25rem; --space-2: 0.5rem; --space-3: 1rem; --space-4: 1.5rem; --space-5: 2.5rem;
+  --text-s: 0.875rem; --text-m: 1rem; --text-l: clamp(1.25rem, 1rem + 1.2vw, 1.6rem); --text-xl: clamp(1.6rem, 1.2rem + 2.4vw, 2.4rem);
+  --radius-s: 0.4rem; --radius-m: 0.75rem; --radius-full: 999px;
+  --duration-fast: 150ms; --duration-base: 250ms; --ease-out: cubic-bezier(0.2, 0, 0, 1);
+  --paper: #f6f5f1; --surface: #ffffff; --ink: #1c1b22; --muted: #55535f; --line: #c9c7d1;
+  --accent: #2b4acb; --on-accent: #ffffff; --accent-deep: #1b2f86; --good: #17693a; --bad: #a3231c;
+}
+@media (prefers-color-scheme: dark) {
+  :root { --paper: #15141a; --surface: #201f27; --ink: #f1f0f5; --muted: #b5b3c0; --line: #4a4856;
+          --accent: #9db0ff; --on-accent: #10142e; --accent-deep: #6f86e6; --good: #7fd6a0; --bad: #ff9c94; }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--paper); color: var(--ink); font: var(--text-m)/1.55 system-ui, sans-serif; }
+main { max-width: 44rem; margin: 0 auto; padding: var(--space-4) var(--space-3) var(--space-5); }
+h1 { font-size: var(--text-xl); line-height: 1.15; margin: 0 0 var(--space-2); }
+h2 { font-size: var(--text-l); line-height: 1.2; margin: 0 0 var(--space-2); }
+p { margin: 0 0 var(--space-3); max-width: 62ch; }
+.note { color: var(--muted); font-size: var(--text-s); }
+header { display: flex; flex-wrap: wrap; gap: var(--space-3); justify-content: space-between; align-items: start; margin-bottom: var(--space-4); }
+section { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-m); padding: clamp(var(--space-3), 5vw, var(--space-4)); margin-bottom: var(--space-3); }
+button, input, summary { font: inherit; color: inherit; }
+:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+
+.lang { display: flex; gap: var(--space-1); }
+.lang button { min-width: 2.75rem; min-height: 2.75rem; border: 1px solid var(--line); background: var(--surface); border-radius: var(--radius-s); cursor: pointer; }
+.lang button[aria-pressed="true"] { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+
+.segmented { position: relative; display: inline-flex; padding: var(--space-1); background: var(--paper); border: 1px solid var(--line); border-radius: var(--radius-full); max-width: 100%; }
+.segmented .indicator { position: absolute; top: var(--space-1); bottom: var(--space-1); left: 0; width: 0; border-radius: var(--radius-full); background: var(--accent);
+  transform: translateX(var(--x, 0px)); transition: transform var(--duration-base) var(--ease-out), width var(--duration-base) var(--ease-out); }
+.segmented [role="radio"] { position: relative; min-height: 2.75rem; padding: 0 clamp(var(--space-2), 3.5vw, var(--space-3)); border: 0; background: none; border-radius: var(--radius-full); cursor: pointer;
+  transition: color var(--duration-fast) var(--ease-out); }
+.segmented [role="radio"][aria-checked="true"] { color: var(--on-accent); }
+.segmented [role="radio"]:hover:not([aria-checked="true"]) { background: color-mix(in srgb, var(--ink) 8%, transparent); }
+
+.depth { min-height: 2.75rem; padding: 0 var(--space-4); border: 0; border-radius: var(--radius-s); background: var(--accent); color: var(--on-accent); cursor: pointer;
+  box-shadow: 0 4px 0 var(--accent-deep); transform: translateY(0); transition: transform var(--duration-fast) var(--ease-out), box-shadow var(--duration-fast) var(--ease-out); }
+.depth:hover { transform: translateY(-1px); box-shadow: 0 5px 0 var(--accent-deep); }
+.depth:active { transform: translateY(4px); box-shadow: 0 0 0 var(--accent-deep); }
+.depth:disabled { transform: none; box-shadow: none; background: var(--line); color: var(--muted); cursor: not-allowed; }
+/* The press moves the face, not the hit area: the wrapper keeps the place. */
+.press-area { display: inline-block; padding-bottom: 4px; }
+
+.action { min-height: 2.75rem; min-width: 9rem; padding: 0 var(--space-3); border: 1px solid var(--ink); border-radius: var(--radius-s); background: var(--surface); cursor: pointer; }
+.action[data-state="running"] { cursor: progress; border-style: dashed; color: var(--muted); }
+.action[data-state="success"] { border-color: var(--good); color: var(--good); }
+.action[data-state="error"] { border-color: var(--bad); color: var(--bad); }
+.row { display: flex; flex-wrap: wrap; gap: var(--space-3); align-items: center; }
+label.check { display: inline-flex; gap: var(--space-2); align-items: center; min-height: 2.75rem; }
+
+.panel { border: 1px solid var(--line); border-radius: var(--radius-m); padding: var(--space-3); display: grid; gap: var(--space-2);
+  transition: border-color var(--duration-fast) var(--ease-out), box-shadow var(--duration-fast) var(--ease-out); }
+.panel:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 25%, transparent); }
+.panel label { display: grid; gap: var(--space-1); font-size: var(--text-s); }
+.panel input { min-height: 2.75rem; padding: 0 var(--space-2); border: 1px solid var(--muted); border-radius: var(--radius-s); background: var(--surface); }
+
+details { border: 1px solid var(--line); border-radius: var(--radius-s); }
+summary { min-height: 2.75rem; padding: var(--space-2) var(--space-3); cursor: pointer; }
+details > div { padding: 0 var(--space-3) var(--space-3); }
+
+.progress { height: 0.75rem; border-radius: var(--radius-full); background: var(--paper); border: 1px solid var(--line); overflow: hidden; margin-bottom: var(--space-2); }
+.progress span { display: block; height: 100%; width: calc(var(--done, 0) / 3 * 100%); background: var(--good); transition: width var(--duration-base) var(--ease-out); }
+
+.stage { display: grid; place-items: center; height: 12rem; border: 1px dashed var(--line); border-radius: var(--radius-m); margin-bottom: var(--space-3); touch-action: none; }
+.orb { width: 6rem; height: 6rem; border-radius: 50%; background: radial-gradient(circle at 35% 30%, var(--surface), var(--accent) 60%, var(--accent-deep)); will-change: transform; }
+.orb[data-state="listening"] { box-shadow: 0 0 0 0.5rem color-mix(in srgb, var(--accent) 30%, transparent); }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; scroll-behavior: auto !important; }
+}
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <div>
+      <h1 data-i18n="title">Interaction patterns</h1>
+      <p class="note" data-i18n="intro">Working examples for the web-improve skill. Nothing here saves or sends data.</p>
+    </div>
+    <div class="lang" role="group" aria-label="Language">
+      <button type="button" data-lang="en" aria-pressed="true">EN</button>
+      <button type="button" data-lang="es" aria-pressed="false">ES</button>
+    </div>
+  </header>
+
+  <section aria-labelledby="h-seg">
+    <h2 id="h-seg" data-i18n="segTitle">Segmented control</h2>
+    <p data-i18n="segText">Arrow keys move the selection. The indicator follows the chosen option and its width, also after a language change.</p>
+    <div class="segmented" role="radiogroup" aria-labelledby="h-seg" id="modes">
+      <span class="indicator" aria-hidden="true"></span>
+      <button type="button" role="radio" aria-checked="true" tabindex="0" data-mode="study" data-i18n="study">Study</button>
+      <button type="button" role="radio" aria-checked="false" tabindex="-1" data-mode="practice" data-i18n="practice">Practice</button>
+      <button type="button" role="radio" aria-checked="false" tabindex="-1" data-mode="review" data-i18n="review">Review</button>
+    </div>
+    <p class="note" id="mode-note" aria-live="polite"></p>
+  </section>
+
+  <section aria-labelledby="h-depth">
+    <h2 id="h-depth" data-i18n="depthTitle">Depth button</h2>
+    <p data-i18n="depthText">It presses down onto its shadow. The area that reacts does not move.</p>
+    <span class="press-area"><button type="button" class="depth" id="depth" data-i18n="depthLabel">Start</button></span>
+    <span class="note" id="depth-count" aria-live="polite"></span>
+  </section>
+
+  <section aria-labelledby="h-action">
+    <h2 id="h-action" data-i18n="actionTitle">Action with a result</h2>
+    <p data-i18n="actionText">The label changes only after the operation ends. The save here is simulated.</p>
+    <div class="row">
+      <button type="button" class="action" id="save" data-state="rest" data-i18n="save">Save</button>
+      <label class="check"><input type="checkbox" id="fail"> <span data-i18n="fail">Make the next save fail</span></label>
+    </div>
+    <p class="note" id="save-status" role="status"></p>
+  </section>
+
+  <section aria-labelledby="h-panel">
+    <h2 id="h-panel" data-i18n="panelTitle">Focus panel</h2>
+    <p data-i18n="panelText">The group lights up while you type inside it.</p>
+    <div class="panel">
+      <label><span data-i18n="name">Name</span><input type="text" id="name" autocomplete="off"></label>
+      <label><span data-i18n="topic">Topic</span><input type="text" id="topic" autocomplete="off"></label>
+    </div>
+  </section>
+
+  <section aria-labelledby="h-more">
+    <h2 id="h-more" data-i18n="moreTitle">Expanding content</h2>
+    <details id="more">
+      <summary data-i18n="moreSummary">Why this pattern uses details</summary>
+      <div><p data-i18n="moreBody">It opens with the keyboard, works without JavaScript and the browser search finds the text inside.</p></div>
+    </details>
+  </section>
+
+  <section aria-labelledby="h-progress">
+    <h2 id="h-progress" data-i18n="progressTitle">Progress signal</h2>
+    <div class="progress" aria-hidden="true"><span id="bar"></span></div>
+    <p id="progress-text" role="status"></p>
+    <div class="row">
+      <button type="button" class="action" id="step" data-i18n="stepLabel">Finish a step</button>
+      <button type="button" class="action" id="reset" data-i18n="reset">Reset</button>
+    </div>
+  </section>
+
+  <section aria-labelledby="h-orb">
+    <h2 id="h-orb" data-i18n="orbTitle">Reactive object</h2>
+    <p data-i18n="orbText">The orb follows the pointer. With reduced motion it moves only while listening, the task you start yourself.</p>
+    <div class="stage" id="stage"><div class="orb" id="orb" data-state="idle" data-x="0" data-y="0"></div></div>
+    <div class="row">
+      <button type="button" class="action" id="listen" aria-pressed="false" data-i18n="listen">Start listening</button>
+      <span class="note" id="orb-state" role="status"></span>
+    </div>
+  </section>
+</main>
+<script>
+const TEXT = {
+  en: { title: "Interaction patterns", intro: "Working examples for the web-improve skill. Nothing here saves or sends data.",
+        segTitle: "Segmented control", segText: "Arrow keys move the selection. The indicator follows the chosen option and its width, also after a language change.",
+        study: "Study", practice: "Practice", review: "Review", modeNote: "Mode: ",
+        depthTitle: "Depth button", depthText: "It presses down onto its shadow. The area that reacts does not move.", depthLabel: "Start", pressed: "Pressed: ",
+        actionTitle: "Action with a result", actionText: "The label changes only after the operation ends. The save here is simulated.",
+        save: "Save", saving: "Saving", saved: "Saved", retry: "Try again", fail: "Make the next save fail",
+        savedStatus: "Saved.", errorStatus: "It could not be saved. Nothing was lost. Try again.",
+        panelTitle: "Focus panel", panelText: "The group lights up while you type inside it.", name: "Name", topic: "Topic",
+        moreTitle: "Expanding content", moreSummary: "Why this pattern uses details",
+        moreBody: "It opens with the keyboard, works without JavaScript and the browser search finds the text inside.",
+        progressTitle: "Progress signal", stepLabel: "Finish a step", reset: "Reset", progress: " of 3 steps done", allDone: "All 3 steps done.",
+        orbTitle: "Reactive object", orbText: "The orb follows the pointer. With reduced motion it moves only while listening, the task you start yourself.",
+        listen: "Start listening", stop: "Stop listening", idle: "State: idle", listening: "State: listening" },
+  es: { title: "Patrones de interacción", intro: "Ejemplos que funcionan para la skill web-improve. Aquí nada guarda ni envía datos.",
+        segTitle: "Botonera", segText: "Las flechas mueven la selección. El indicador sigue la opción elegida y su ancho, también al cambiar de idioma.",
+        study: "Estudiar", practice: "Practicar", review: "Repasar", modeNote: "Modo: ",
+        depthTitle: "Botón con profundidad", depthText: "Se hunde hacia su sombra. La zona que responde no se mueve.", depthLabel: "Empezar", pressed: "Pulsado: ",
+        actionTitle: "Acción con resultado", actionText: "La etiqueta cambia solo cuando la operación termina. Aquí el guardado es simulado.",
+        save: "Guardar", saving: "Guardando", saved: "Guardado", retry: "Reintentar", fail: "Hacer que falle el próximo guardado",
+        savedStatus: "Guardado.", errorStatus: "No se pudo guardar. No se perdió nada. Inténtalo otra vez.",
+        panelTitle: "Panel con foco", panelText: "El grupo se resalta mientras escribes dentro.", name: "Nombre", topic: "Tema",
+        moreTitle: "Contenido que se despliega", moreSummary: "Por qué este patrón usa details",
+        moreBody: "Se abre con el teclado, funciona sin JavaScript y la búsqueda del navegador encuentra el texto de dentro.",
+        progressTitle: "Señal de progreso", stepLabel: "Terminar un paso", reset: "Reiniciar", progress: " de 3 pasos hechos", allDone: "Los 3 pasos están hechos.",
+        orbTitle: "Objeto reactivo", orbText: "La esfera sigue al puntero. Con movimiento reducido solo se mueve mientras escucha, la tarea que inicias tú.",
+        listen: "Empezar a escuchar", stop: "Dejar de escuchar", idle: "Estado: reposo", listening: "Estado: escuchando" },
+};
+const state = { lang: "en", mode: "study", presses: 0, save: "rest", done: 0, listening: false };
+const $ = (id) => document.getElementById(id);
+const t = (key) => TEXT[state.lang][key];
+const reduced = window.matchMedia("(prefers-reduced-motion: reduce)");
+
+// Segmented control: the indicator is measured from the selected option, never from a fixed size.
+const group = $("modes");
+const options = [...group.querySelectorAll('[role="radio"]')];
+function placeIndicator() {
+  const chosen = options.find((option) => option.dataset.mode === state.mode);
+  const indicator = group.querySelector(".indicator");
+  indicator.style.setProperty("--x", `${chosen.offsetLeft}px`);
+  indicator.style.width = `${chosen.offsetWidth}px`;
+}
+function selectMode(mode, focus) {
+  state.mode = mode;
+  for (const option of options) {
+    const on = option.dataset.mode === mode;
+    option.setAttribute("aria-checked", String(on));
+    option.tabIndex = on ? 0 : -1;
+    if (on && focus) option.focus();
+  }
+  placeIndicator();
+  $("mode-note").textContent = t("modeNote") + t(mode);
+}
+group.addEventListener("click", (event) => {
+  const option = event.target.closest('[role="radio"]');
+  if (option) selectMode(option.dataset.mode, false);
+});
+group.addEventListener("keydown", (event) => {
+  const index = options.findIndex((option) => option.dataset.mode === state.mode);
+  const next = { ArrowRight: index + 1, ArrowDown: index + 1, ArrowLeft: index - 1, ArrowUp: index - 1, Home: 0, End: options.length - 1 }[event.key];
+  if (next === undefined) return;
+  event.preventDefault();
+  selectMode(options[(next + options.length) % options.length].dataset.mode, true);
+});
+new ResizeObserver(placeIndicator).observe(group);
+if (document.fonts) document.fonts.ready.then(placeIndicator);
+
+// Depth button
+$("depth").addEventListener("click", () => { state.presses += 1; render(); });
+
+// Action with a result: the label follows the real outcome of the operation.
+function simulatedSave() {
+  const fail = $("fail").checked;
+  return new Promise((resolve, reject) => setTimeout(() => (fail ? reject(new Error("simulated")) : resolve()), 600));
+}
+$("save").addEventListener("click", async () => {
+  if (state.save === "running") return;
+  state.save = "running";
+  render();
+  try {
+    await simulatedSave();
+    state.save = "success";
+  } catch {
+    state.save = "error";
+    $("fail").checked = false;
+  }
+  render();
+});
+
+// Progress signal
+$("step").addEventListener("click", () => { state.done = Math.min(3, state.done + 1); render(); });
+$("reset").addEventListener("click", () => { state.done = 0; render(); });
+
+// Reactive object. One loop moves it, and the loop itself honors reduced motion, visibility and the tab being hidden.
+const orb = $("orb");
+const stage = $("stage");
+const target = { x: 0, y: 0 };
+const position = { x: 0, y: 0 };
+let frame = 0;
+let onScreen = true;
+const mayMove = () => state.listening || !reduced.matches;
+function tick() {
+  frame = 0;
+  if (!mayMove() || document.hidden || !onScreen) return;
+  position.x += (target.x - position.x) * 0.15;
+  position.y += (target.y - position.y) * 0.15;
+  const settled = Math.abs(target.x - position.x) < 0.1 && Math.abs(target.y - position.y) < 0.1;
+  if (settled) { position.x = target.x; position.y = target.y; }
+  orb.style.transform = `translate(${position.x.toFixed(1)}px, ${position.y.toFixed(1)}px)`;
+  orb.dataset.x = position.x.toFixed(1);
+  orb.dataset.y = position.y.toFixed(1);
+  if (!settled) frame = requestAnimationFrame(tick);
+}
+function wake() { if (!frame && mayMove()) frame = requestAnimationFrame(tick); }
+stage.addEventListener("pointermove", (event) => {
+  if (!mayMove()) return;
+  const box = stage.getBoundingClientRect();
+  target.x = Math.max(-1, Math.min(1, (event.clientX - box.left) / box.width * 2 - 1)) * 40;
+  target.y = Math.max(-1, Math.min(1, (event.clientY - box.top) / box.height * 2 - 1)) * 24;
+  wake();
+});
+stage.addEventListener("pointerleave", () => { target.x = 0; target.y = 0; wake(); });
+$("listen").addEventListener("click", () => {
+  state.listening = !state.listening;
+  if (!state.listening) { target.x = 0; target.y = 0; }
+  render();
+  rest();
+});
+function rest() {
+  if (mayMove()) return wake();
+  cancelAnimationFrame(frame);
+  frame = 0;
+  target.x = target.y = position.x = position.y = 0;
+  orb.style.transform = "translate(0px, 0px)";
+  orb.dataset.x = orb.dataset.y = "0.0";
+}
+reduced.addEventListener("change", rest);
+document.addEventListener("visibilitychange", wake);
+new IntersectionObserver(([entry]) => { onScreen = entry.isIntersecting; wake(); }).observe(stage);
+
+// Language
+for (const button of document.querySelectorAll("[data-lang]")) {
+  button.addEventListener("click", () => { state.lang = button.dataset.lang; render(); });
+}
+function render() {
+  document.documentElement.lang = state.lang;
+  document.title = t("title");
+  for (const node of document.querySelectorAll("[data-i18n]")) node.textContent = t(node.dataset.i18n);
+  for (const button of document.querySelectorAll("[data-lang]")) button.setAttribute("aria-pressed", String(button.dataset.lang === state.lang));
+  selectMode(state.mode, false);
+  $("depth-count").textContent = state.presses ? t("pressed") + state.presses : "";
+  const save = $("save");
+  save.dataset.state = state.save;
+  save.disabled = state.save === "running";
+  save.textContent = { rest: t("save"), running: t("saving"), success: t("saved"), error: t("retry") }[state.save];
+  $("save-status").textContent = { rest: "", running: "", success: t("savedStatus"), error: t("errorStatus") }[state.save];
+  $("bar").style.setProperty("--done", state.done);
+  $("progress-text").textContent = state.done === 3 ? t("allDone") : state.done + t("progress");
+  $("step").disabled = state.done === 3;
+  orb.dataset.state = state.listening ? "listening" : "idle";
+  $("listen").setAttribute("aria-pressed", String(state.listening));
+  $("listen").textContent = state.listening ? t("stop") : t("listen");
+  $("orb-state").textContent = state.listening ? t("listening") : t("idle");
+}
+render();
+rest();
+</script>
+</body>
+</html>

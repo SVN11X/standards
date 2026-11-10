@@ -92,7 +92,7 @@ def fake_run(tmp: Path, mode: str, conf: dict, **kwargs) -> dict:
     script = tmp / "fake_executor.py"
     script.write_text(FAKE_EXECUTOR, encoding="utf-8")
     local = {"folders": [{"path": str(tmp), "class": "personal-public"}],
-             "free_models": [{"id": f"fake/{mode}", "checked": dt.date.today().isoformat()}]}
+             "free_models": [{"id": f"fake/{mode}", "checked": dt.date.today().isoformat(), "data_use": "none"}]}
     return orchestrate.delegate_opencode(
         repo, "Fix sum_even in calc.py.", ["calc.py"], f'"{sys.executable}" -m unittest test_calc',
         model=f"fake/{mode}", protect=kwargs.get("protect", ["test_*.py"]), untrusted=kwargs.get("untrusted"),
@@ -432,6 +432,93 @@ def run_suite(level: str = "standard", repo: Path = ROOT, only: str | None = Non
             return (chosen["executor"] == "blocked" and old["executor"] == "claude"), \
                 f"work code: {chosen['executor']}, free model checked long ago: {old['executor']}"
         add("F.privacy-and-stale-free-model", "resilience", f4, expected="client code never goes to a free model and an old price check does not count")
+
+        # P. Cost and privacy policy: the free modes must stop before a paid or remote call, not after it
+        today = dt.date.today().isoformat()
+        offline = {"ollama": {"up": False}, "opencode": {"path": "/usr/bin/opencode"}}
+
+        def public(*models, **extra):
+            return {"folders": [{"path": str(tmp), "class": "personal-public"}],
+                    "free_models": [{"id": m, "checked": today} for m in models], **extra}
+
+        def p1():
+            strict = orchestrate.route("made-up-task", tmp, conf=conf, local=public(), caps=offline, mode="free-strict")
+            secret = orchestrate.route("made-up-task", tmp, conf=conf, caps=offline,
+                                       local={"folders": [{"path": str(tmp), "class": "restricted"}]})
+            return strict["executor"] == "blocked" and secret["executor"] == "blocked", \
+                f"free-strict: {strict['executor']}, restricted folder: {secret['executor']}"
+        add("P.unknown-task-type", "policy", p1, expected="an unknown task type never reaches Claude in a free mode or from a restricted folder")
+
+        def p2():
+            local = public("opencode/glm-5.3-flash-free")
+            risky = orchestrate.route("edit-small", tmp, risk="red", conf=conf, local=local, caps=offline, mode="free-strict")
+            planner = orchestrate.route("plan", tmp, conf=conf, local=local, caps=offline, mode="free-strict")
+            return (risky["executor"] == "blocked" and risky["review"] == "owner" and planner["executor"] == "blocked"), \
+                f"red edit: {risky['executor']} with review by {risky['review']}, plan: {planner['executor']}"
+        add("P.risk-without-proven-model", "policy", p2, expected="high risk without a proven free model is blocked and keeps the owner's review")
+
+        def p3():
+            catalog = {"models": [{"id": "pro-free", "executor": "opencode", "cost": "paid", "data": {"stores": "no", "trains": "no"}},
+                                  {"id": "old-free", "executor": "opencode", "cost": "free-promo", "review_by": "2020-01-01",
+                                   "data": {"stores": "no", "trains": "no"}},
+                                  {"id": "tool-free", "executor": "opencode", "cost": "unknown", "data": {"stores": "no", "trains": "no"}}]}
+            found = [orchestrate.route("edit-small", tmp, conf=conf, local=public(f"opencode/{name}"), caps=offline,
+                                       mode="free-strict", catalog=catalog)["executor"] for name in ("pro-free", "old-free", "tool-free")]
+            return found == ["blocked"] * 3, f"paid, expired promotion, unknown price: {found}"
+        add("P.price-unknown-or-expired", "policy", p3, expected="a model is refused before any request when its price is paid, unknown or its promotion expired")
+
+        def p4():
+            work = {"folders": [{"path": str(tmp), "class": "work"}], "free_models": [{"id": "big:cloud", "checked": today, "data_use": "none"}]}
+            cloud_tag = orchestrate.gate("ollama", "big:cloud", tmp, conf, work)
+            proxied = orchestrate.gate("ollama", "qwen3.5:4b", tmp, conf, work, caps={"ollama": {"remote": ["qwen3.5:4b"]}})
+            far = orchestrate.policy()
+            far["executors"]["ollama"]["url"] = "http://gateway.example.com:11434"
+            other_host = orchestrate.gate("ollama", "qwen3.5:4b", tmp, far, work)
+            gateway = orchestrate.gate("gateway", "any-model", tmp, conf, work)
+            stays = orchestrate.gate("ollama", "qwen3.5:4b", tmp, conf, work, "local-only")
+            return (not cloud_tag[0] and not proxied[0] and not other_host[0] and not gateway[0] and stays[0]), \
+                f"cloud tag: {cloud_tag[0]}, model served from a remote host: {proxied[0]}, non-local URL: {other_host[0]}, unknown gateway: {gateway[0]}, real local model: {stays[0]}"
+        add("P.work-data-through-localhost", "policy", p4, expected="work code never leaves through a cloud tag, a proxy on localhost or a gateway")
+
+        def p5():
+            local = public()
+            run = orchestrate.bench_agent("fix-bug", "opencode", "opencode/never-checked", local=local, conf=conf,
+                                          command=[sys.executable, "-c", "raise SystemExit(7)"])
+            subscription = orchestrate.bench_agent("fix-bug", "claude", None, local=public(cost_mode="free-strict"), conf=conf,
+                                                   command=[sys.executable, "-c", "raise SystemExit(7)"])
+            return run["state"] == "blocked" and subscription["state"] == "blocked", \
+                f"unchecked model: {run['state']} ({run['error']}), Claude in free-strict: {subscription['state']}"
+        add("P.bench-follows-the-same-rules", "policy", p5, expected="a benchmark cannot certify its own model as free or use the subscription in a free mode")
+
+        def p6():
+            strict = public("opencode/mimo-v2.6-flash-free", cost_mode="free-strict")
+            loosened = orchestrate.cost_mode(conf, strict, "existing-subscription")[0]
+            private = {"folders": [{"path": str(tmp), "class": "personal-private", "allow_remote_free": True}],
+                       "free_models": [{"id": "opencode/mimo-v2.6-flash-free", "checked": today, "data_use": "none"}]}
+            trained = orchestrate.route("edit-small", tmp, conf=conf, local=private, caps=offline, mode="free-strict")
+            return loosened == "free-strict" and trained["executor"] == "blocked", \
+                f"asked to loosen: stays {loosened}. Private code to a model that trains: {trained['executor']}"
+        add("P.cannot-loosen", "policy", p6, expected="a run cannot loosen the owner's cost mode, and a note in the owner file cannot soften the catalog's data use")
+
+        def p7():
+            checked = public()
+            checked["free_providers"] = [{"id": name, "checked": today} for name in orchestrate.providers.load()]
+            found = {name: orchestrate.explain("api", f"{name}/some-model", tmp, conf, checked, "free-strict")[2]
+                     for name, entry in orchestrate.providers.load().items() if entry.get("cost") not in conf["cost"]["free_categories"]}
+            unlisted = orchestrate.explain("api", "openrouter/vendor/model:free", tmp, conf, checked, "free-strict")
+            return (bool(found) and all(code in {"paid", "unknown-cost", "retired", "no-adapter"} for code in found.values())
+                    and unlisted[2] == "unknown-cost"), f"{found}. A model with no fresh price list: {unlisted[2]}"
+        add("P.provider-without-a-free-offer", "policy", p7,
+            expected="a trial, retired or unknown provider is never called, even after the owner's check, and a :free name without a price list proves nothing")
+
+        def p8():
+            checked = {"folders": [{"path": str(tmp), "class": "work"}], "free_providers": [{"id": "groq", "checked": today, "data_use": "none"}]}
+            work = orchestrate.explain("api", "groq/any-model", tmp, conf, checked)
+            unchecked = orchestrate.explain("api", "groq/any-model", tmp, conf, public())
+            run = orchestrate.bench_run("classify", "api", "groq/any-model", conf=conf, local=public())
+            return (work[2] == "privacy" and unchecked[2] == "owner-check" and bool(run.get("skipped"))), \
+                f"work code: {work[2]}. Without the owner's check: {unchecked[2]}. Bench: {str(run.get('skipped'))[:60]}"
+        add("P.provider-needs-consent", "policy", p8, expected="work code never reaches a provider and nothing is called before the owner checks the account")
 
         def f5():
             orchestrate.bench_file().write_text('{"task": "classify", "executor": "tools", "seconds": 1, "verified": true}\nnot json\n', encoding="utf-8")

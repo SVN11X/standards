@@ -4,7 +4,7 @@ How SVN11X repositories are organized, documented and reviewed. One source of tr
 
 ## Read first
 
-`SETUP.md` sets up the standard with any AI tool. The `docs/` folder explains it in order: `000-philosophy.md`, `001-profiles.md`, `002-intent.md`, `003-autopilot-and-hooks.md`, `004-radar.md` and `005-verification-and-orchestration.md`.
+`SETUP.md` sets up the standard with any AI tool. `docs/how-it-works.md` explains how this repository works inside. The `docs/` folder explains the standard in order: `000-philosophy.md`, `001-profiles.md`, `002-intent.md`, `003-autopilot-and-hooks.md`, `004-radar.md`, `005-verification-and-orchestration.md` and `006-model-analyzer.md`.
 
 ## How a repository uses it
 
@@ -94,7 +94,23 @@ It runs the selftest, the unit tests, the adversarial suite, the linters it find
 python scripts/orchestrate.py consent --path C:/my_drive/Portafolio --class personal-public --free-model <id from opencode models>
 python scripts/orchestrate.py doctor --full
 python scripts/orchestrate.py route edit-small --repo ../my-site
+python scripts/orchestrate.py route --all --repo ../my-site
 ```
+
+`route --all` prints who does each task type on this machine, with the exact model and the reason. Three cost modes decide what a run may use: `local-only`, `free-strict` and `existing-subscription`. In a free mode a task that no allowed executor can take is blocked with the reason, and nothing paid is used on its own.
+
+## Find the best model for each task
+
+`scripts/analyze.py` finds every model the local Ollama has installed and every model the providers of `settings/providers.yml` list, tests the ones that are allowed on synthetic tasks graded by a program, and writes a report with a proposed split. It never downloads a model or uses a paid endpoint. `prepare` shows each model found with its state and the reason.
+
+```bash
+python scripts/analyze.py prepare
+python scripts/analyze.py plan
+python scripts/analyze.py run
+python scripts/analyze.py report
+```
+
+`docs/006-model-analyzer.md` has the cost modes, the bench classes and the night guide.
 
 ## Change the standard
 
@@ -116,9 +132,9 @@ A breaking change gets a new major tag (`v2`). Each repository moves to it when 
 - `hooks/`: Claude Code hooks published with the skills: guardrails, secret scan, executors at startup, rules after compaction, notifications and the autopilot.
 - `radar/`: evaluated tools with their status.
 - `docs/`: the standard explained in reading order.
-- `scripts/`: `standard.py` (init, agents, check, migrate, templates, package-skills, skills-repo, selftest), `verify.py`, `adversarial.py`, `orchestrate.py`, `preserve.py`, `safe_patch.py`, `memory.py`, and `release`, `publish-templates`, `publish-skills`, `protect-repo`, `setup-opencode` and `verify-all`, each in `.sh` and `.ps1`.
+- `scripts/`: `standard.py` (init, agents, check, migrate, subprofile, templates, package-skills, skills-repo, selftest), `verify.py`, `adversarial.py`, `orchestrate.py`, `analyze.py`, `providers.py`, `bench_tasks.py`, `preserve.py`, `safe_patch.py`, `memory.py`, and `release`, `publish-templates`, `publish-skills`, `protect-repo`, `setup-opencode`, `verify-all` and `analyze-models`, each in `.sh` and `.ps1`.
 - `schemas/`: JSON Schema of the verification report.
-- `tests/`: unit tests of the scripts, run with `python -m unittest discover -s tests`.
-- `settings/`: repository and tool settings as code, such as the branch ruleset, the OpenCode setup, the routing policy (`orchestration.yml`) and the MCP catalog.
+- `tests/`: unit tests of the scripts with fake executors, run with `python -m unittest discover -s tests`, and `tests/web/gallery.test.mjs`, which checks the pattern gallery in a browser.
+- `settings/`: repository and tool settings as code, such as the branch ruleset, the OpenCode setup, the routing, privacy and cost policy (`orchestration.yml`), the settings of models (`models.yml`), the remote providers (`providers.yml`) and the MCP catalog.
 - `preferences.md`: the owner's taste, with good and bad examples.
 - `references.md`: the sources behind the rules.

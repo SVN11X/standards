@@ -111,7 +111,7 @@ def check_settings(repo: Path) -> list[dict]:
     conf = yaml.safe_load((repo / "settings" / "orchestration.yml").read_text(encoding="utf-8"))
     problems = [key for key in ("privacy", "tasks", "limits", "executors", "protected") if key not in conf]
     for task, candidates in (conf.get("tasks") or {}).items():
-        unknown = set(candidates) - {"tools", "ollama", "opencode", "claude"}
+        unknown = set(candidates) - {"tools", "ollama", "opencode", "api", "claude"}
         if unknown:
             problems.append(f"task {task}: unknown executors {sorted(unknown)}")
     classes = conf.get("privacy", {}).get("classes", {})
@@ -119,9 +119,73 @@ def check_settings(repo: Path) -> list[dict]:
         problems.append("privacy order and classes differ")
     if classes.get("work", {}).get("remote_free") != "deny" or classes.get("restricted", {}).get("remote_claude") != "deny":
         problems.append("work or restricted code could reach a remote model")
+    cost = conf.get("cost") or {}
+    modes = cost.get("modes") or {}
+    if set(modes) != set(cost.get("order") or []) or cost.get("default") not in modes:
+        problems.append("cost order, modes and default differ")
+    if modes.get("local-only", {}).get("remote_free") != "deny" or modes.get("local-only", {}).get("remote_claude") != "deny":
+        problems.append("local-only could send something out")
+    if modes.get("free-strict", {}).get("remote_claude") != "deny":
+        problems.append("free-strict could use a subscription")
+    if {"paid", "trial", "unknown", "subscription"} & set(cost.get("free_categories") or []):
+        problems.append("a paid, trial or unknown cost counts as free")
+    if any(classes.get(name, {}).get("remote_data") for name in ("work", "restricted")):
+        problems.append("work or restricted code names a remote data use")
+    stray = [task for task in [*(conf.get("proven_only") or []), *(conf.get("needs") or {})] if task not in (conf.get("tasks") or {})]
+    if stray:
+        problems.append(f"rules for task types that do not exist: {stray}")
     results.append(R("S.orchestration-policy", "security", "FAIL" if problems else "PASS", severity="critical",
-                     evidence="; ".join(problems) or "policy loads, client code never reaches free models",
-                     expected="every task names known executors and work code stays local"))
+                     evidence="; ".join(problems) or "policy loads, client code never reaches free models, free modes never pay",
+                     expected="every task names known executors, work code stays local and a free mode cannot reach paid or subscription models"))
+    models = yaml.safe_load((repo / "settings" / "models.yml").read_text(encoding="utf-8")) or {}
+    costs = {"local", "free-quota", "free-promo", "subscription", "trial", "paid", "unknown"}
+    wrong, seen = [], set()
+    for entry in models.get("models") or []:
+        key = (entry.get("executor"), entry.get("id"))
+        name = f"{key[0]}:{key[1]}"
+        if key in seen:
+            wrong.append(f"{name}: listed twice")
+        seen.add(key)
+        if entry.get("executor") not in {"ollama", "opencode"} or not entry.get("id"):
+            wrong.append(f"{name}: executor or id")
+        if entry.get("cost") not in costs:
+            wrong.append(f"{name}: cost")
+        if entry.get("evidence") not in {"declared", "candidate"}:
+            wrong.append(f"{name}: evidence")
+        data = entry.get("data") or {}
+        if {str(data.get("stores")), str(data.get("trains"))} - {"yes", "no", "unknown"}:
+            wrong.append(f"{name}: data use")
+        if entry.get("enabled") or (entry.get("evidence") == "declared" and not entry.get("checked")):
+            wrong.append(f"{name}: enabled by default, or declared without a date")
+        if entry.get("executor") == "opencode" and not entry.get("source"):
+            wrong.append(f"{name}: no source to read again")
+    results.append(R("S.model-catalog", "security", "FAIL" if wrong else "PASS", severity="high",
+                     evidence="; ".join(wrong[:8]) or f"{len(seen)} candidates with cost, data use, evidence and source. None is enabled here",
+                     expected="every model candidate says its cost, data use, evidence level and where to check it again"))
+    listed = (yaml.safe_load((repo / "settings" / "providers.yml").read_text(encoding="utf-8")) or {}).get("providers") or {}
+    free = set(cost.get("free_categories") or [])
+    faults = []
+    for name, entry in listed.items():
+        if entry.get("status") not in {"adapter", "no-adapter", "retired"} or entry.get("cost") not in costs or not entry.get("sources"):
+            faults.append(f"{name}: status, cost or sources")
+        if entry.get("status") != "adapter":
+            continue
+        address = str(entry.get("base_url") or "")
+        if not address.startswith("https://") or not entry.get("key_env") or entry.get("protocol") != "openai":
+            faults.append(f"{name}: needs an https base_url, a key_env and a known protocol")
+        if entry.get("free_rule") not in {"zero-price", "plan"} or entry.get("preflight") not in {"openrouter-key", "owner"}:
+            faults.append(f"{name}: free_rule or preflight")
+        if set(entry.get("features") or []) - {"chat", "json", "tools", "vision"}:
+            faults.append(f"{name}: unknown feature")
+        data = entry.get("data") or {}
+        if {str(data.get("stores")), str(data.get("trains"))} - {"yes", "no", "unknown"}:
+            faults.append(f"{name}: data use")
+        if any(key for key in entry if "secret" in key.lower() or key.lower() in {"key", "token", "api_key"}):
+            faults.append(f"{name}: a key must come from the environment, never from this file")
+    callable_now = sorted(name for name, entry in listed.items() if entry.get("status") == "adapter" and entry.get("cost") in free)
+    results.append(R("S.provider-settings", "security", "FAIL" if faults else "PASS", severity="high",
+                     evidence="; ".join(faults[:8]) or f"{len(listed)} providers. With a free offer and an adapter: {', '.join(callable_now)}. No key is stored",
+                     expected="every provider says its status, cost, sources and data use, uses https and takes its key from the environment"))
     opencode = json.loads((repo / "settings" / "opencode" / "opencode.json").read_text(encoding="utf-8"))
     bash, edit = opencode["permission"]["bash"], opencode["permission"]["edit"]
     lost = [rule for rule, want in (("git push --force*", "deny"), ("gh pr merge*", "deny"), ("git filter-*", "deny"),
@@ -150,6 +214,37 @@ def check_settings(repo: Path) -> list[dict]:
                      evidence="; ".join(bad) or f"{len(catalog.get('servers', []))} servers, trial ones pinned, none on by default",
                      expected="exact versions and a privacy note for every server in use"))
     return results
+
+
+def check_explanation(repo: Path) -> dict:
+    """The standard follows its own rule: docs/how-it-works.md exists, is confirmed and names only real paths."""
+    import standard
+    path = repo / "docs" / "how-it-works.md"
+    if not path.exists():
+        return R("S.how-it-works", "contract", "FAIL", severity="medium", evidence="docs/how-it-works.md is missing")
+    text = path.read_text(encoding="utf-8")
+    problems = [f"names {token}, which does not exist" for token in standard.missing_doc_paths(repo, text)]
+    problems += ["still has TODO(owner) lines"] if standard.OWNER_TODO in text else []
+    problems += ["README.md does not link it"] if "docs/how-it-works.md" not in (repo / "README.md").read_text(encoding="utf-8") else []
+    return R("S.how-it-works", "contract", "FAIL" if problems else "PASS", severity="medium",
+             evidence="; ".join(problems) or "docs/how-it-works.md exists, README.md links it and every path it names exists",
+             expected="the explanation of how the repository works is present and true to the files")
+
+
+def check_gallery(repo: Path) -> dict:
+    """The pattern gallery of web-improve in a real browser. It needs Node and Playwright, and is skipped without them."""
+    script = repo / "tests" / "web" / "gallery.test.mjs"
+    if not script.exists() or not shutil.which("node"):
+        return R("S.gallery", "web", "SKIP", severity="info", evidence="Node is not installed" if script.exists() else "no gallery test here")
+    ran = sh(["node", str(script)], repo, 300)
+    lines = [line for line in (ran["stdout"] or "").splitlines() if line.strip()]
+    if ran["exit"] == 77:
+        return R("S.gallery", "web", "SKIP", severity="info", evidence="Playwright is not installed for Node. Run it where a browser is available.")
+    failed = [line for line in lines if line.startswith("FAIL")]
+    return R("S.gallery", "web", "PASS" if ran["exit"] == 0 else "FAIL", severity="medium",
+             evidence="; ".join(failed)[:800] or f"{len(lines)} browser checks passed: keyboard, touch, language, states, reduced motion, contrast",
+             repro="node tests/web/gallery.test.mjs",
+             expected="every pattern works with keyboard and touch, keeps its state across languages and stays still with reduced motion")
 
 
 def check_ruff(repo: Path, required: bool) -> dict:
@@ -259,6 +354,8 @@ def live_checks(repo: Path) -> list[dict]:
                                   f"{metrics.get('tokens_per_s')} tokens/s, load {round((metrics.get('load_duration') or 0) / 1e9, 2)}s",
                          repro="python scripts/orchestrate.py delegate ollama --task \"Say OK\""))
         row = orchestrate.bench_classify("ollama", model) if model else None
+        if row and row.get("skipped"):
+            row = None
         base = orchestrate.bench_classify("tools", None)
         for item in filter(None, [row, base]):
             orchestrate.append_bench(item)
@@ -278,7 +375,8 @@ def live_checks(repo: Path) -> list[dict]:
     else:
         for model in models:
             row = orchestrate.bench_fix("opencode", model)
-            orchestrate.append_bench(row)
+            if row["state"] != "blocked":
+                orchestrate.append_bench(row)
             results.append(R(f"L.opencode-delegation:{model}", "executor", "PASS" if row["verified"] else "FAIL", severity="medium",
                              evidence=f"{row['state']}, hidden tests {row['hidden_tests']}, {row['seconds']}s, checks {row['checks']}, note {row['error']}",
                              repro=f"python scripts/orchestrate.py bench --executors opencode:{model}"))
@@ -319,11 +417,13 @@ def main(argv: list[str] | None = None) -> int:
                                      "every profile passes init and check, hooks behave"))
         results.append(check_skills(repo))
         results += check_settings(repo)
+        results.append(check_explanation(repo))
         if args.level != "quick":
             results.append(check_command("S.unit-tests", "regression",
                                          [sys.executable, "-m", "unittest", "discover", "-s", "tests"],
                                          repo, "the unit tests of the scripts pass"))
             results.append(check_ruff(repo, args.ci))
+            results.append(check_gallery(repo))
             results.append(check_powershell(repo))
     else:
         results += check_repository(repo)

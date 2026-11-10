@@ -11,6 +11,7 @@ Commands:
   migrate PATH --profile NAME   propose a move plan for an existing repository, then apply it with --apply
   github PATH [--apply]      show or apply the GitHub settings: About panel, features, security, labels
   notes PATH VERSION         print the CHANGELOG.md section of a version, for release notes
+  subprofile "REQUEST"       name the web sub-profile a request calls for, and the summary to load
   selftest                   run every profile through init and check
 """
 from __future__ import annotations
@@ -155,6 +156,31 @@ def resolve(profile: dict, answers: dict) -> dict:
     subfolders = {parent: children for parent, children in subfolders.items() if parent in folders}
     return {"folders": folders, "subfolders": subfolders, "files": files, "root_files": root_files,
             "topics": list(dict.fromkeys(topics)), "option_rules": option_rules, "problems": problems}
+
+
+# Web sub-profiles
+
+def choose_subprofile(text: str, repo: Path | None = None) -> dict:
+    """The web sub-profile for a request: named in the request, then the owner's stored choice, then keywords, else unsure."""
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    import bench_tasks
+    specs = bench_tasks.subprofiles()
+    low = text.lower()
+    named = [name for name, spec in specs.items() if name in low or str(spec.get("alias", "")).lower() in low]
+    stored = None
+    if repo and (repo / ".standard.yml").exists():
+        stored = (read_config(repo).get("options") or {}).get("experience")
+    if len(named) == 1:
+        chosen, why = named[0], "the request names it"
+    elif stored in specs:
+        chosen, why = stored, "the owner chose it in .standard.yml (experience)"
+    else:
+        chosen, signals = bench_tasks.suggest_subprofile(text)
+        why = f"the request mentions {', '.join(signals)}" if chosen else "no clear signal in the request"
+    spec = specs.get(chosen) or {}
+    return {"subprofile": chosen, "why": why, "summary": " ".join(str(spec.get("summary", "")).split()),
+            "guide": "skills/web-improve/references/subprofiles.md",
+            "choices": {name: item["choose_when"] for name, item in specs.items()}}
 
 
 # Rendering
@@ -821,6 +847,40 @@ def check_content(repo: Path, files: list[str], report: Report) -> None:
                 report.warn(rel, f"{dashes} em dashes. Use periods and commas.")
 
 
+DOC_PATH = re.compile(r"`([\w.@-]+(?:/[\w.@-]+)*/?)`")
+
+
+def version_tuple(text: str) -> tuple[int, ...]:
+    return tuple(int(part) for part in re.findall(r"\d+", str(text))[:3])
+
+
+def missing_doc_paths(repo: Path, text: str) -> list[str]:
+    """Paths written in backticks that do not exist. A token counts as a path when it has a slash: a bare name could live anywhere."""
+    return [token for token in dict.fromkeys(DOC_PATH.findall(text))
+            if "/" in token and not token.startswith(("http", "~", ".standards/")) and not (repo / token).exists()]
+
+
+def check_how_it_works(repo: Path, report: Report) -> None:
+    base = base_config()
+    spec = base.get("how_it_works") or {}
+    rel = spec.get("path")
+    if not rel:
+        return
+    path = repo / rel
+    if not path.exists():
+        message = "Missing. It explains how the repository works inside. Run init --existing to add the template, then fill it in."
+        if version_tuple(base["version"]) >= version_tuple(spec.get("required_from", "999")):
+            report.error(rel, message)
+        else:
+            report.warn(rel, message + f" It becomes an error in version {spec.get('required_from')}.")
+        return
+    text = path.read_text(encoding="utf-8")
+    for token in missing_doc_paths(repo, text):
+        report.warn(rel, f"Names `{token}`, which does not exist. Fix the path or the explanation.")
+    if re.search(r"^Status:\s*draft", text, re.I | re.M) and OWNER_TODO not in text:
+        report.warn(rel, "Still marked as a draft. The owner confirms it by removing the Status line.")
+
+
 def check_plan(repo: Path, report: Report) -> None:
     path = repo / "docs" / "improvement-plan.md"
     if not path.exists():
@@ -872,6 +932,7 @@ def run_check(repo: Path, pull_request: bool = False) -> Report:
         check_content(repo, files, report)
         check_github(config, report)
         check_plan(repo, report)
+        check_how_it_works(repo, report)
     if pull_request:
         check_pull_request(report)
     return report
@@ -1282,7 +1343,7 @@ def skill_names() -> list[str]:
 
 # Scripts the skills call from the bundled copy of the standard, next to standard.py.
 BUNDLED_SCRIPTS = ("standard.py", "orchestrate.py", "verify.py", "evidence.py", "preserve.py", "adversarial.py",
-                   "safe_patch.py", "memory.py")
+                   "safe_patch.py", "memory.py", "bench_tasks.py", "analyze.py", "providers.py")
 
 
 def cmd_package_skills(out_dir: Path) -> None:
@@ -1307,7 +1368,8 @@ def cmd_package_skills(out_dir: Path) -> None:
         shutil.copy2(STANDARD_ROOT / "hooks" / hook, snapshot / "hooks" / hook)
     shutil.copytree(STANDARD_ROOT / "schemas", snapshot / "schemas", ignore=ignore)
     (snapshot / "settings").mkdir()
-    shutil.copy2(STANDARD_ROOT / "settings" / "orchestration.yml", snapshot / "settings" / "orchestration.yml")
+    for name in ("orchestration.yml", "models.yml", "providers.yml"):
+        shutil.copy2(STANDARD_ROOT / "settings" / name, snapshot / "settings" / name)
     for name in ("mcp", "opencode"):
         shutil.copytree(STANDARD_ROOT / "settings" / name, snapshot / "settings" / name, ignore=ignore)
     shutil.copy2(STANDARD_ROOT / "preferences.md", snapshot / "preferences.md")
@@ -1371,7 +1433,8 @@ def cmd_selftest() -> int:
     failures: list[str] = []
     cases = [(name, {}, {}) for name in profile_names()]
     cases += [
-        ("web", {"three_d": "core", "flows": "multi-step", "build": "npm", "motion": "rich"}, {"api": "software"}),
+        ("web", {"three_d": "core", "flows": "multi-step", "build": "npm", "motion": "rich",
+                 "experience": "reactive-object"}, {"api": "software"}),
         ("data-ai", {"kind": "ml", "personal_data": "present", "platform": "databricks"}, {}),
         ("hardware", {"firmware": "none", "mechanical": "cad", "power": "battery"}, {"app": "software"}),
         ("docs", {"format": "typst", "citation": "none"}, {}),
@@ -1484,6 +1547,20 @@ def cmd_selftest() -> int:
             failures.append("an empty About description should be an error once setup is done")
         else:
             print("negative case passed: empty About description")
+
+        explanation = first_repo / "docs" / "how-it-works.md"
+        template = explanation.read_text(encoding="utf-8")
+        write_text(explanation, "# How it works\n\nStatus: draft.\n\nThe entry point is `src/missing-file.py`. Rules are in `AGENTS.md`.\n")
+        found = [message for where, message in run_check(first_repo).warnings if where == "docs/how-it-works.md"]
+        explanation.unlink()
+        gone = run_check(first_repo)
+        absent = [message for where, message in gone.warnings if where == "docs/how-it-works.md"]
+        write_text(explanation, template)
+        if (len(found) != 2 or "src/missing-file.py" not in found[0] or "draft" not in found[1] or len(absent) != 1
+                or "Missing" not in absent[0] or gone.errors):
+            failures.append(f"how-it-works check is wrong: {found} {absent} {gone.errors}")
+        else:
+            print("negative case passed: how-it-works with a broken path, as a draft, and missing")
 
         skills_out = root / "skills-out"
         cmd_skills_repo(skills_out)
@@ -1683,6 +1760,11 @@ def main(argv: list[str] | None = None) -> int:
     skills_repo = commands.add_parser("skills-repo", help="build the public skills repository")
     skills_repo.add_argument("out_dir")
 
+    subprofile = commands.add_parser("subprofile", help="name the web sub-profile a request calls for")
+    subprofile.add_argument("request")
+    subprofile.add_argument("--repo", help="repository whose stored choice counts")
+    subprofile.add_argument("--json", action="store_true")
+
     commands.add_parser("selftest", help="run every profile through init and check")
 
     args = parser.parse_args(argv)
@@ -1698,6 +1780,16 @@ def main(argv: list[str] | None = None) -> int:
             print("\n".join(f"created {rel}" for rel in created) or "Nothing to add.")
             print("\nNext: write docs/goals.md (and DESIGN.md for web), then run agents and check.")
             return 0
+        if args.command == "subprofile":
+            choice = choose_subprofile(args.request, Path(args.repo).resolve() if args.repo else None)
+            if args.json:
+                print(json.dumps(choice, indent=2, ensure_ascii=False))
+            elif choice["subprofile"]:
+                print(f"{choice['subprofile']}: {choice['why']}.\n{choice['summary']}\nFull guide: {choice['guide']}")
+            else:
+                print("unsure: " + choice["why"] + ". Decide from this list, say why in one line and continue:")
+                print("\n".join(f"  {name}: {when}" for name, when in choice["choices"].items()))
+            return 0 if choice["subprofile"] else 3
         if args.command == "agents":
             repo = Path(args.path).resolve()
             written = write_instruction_files(repo, read_config(repo))

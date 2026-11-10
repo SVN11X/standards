@@ -10,7 +10,8 @@ flowchart LR
   route -->|search, lint, tests, hashes| tools[Program without AI]
   route -->|short local work| ollama[Ollama API]
   route -->|small green edit| opencode[OpenCode in its own worktree]
-  route -->|plan, large or risky work| claude[Claude Code]
+  route -->|plan and work nobody else may take| claude[Claude Code]
+  route -->|nobody is allowed| blocked[Blocked with the reason]
   ollama --> verify[Checks run by the caller]
   opencode --> verify
   verify -->|PASS| integrate[cherry-pick on the work branch]
@@ -18,7 +19,7 @@ flowchart LR
 ```
 
 1. Detection. At startup the `session_probe` hook says whether OpenCode is installed, whether Ollama answers, how many free models the owner checked and the privacy class of the folder. It installs nothing, contacts nothing remote and never blocks the session. Detection alone delegates nothing.
-2. Decision. `orchestrate.py route` applies `settings/orchestration.yml`: the task type, the traffic light, the number of files, the privacy class and the measured history. A program without AI comes first whenever it can do the job. Yellow and red items stay with Claude. The answer can be "blocked".
+2. Decision. `orchestrate.py route` applies `settings/orchestration.yml` in this order: can a program without AI do it, does the cost mode allow the executor, does the privacy class allow it, can the model do what the task needs, did it pass the bench class when the task or the risk asks for proof, and only then which allowed candidate is fastest. Cost, privacy and risk are never added into one score. Yellow and red items need the owner's review, whoever does the work. A task type that is not listed passes the same rules. The answer can be "blocked". `006-model-analyzer.md` explains the cost modes.
 3. Delegation. `orchestrate.py delegate opencode` creates a worktree on a new `delegate/<id>` branch from HEAD, writes a short task file (purpose, allowed files, protected files, the test command, base commit, untrusted material fenced as data), runs OpenCode with an explicit model, and keeps the exit code and the output. Credentials are removed from its environment. `delegate ollama` calls the API directly with thinking off, a fixed context and a token limit.
 4. Verification. The caller, not the executor, checks that something changed, that nothing outside the allowed files and nothing protected changed, and that the tests pass. Only then it commits on the delegate branch. Every state change (planned, approved, running, blocked, failed, verified, integrated) is written to `~/.standards/runs/<id>.json`, so a session that stops can see what was done instead of doing it twice.
 5. Integration. Claude cherry-picks a verified commit and runs the check again. Two writers never share a worktree.
@@ -32,7 +33,7 @@ flowchart LR
 | work | yes | never | only with the owner's consent |
 | restricted | yes | never | never |
 
-The class comes from `~/.standards/local.yml`, which only the owner edits (`orchestrate.py consent`, and the guard hook asks before an agent runs it). A repository can declare a stricter class in `.standard.yml` with `privacy:`, never a looser one. A model whose name ends in `free` is not trusted to be free: it counts only when the owner checked it within the last 30 days, and the router never moves to a paid model on its own.
+The class comes from `~/.standards/local.yml`, which only the owner edits (`orchestrate.py consent`, and the guard hook asks before an agent runs it). A repository can declare a stricter class in `.standard.yml` with `privacy:`, never a looser one. A model whose name ends in `free` is not trusted to be free: it counts only when the owner checked it within the last 30 days, the catalog does not list it as paid or unknown, and its data use fits the folder. The router never moves to a paid model on its own. Route, delegate, bench and the analyzer all pass through the same gate.
 
 ## Verification
 

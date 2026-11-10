@@ -79,6 +79,8 @@ Existing repository:
 
 Then write the owner's answers into `docs/goals.md` and, for web, `DESIGN.md`, and run `python <standard>/scripts/standard.py agents .` so `AGENTS.md` picks up the goal summary.
 
+In a repository that already has code, draft `docs/how-it-works.md` from the real files: the main flow in numbered steps, each part with its path, where to start reading, how to run and check it, and what is not covered. Add a Mermaid diagram when it helps. Keep the `Status: draft.` line until the owner confirms the text. In an empty repository leave the template as it is.
+
 ## 5. GitHub settings
 
 The parts of GitHub outside the files follow the standard too: the About panel (description, website, topics), the features that are on or off (issues on, wiki and projects off unless used), merge settings, security features and labels.

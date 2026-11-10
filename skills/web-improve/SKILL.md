@@ -19,16 +19,21 @@ Improve a real site so visitors understand it, can use it, and it stays fast, ac
 
 If the repository has an `AGENTS.md`, follow it. Its options (motion, 3D, flows, theme), fixed rules and recorded decisions win over this skill. `DESIGN.md` is the visual direction. If it is missing or has `TODO(owner)` items, interview the owner before any visual change (identity, audience, personality, palette, typography, motion, references), transcribe the answers and show them for confirmation. If the antislop skills are installed, use antislop-ui, antislop-human, antislop-layoutmobile and antislop-copywriting for their topics.
 
+Its `experience` option names the web sub-profile that leads the site. Read `references/subprofiles.md` for the full guide of each one and for how to choose when the owner named none. `python <standard>/scripts/standard.py subprofile "<the request>" --repo .` gives the choice and a short summary to load.
+
 ## 1. Inventory without changing anything
 
 - Read the real files, the deploy setup (GitHub Actions, Pages source, base path), dependencies and lockfile. Record the branch and the starting commit.
-- If you can run code, run `python scripts/audit_site.py <site-folder>`. It only reads files.
+- If you can run code, run `python scripts/audit_site.py <site-folder>`. It only reads files, and its `design` section lists measured findings: font families, durations outside the tokens of `DESIGN.md`, scripts that animate without reading the reduced motion setting, images without alt or size, heading order.
+- When the project has Playwright, `node scripts/measure_page.mjs <url-or-file>` measures the page in a browser at 360 and 1280 px: horizontal scroll, touch targets, text contrast, line length, clipped text and font families.
 - When the owner gives a public URL, compare it with the code. They can differ.
 - Read `references/stack-and-hosting.md` for hosting limits and technology choices.
 
 ## 2. Audit the experience
 
 Review the home page and main routes: what the site offers and for whom within five seconds, hierarchy, navigation, calls to action, mobile, accessibility, states (loading, empty, error, success), text length and repetition, images, motion and forms. Use the heuristics in `references/art-direction-and-content.md`.
+
+Judge design in the three layers of `references/design-judgment.md`: measured without AI, compared with the owner's examples in `DESIGN.md`, and screenshots reviewed by a model that reads images and passed the judge test. Every finding says its layer and carries the measurement, the screenshot or the example behind it. Never give an overall design score.
 
 Judge the use of space with `references/layout-and-space.md`, not by taste. Every layout finding cites the rule and its source, and gives a measurement: characters per line, how much of the first screen the main task uses, side margins, at 360, 768, 1280 and 1920 px.
 
@@ -50,13 +55,17 @@ When the site teaches something, such as a diagram, a model, a simulation or tec
 
 - Build reusable components. Cut repeated text. One idea per block.
 - An interactive demo must work, start in a meaningful state, show current values with units, offer a reset, and have a static fallback.
-- Use motion only to show continuity, state or cause. Always respect `prefers-reduced-motion`.
+- Use motion only to show continuity, state or cause. Always respect `prefers-reduced-motion`, in CSS and in the JavaScript that animates. `references/motion-and-foundations.md` lists what motion must survive, the foundations (tokens, native CSS first, fonts, empty states, first visit) and when a library is justified.
+- For buttons and microinteractions, copy a pattern from `references/interaction-patterns.md`. Each one runs in `gallery/index.html`, which opens straight from the file on a computer or a phone.
+- A structural redesign shows two short versions with real content. Record the owner's choice and its reason in `DESIGN.md` under Examples.
 - Choose technology with the matrix in `references/stack-and-hosting.md`: the simplest option that meets the goal. Prefer tools marked adopt or trial in the radar of the standard, and only those whose expression levels include the one in `DESIGN.md`. A tool outside the radar is evaluated with tool-radar first.
 - Keep the output static when the host is GitHub Pages. Never put secrets in frontend code.
 
 ## 6. Verify with evidence
 
 Follow `references/quality-and-delivery.md`. Check syntax and paths under the repository base path. Test every control at its minimum, maximum, repeated changes and reset. Test mobile at 360 px, desktop, keyboard, touch, reduced motion, dark mode if the site has it, the build and existing tests. Report exactly what ran. Say "verified in a browser" only after a real browser test.
+
+A site with a reactive object or a pointer effect gets this test: with reduced motion and no task running, the object stays still while the pointer moves.
 
 Keep the evidence in the repository: add or update Playwright Test cases with `references/regression-testing.md`, and run adversarial-testing at the standard level before delivering. When the change touches data files, take a data-preservation snapshot before it.
 
