@@ -301,11 +301,12 @@ def may_send(kind: str, repo: Path, conf: dict, local: dict) -> tuple[bool, str]
     """kind is local, remote_free or remote_claude."""
     cls, source = privacy_class(repo, conf, local)
     rule = conf["privacy"]["classes"][cls][kind]
+    what = CHANNEL_TEXT.get(kind, kind)
     if rule == "allow":
-        return True, f"{cls} ({source}) allows {kind}"
+        return True, f"{cls} ({source}) allows {what}"
     if rule == "owner" and folder_entry(repo, local).get(f"allow_{kind}") is True:
-        return True, f"{cls} ({source}): the owner allowed {kind} for this folder"
-    return False, f"{cls} ({source}) does not allow {kind}" + (" without the owner's consent" if rule == "owner" else "")
+        return True, f"{cls} ({source}): the owner allowed {what} for this folder"
+    return False, f"{cls} ({source}) does not allow {what}" + (" without the owner's consent" if rule == "owner" else "")
 
 
 def fresh_free_models(local: dict, conf: dict) -> list[dict]:
