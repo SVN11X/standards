@@ -41,6 +41,8 @@ class Analyzer(unittest.TestCase):
         os.environ["STANDARDS_HOME"] = str(self.tmp / "home")
         os.environ.pop("STANDARDS_COST_MODE", None)
         self.server, url = fakes.start_ollama()
+        self.real_load = orchestrate.providers.load
+        orchestrate.providers.load = lambda path=None: {}
         self.conf = orchestrate.policy()
         self.conf["executors"]["ollama"].update(url=url, prefer=["good:1b"])
         self.conf["executors"]["opencode"]["command"] = [sys.executable, str(fakes.write_agent(self.tmp)), "{model}", "{message}"]
@@ -54,6 +56,7 @@ class Analyzer(unittest.TestCase):
     def tearDown(self):
         self.server.shutdown()
         self.server.server_close()
+        orchestrate.providers.load = self.real_load
         for key, value in self.old.items():
             if value is None:
                 os.environ.pop(key, None)
@@ -68,8 +71,9 @@ class Analyzer(unittest.TestCase):
     def test_plan_comes_from_the_catalog_and_the_rules(self):
         ready, left_out = analyze.candidates(self.conf, self.local, self.caps, CATALOG)
         names = {f"{r['executor']}:{r['model']}" for r in ready}
-        self.assertEqual(names, {"ollama:good:1b", "ollama:bad:1b", "opencode:opencode/fix-free", "opencode:opencode/limit-free",
-                                 "opencode:opencode/after-limit-free", "opencode:opencode/lazy-free"})
+        self.assertEqual(names, {"ollama:good:1b", "ollama:bad:1b", "ollama:swap:1b", "opencode:opencode/fix-free",
+                                 "opencode:opencode/limit-free", "opencode:opencode/after-limit-free", "opencode:opencode/lazy-free"})
+        self.assertIn("not in the catalog", next(r for r in ready if r["model"] == "swap:1b")["why"])
         why = {item["model"]: item for item in left_out}
         self.assertEqual(why["missing:3b"]["fix"], "ollama pull missing:3b")
         self.assertIn("search only", why["embed:1b"]["why"])
@@ -83,7 +87,7 @@ class Analyzer(unittest.TestCase):
         self.assertIn("7 runs left out", next(c for c in cut if c["model"] == "opencode/lazy-free")["why"])
         text = "\n".join(analyze.plan_lines(steps, cut, left_out, self.conf, "existing-subscription"))
         self.assertIn("Longest it can take", text)
-        self.assertIn("Remote sessions in total", text)
+        self.assertIn("Remote in total", text)
 
     def test_local_only_plans_no_remote_step(self):
         ready, left_out = analyze.candidates(self.conf, self.local, self.caps, CATALOG, mode="local-only")
@@ -116,6 +120,8 @@ class Analyzer(unittest.TestCase):
         self.assertFalse(analyze.state_file().exists())
         report = analyze.build_report(self.conf, CATALOG, state=state)
         self.assertIn("## Proposed split", report)
+        self.assertIn("## Full agent", report)
+        self.assertIn("## Inference by API or by a program", report)
         self.assertIn("limit was reached", report)
         self.assertIn("ollama pull missing:3b", report)
         self.assertIn("made-up sample", report)

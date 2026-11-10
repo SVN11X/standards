@@ -205,7 +205,7 @@ def tool_case_ok(case: dict, chat) -> tuple[bool, str]:
             if not isinstance(arguments, dict) or not isinstance(arguments.get(known[name]), str) or not arguments[known[name]]:
                 return False, f"{name} called without a valid {known[name]}"
             called.append(name)
-            messages.append({"role": "tool", "tool_name": name, "content": case["results"][name]})
+            messages.append({"role": "tool", "tool_name": name, "tool_call_id": call.get("id"), "content": case["results"][name]})
     return False, "kept calling tools without answering"
 
 
@@ -298,6 +298,12 @@ def judge_ok(pair: dict, ask) -> bool:
     second = ask(JUDGE_PROMPT, [pair["b"], pair["a"]])
     answers = [str((reply or {}).get("choice", "")).strip().lower() if isinstance(reply, dict) else "" for reply in (first, second)]
     return answers == [pair["choice"], flipped[pair["choice"]]]
+
+
+def request_estimate(task: str) -> int:
+    """About how many requests one run of a chat task sends, to plan against a provider's daily limit."""
+    return {"classify": len(CLASSIFY), "extract": len(EXTRACT), "summarize": len(SUMMARIZE), "web-subprofile": len(subprofile_items()),
+            "tool-call": 3 * len(TOOL_CASES), "vision": len(VISION), "design-judge": 2 * len(design_pairs()[0])}.get(task, 1)
 
 
 # Running a chat task

@@ -111,7 +111,7 @@ def check_settings(repo: Path) -> list[dict]:
     conf = yaml.safe_load((repo / "settings" / "orchestration.yml").read_text(encoding="utf-8"))
     problems = [key for key in ("privacy", "tasks", "limits", "executors", "protected") if key not in conf]
     for task, candidates in (conf.get("tasks") or {}).items():
-        unknown = set(candidates) - {"tools", "ollama", "opencode", "claude"}
+        unknown = set(candidates) - {"tools", "ollama", "opencode", "api", "claude"}
         if unknown:
             problems.append(f"task {task}: unknown executors {sorted(unknown)}")
     classes = conf.get("privacy", {}).get("classes", {})
@@ -162,6 +162,30 @@ def check_settings(repo: Path) -> list[dict]:
     results.append(R("S.model-catalog", "security", "FAIL" if wrong else "PASS", severity="high",
                      evidence="; ".join(wrong[:8]) or f"{len(seen)} candidates with cost, data use, evidence and source. None is enabled here",
                      expected="every model candidate says its cost, data use, evidence level and where to check it again"))
+    listed = (yaml.safe_load((repo / "settings" / "providers.yml").read_text(encoding="utf-8")) or {}).get("providers") or {}
+    free = set(cost.get("free_categories") or [])
+    faults = []
+    for name, entry in listed.items():
+        if entry.get("status") not in {"adapter", "no-adapter", "retired"} or entry.get("cost") not in costs or not entry.get("sources"):
+            faults.append(f"{name}: status, cost or sources")
+        if entry.get("status") != "adapter":
+            continue
+        address = str(entry.get("base_url") or "")
+        if not address.startswith("https://") or not entry.get("key_env") or entry.get("protocol") != "openai":
+            faults.append(f"{name}: needs an https base_url, a key_env and a known protocol")
+        if entry.get("free_rule") not in {"zero-price", "plan"} or entry.get("preflight") not in {"openrouter-key", "owner"}:
+            faults.append(f"{name}: free_rule or preflight")
+        if set(entry.get("features") or []) - {"chat", "json", "tools", "vision"}:
+            faults.append(f"{name}: unknown feature")
+        data = entry.get("data") or {}
+        if {str(data.get("stores")), str(data.get("trains"))} - {"yes", "no", "unknown"}:
+            faults.append(f"{name}: data use")
+        if any(key for key in entry if "secret" in key.lower() or key.lower() in {"key", "token", "api_key"}):
+            faults.append(f"{name}: a key must come from the environment, never from this file")
+    callable_now = sorted(name for name, entry in listed.items() if entry.get("status") == "adapter" and entry.get("cost") in free)
+    results.append(R("S.provider-settings", "security", "FAIL" if faults else "PASS", severity="high",
+                     evidence="; ".join(faults[:8]) or f"{len(listed)} providers. With a free offer and an adapter: {', '.join(callable_now)}. No key is stored",
+                     expected="every provider says its status, cost, sources and data use, uses https and takes its key from the environment"))
     opencode = json.loads((repo / "settings" / "opencode" / "opencode.json").read_text(encoding="utf-8"))
     bash, edit = opencode["permission"]["bash"], opencode["permission"]["edit"]
     lost = [rule for rule, want in (("git push --force*", "deny"), ("gh pr merge*", "deny"), ("git filter-*", "deny"),

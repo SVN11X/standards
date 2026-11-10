@@ -40,6 +40,7 @@ risk:
   red: {review: owner, needs: proven}
 
 # Candidates per task type, in order. tools means a program without AI (git, grep, a parser, a linter, tests).
+# api means a model of a remote provider in settings/providers.yml. It is used only after it passed the bench class of the task.
 tasks:
   search: [tools]
   format: [tools]
@@ -47,9 +48,9 @@ tasks:
   test: [tools]
   hash: [tools]
   schema: [tools]
-  classify: [ollama, claude]
-  summarize-short: [ollama, claude]
-  extract-short: [ollama, claude]
+  classify: [ollama, api, claude]
+  summarize-short: [ollama, api, claude]
+  extract-short: [ollama, api, claude]
   edit-small: [opencode, claude]
   fix-test: [opencode, claude]
   docs-small: [opencode, ollama, claude]
@@ -61,9 +62,9 @@ tasks:
   web-direction: [claude]
   web-pattern: [opencode, claude]
   web-test: [opencode, claude]
-  web-copy: [ollama, opencode, claude]
-  web-classify: [ollama, claude]
-  web-visual-review: [ollama, claude]
+  web-copy: [ollama, opencode, api, claude]
+  web-classify: [ollama, api, claude]
+  web-visual-review: [ollama, api, claude]
   fix-check: [opencode, claude]
 
 # A task type that is not listed above is planner work. It passes the same cost and privacy rules.
@@ -86,6 +87,8 @@ limits:
   bench_min_runs: 3
   bench_min_pass_rate: 0.8
   bench_recheck_days: 30
+  # A provider's price list older than this no longer proves that a model is free.
+  provider_list_max_age_h: 24
   output_tail_chars: 4000
 
 executors:
@@ -122,6 +125,12 @@ analysis:
   remote_runs_per_model: 9
   # An agent session makes several requests. This estimate is charged against a model's requests_per_day.
   requests_per_agent_run: 10
+  # Share of a provider's daily requests one night may use, and the sessions it gets when no limit is known.
+  api_budget_share: 0.8
+  api_requests_when_unknown: 60
+  # A local model is tested only when its size with this overhead fits in the graphics memory plus this share of the RAM.
+  memory_overhead: 1.15
+  ram_share: 0.6
 
 # Files that running code or tests creates on its own. They never count as a change by the executor.
 generated: ["__pycache__/*", "*/__pycache__/*", "*.pyc", ".pytest_cache/*", ".ruff_cache/*", ".mypy_cache/*", "node_modules/*"]

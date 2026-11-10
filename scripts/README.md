@@ -5,7 +5,8 @@
 - `adversarial.py`: tries to break the standard's controls with fake executors and synthetic data, in quick, standard and deep levels.
 - `orchestrate.py`: finds the executors of the machine, chooses one per task under the cost and privacy rules, delegates to OpenCode or Ollama and verifies the result, runs benchmarks, records consent and the cost mode, merges the OpenCode config and prints MCP configs.
 - `bench_tasks.py`: the synthetic bench tasks and the code that grades them. No model grades another.
-- `analyze.py`: tests the allowed model candidates overnight and writes the report (`prepare`, `plan`, `run`, `report`). `analyze-models.ps1` and `analyze-models.sh` run it. It never downloads a model.
+- `analyze.py`: finds the models of the machine and of each provider, tests the allowed ones overnight and writes the report (`prepare`, `plan`, `run`, `report`). `analyze-models.ps1` and `analyze-models.sh` run it. It never downloads a model.
+- `providers.py`: the transport for providers with an OpenAI-compatible API (`status`, `models`, `check`). Keys come from the environment and are never stored or printed.
 - `preserve.py`: snapshots and compares protected data, and lists what an extraction still misses.
 - `safe_patch.py`: builds a patch for git am and proves it applies and passes the tests on its base.
 - `memory.py`: local technical memory in SQLite FTS5, outside every repository, with export and expiry of agent hints.

@@ -500,6 +500,26 @@ def run_suite(level: str = "standard", repo: Path = ROOT, only: str | None = Non
                 f"asked to loosen: stays {loosened}. Private code to a model that trains: {trained['executor']}"
         add("P.cannot-loosen", "policy", p6, expected="a run cannot loosen the owner's cost mode, and a note in the owner file cannot soften the catalog's data use")
 
+        def p7():
+            checked = public()
+            checked["free_providers"] = [{"id": name, "checked": today} for name in orchestrate.providers.load()]
+            found = {name: orchestrate.explain("api", f"{name}/some-model", tmp, conf, checked, "free-strict")[2]
+                     for name, entry in orchestrate.providers.load().items() if entry.get("cost") not in conf["cost"]["free_categories"]}
+            unlisted = orchestrate.explain("api", "openrouter/vendor/model:free", tmp, conf, checked, "free-strict")
+            return (bool(found) and all(code in {"paid", "unknown-cost", "retired", "no-adapter"} for code in found.values())
+                    and unlisted[2] == "unknown-cost"), f"{found}. A model with no fresh price list: {unlisted[2]}"
+        add("P.provider-without-a-free-offer", "policy", p7,
+            expected="a trial, retired or unknown provider is never called, even after the owner's check, and a :free name without a price list proves nothing")
+
+        def p8():
+            checked = {"folders": [{"path": str(tmp), "class": "work"}], "free_providers": [{"id": "groq", "checked": today, "data_use": "none"}]}
+            work = orchestrate.explain("api", "groq/any-model", tmp, conf, checked)
+            unchecked = orchestrate.explain("api", "groq/any-model", tmp, conf, public())
+            run = orchestrate.bench_run("classify", "api", "groq/any-model", conf=conf, local=public())
+            return (work[2] == "privacy" and unchecked[2] == "owner-check" and bool(run.get("skipped"))), \
+                f"work code: {work[2]}. Without the owner's check: {unchecked[2]}. Bench: {str(run.get('skipped'))[:60]}"
+        add("P.provider-needs-consent", "policy", p8, expected="work code never reaches a provider and nothing is called before the owner checks the account")
+
         def f5():
             orchestrate.bench_file().write_text('{"task": "classify", "executor": "tools", "seconds": 1, "verified": true}\nnot json\n', encoding="utf-8")
             rows = orchestrate.bench_rows()
