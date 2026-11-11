@@ -189,8 +189,9 @@ def tool_case_ok(case: dict, chat) -> tuple[bool, str]:
         calls = reply.get("tool_calls") or []
         if not calls:
             text = str(reply.get("content") or "").strip()
-            if [name for name in called if name in case["order"]][: len(case["order"])] != case["order"]:
-                return False, f"called {called or 'nothing'}, expected {case['order']}"
+            first = [called.index(name) if name in called else -1 for name in case["order"]]
+            if -1 in first or first != sorted(first):
+                return False, f"called {called or 'nothing'}, expected {' before '.join(case['order'])}"
             if not text:
                 return False, "no final answer"
             if case["final"] and not any(word in text.lower() for word in case["final"]):

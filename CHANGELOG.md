@@ -49,6 +49,9 @@ All notable changes to this standard are documented here. The format follows [Ke
 
 ### Fixed
 
+- The `tool-call` grader failed a model that read more than one file before running the tests. It now checks that each required tool was called and in the right order, and allows repeats. Found in a real run.
+- `bench` prints why a run was not accepted.
+
 - A limit reached at the host behind a router stopped the whole provider for the night. It now stops only that model. A limit of the account still stops the provider. Found in the first real run against OpenRouter.
 - A refusal because a model is only served by hosts that train on what they receive was reported as "not evaluated". It is reported as privacy.
 - A model that also outputs audio or images was listed as a chat model. It is no longer a candidate.

@@ -215,6 +215,13 @@ class Graders(unittest.TestCase):
     def test_tool_sequence(self):
         case = bench_tasks.TOOL_CASES[0]
         self.assertTrue(bench_tasks.tool_case_ok(case, lambda m, t: fakes.answer({"messages": m, "tools": t}))[0])
+        def script(names):
+            left = list(names)
+            return lambda m, t: ({"tool_calls": [{"function": {"name": left.pop(0), "arguments": {"path": "calc.py", "target": "t.py"}}}]}
+                                 if left else {"content": "Found it."})
+        self.assertTrue(bench_tasks.tool_case_ok(case, script(["read_file", "read_file", "read_file", "run_tests"]))[0])
+        self.assertIn("before", bench_tasks.tool_case_ok(case, script(["run_tests", "read_file"]))[1])
+        self.assertFalse(bench_tasks.tool_case_ok(case, script(["read_file"]))[0])
         wrong = lambda m, t: {"tool_calls": [{"function": {"name": "delete_repo", "arguments": {}}}]}  # noqa: E731
         self.assertIn("does not exist", bench_tasks.tool_case_ok(case, wrong)[1])
         self.assertFalse(bench_tasks.tool_case_ok(case, lambda m, t: {"content": "It is fine."})[0])

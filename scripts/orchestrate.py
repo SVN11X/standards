@@ -1671,6 +1671,8 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"{row['task']} {executor} {model or '-'}: verified={row['verified']} {row['seconds']}s"
                       + (f" accuracy={row['accuracy']}" if "accuracy" in row else "")
                       + (f" ({row['error']})" if row.get("error") and not row["verified"] else ""))
+                if not row["verified"] and row.get("notes"):
+                    print("  why: " + ". ".join(str(note) for note in row["notes"]))
         return 0
     if args.command == "consent":
         if bool(args.path) != bool(args.cls):
