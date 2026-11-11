@@ -25,7 +25,7 @@ CHAT_TASKS = {"classify": [], "extract": [], "summarize": [], "web-subprofile": 
 BASELINES = {"classify", "extract", "web-subprofile"}
 # Version of the rule that grades each task. Raise it when a grader changes what it accepts: runs graded by an older
 # rule stay in the history and stop counting. A task that is not listed is at version 1.
-GRADERS = {"summarize": 2, "tool-call": 2}
+GRADERS = {"summarize": 3, "tool-call": 2}
 
 
 def grader_version(task: str | None) -> int:
@@ -116,7 +116,8 @@ COMMAND_SHAPE = re.compile(r"\b(?:git|ollama|pip|npm|docker)\s+[a-z][\w-]*\s+(?:
 
 
 def squeeze(text: str) -> str:
-    return " ".join(str(text).replace("`", " ").split())
+    """One spacing and no quoting marks, so a command a model wrapped in quotes or backticks still matches the text."""
+    return " ".join(re.sub(r"[`\"'\u201c\u201d\u2018\u2019]", " ", str(text)).split())
 
 
 def summarize_ok(item: dict, parsed) -> tuple[bool, str]:
