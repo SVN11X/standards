@@ -418,20 +418,26 @@ def run_suite(level: str = "standard", repo: Path = ROOT, only: str | None = Non
             down = orchestrate.delegate_ollama("hello", conf=local_conf, model="qwen3.5:4b")
             caps = {"ollama": orchestrate.detect_ollama(local_conf["executors"]["ollama"], timeout=0.5), "opencode": {}}
             chosen = orchestrate.route("classify", tmp, conf=local_conf, local={}, caps=caps)
-            return down["state"] == "failed" and chosen["executor"] == "claude", f"delegate: {down['state']}, route: {chosen['executor']}"
-        add("F.ollama-down-falls-back", "resilience", f3, expected="no Ollama means the work goes to an allowed executor, without a crash")
+            return down["state"] == "failed" and chosen["executor"] == "blocked" \
+                and all(r["executor"] != "claude" for r in chosen["rejected"]), \
+                f"delegate: {down['state']}, route with no Ollama: {chosen['executor']}"
+        add("F.ollama-down-falls-back", "resilience", f3,
+            expected="no Ollama means the task is blocked, it never falls back to Claude, without a crash")
 
         def f4():
             caps = {"ollama": {"up": False}, "opencode": {"path": "/usr/bin/opencode"}}
-            work = {"folders": [{"path": str(tmp), "class": "work"}],
-                    "free_models": [{"id": "opencode/free-x", "checked": dt.date.today().isoformat()}]}
-            chosen = orchestrate.route("edit-small", tmp, conf=conf, local=work, caps=caps)
+            fresh = {"id": "opencode/free-x", "checked": dt.date.today().isoformat(), "data_use": "none"}
+            allowed = {"folders": [{"path": str(tmp), "class": "personal-public"}], "free_models": [fresh]}
+            chosen = orchestrate.route("edit-small", tmp, conf=conf, local=allowed, caps=caps)
+            work = {"folders": [{"path": str(tmp), "class": "work"}], "free_models": [fresh]}
+            private = orchestrate.route("edit-small", tmp, conf=conf, local=work, caps=caps)
             stale = {"folders": [{"path": str(tmp), "class": "personal-public"}],
-                     "free_models": [{"id": "opencode/free-x", "checked": "2020-01-01"}]}
+                     "free_models": [{"id": "opencode/free-x", "checked": "2020-01-01", "data_use": "none"}]}
             old = orchestrate.route("edit-small", tmp, conf=conf, local=stale, caps=caps)
-            return (chosen["executor"] == "blocked" and old["executor"] == "claude"), \
-                f"work code: {chosen['executor']}, free model checked long ago: {old['executor']}"
-        add("F.privacy-and-stale-free-model", "resilience", f4, expected="client code never goes to a free model and an old price check does not count")
+            return (chosen["executor"] == "opencode" and private["executor"] == "blocked" and old["executor"] == "blocked"), \
+                f"fresh free model: {chosen['executor']}, client code: {private['executor']}, free model checked long ago: {old['executor']}"
+        add("F.privacy-and-stale-free-model", "resilience", f4,
+            expected="client code never goes to a free model, an old price check does not count, and a checked model still works")
 
         # P. Cost and privacy policy: the free modes must stop before a paid or remote call, not after it
         today = dt.date.today().isoformat()
@@ -453,9 +459,10 @@ def run_suite(level: str = "standard", repo: Path = ROOT, only: str | None = Non
             local = public("opencode/glm-5.3-flash-free")
             risky = orchestrate.route("edit-small", tmp, risk="red", conf=conf, local=local, caps=offline, mode="free-strict")
             planner = orchestrate.route("plan", tmp, conf=conf, local=local, caps=offline, mode="free-strict")
-            return (risky["executor"] == "blocked" and risky["review"] == "owner" and planner["executor"] == "blocked"), \
+            return (risky["executor"] == "blocked" and risky["review"] == "owner" and planner["executor"] == "planner"), \
                 f"red edit: {risky['executor']} with review by {risky['review']}, plan: {planner['executor']}"
-        add("P.risk-without-proven-model", "policy", p2, expected="high risk without a proven free model is blocked and keeps the owner's review")
+        add("P.risk-without-proven-model", "policy", p2,
+            expected="high risk without a proven free model is blocked and keeps the owner's review, while planning goes to the planner")
 
         def p3():
             catalog = {"models": [{"id": "pro-free", "executor": "opencode", "cost": "paid", "data": {"stores": "no", "trains": "no"}},
