@@ -398,9 +398,11 @@ def run_plan(conf: dict | None = None, local: dict | None = None, caps: dict | N
             if time.monotonic() - started >= budget:
                 say(f"Stopped: this run used its {hours(budget)}. Run it again to continue.")
                 break
-            scope = f"{step['executor']}:{step['model']}" if step.get("own_limit") else step["provider"]
-            if step["remote"] and scope in state["stopped"]:
-                state["done"][step["key"]] = {"skipped": f"{state['stopped'][scope]}, so it was not used again this night"}
+            one = f"{step['executor']}:{step['model']}"
+            scope = one if step.get("own_limit") else step["provider"]
+            halted = next((name for name in (one, scope) if name in state["stopped"]), None)
+            if step["remote"] and halted:
+                state["done"][step["key"]] = {"skipped": f"{state['stopped'][halted]}, so it was not used again this night"}
                 continue
             if step["executor"] == "ollama" and step["model"] != current_local:
                 unload_other_models(step["model"], conf)
@@ -415,8 +417,9 @@ def run_plan(conf: dict | None = None, local: dict | None = None, caps: dict | N
                 state["done"][step["key"]] = {"skipped": row["skipped"]}
                 say(f"skip  {step['key']}: {row['skipped']}")
                 if step["remote"] and row.get("rate_limited"):
-                    state["stopped"][scope] = f"{scope} stopped answering for free ({row['skipped'][:80]})"
-                    say(f"stopped: {scope} is not used again this night")
+                    target = one if row.get("stop_scope") == "model" else scope
+                    state["stopped"][target] = f"{target} stopped answering for free ({row['skipped'][:80]})"
+                    say(f"stopped: {target} is not used again this night")
             else:
                 row.update(night=state["id"], run=step["run"])
                 orchestrate.append_bench(row)

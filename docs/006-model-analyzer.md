@@ -67,7 +67,7 @@ Before any request to a provider model, all of this holds:
 5. The key is in the environment. Without it the provider is pending and nothing is sent. Keys are never stored, printed or written to a report.
 6. Where an endpoint reports the account, it still has free requests today.
 
-A reply that reports a charge, a payment request or a reached limit stops that provider for the night. A reply from another model fails the run. The adapter never follows a redirect, so a key cannot travel to another host. A redirect, a limit or an outage is not a result of the model, so that run is not kept.
+A reply that reports a charge, a payment request or a reached limit of the account stops that provider for the night. A limit at the host behind a router stops only that model. A reply from another model fails the run. The adapter never follows a redirect, so a key cannot travel to another host. A redirect, a limit or an outage is not a result of the model, so that run is not kept.
 
 The router may send a real short task to a provider model (`api` in `settings/orchestration.yml`) only after that model passed the bench class of the task.
 

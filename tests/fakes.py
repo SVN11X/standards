@@ -141,6 +141,10 @@ PROVIDER_MODELS = [
     {"id": "acme/paid", "pricing": {"prompt": "0.000002", "completion": "0.000008"}},
     {"id": "acme/noprice"},
     {"id": "acme/embed-text:free", "pricing": {"prompt": "0", "completion": "0"}},
+    {"id": "acme/busy:free", "pricing": {"prompt": "0", "completion": "0"}},
+    {"id": "acme/trains:free", "pricing": {"prompt": "0", "completion": "0"}},
+    {"id": "acme/music:free", "pricing": {"prompt": "0", "completion": "0"},
+     "architecture": {"input_modalities": ["text"], "output_modalities": ["text", "audio"]}},
     {"id": "acme/retired:free", "pricing": {"prompt": "0", "completion": "0"}, "active": False},
 ]
 
@@ -198,6 +202,11 @@ class Provider(http.server.BaseHTTPRequestHandler):
         if Provider.outage:
             Provider.outage -= 1
             self.reply(503, {"error": {"message": "overloaded"}})
+        elif "busy" in model:
+            self.reply(429, {"error": {"message": "Provider returned error", "code": 429, "metadata": {
+                "raw": f"{model} is temporarily rate-limited upstream. Please retry shortly", "provider_name": "Some Host"}}})
+        elif "trains" in model:
+            self.reply(404, {"error": {"message": "No endpoints found matching your data policy (Free model training).", "code": 404}})
         elif "limit" in model:
             self.reply(429, {"error": {"message": "Rate limit exceeded: free-models-per-day"}}, {"Retry-After": "3600"})
         elif "bill" in model:
