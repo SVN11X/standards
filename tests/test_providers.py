@@ -223,6 +223,25 @@ class Bench(Base):
         self.assertTrue(out["rate_limited"])
         self.assertEqual(len(fakes.Provider.bodies), before)
 
+    def test_a_busy_host_stops_one_model_and_a_data_policy_is_privacy(self):
+        busy = self.bench("classify", "fake/acme/busy:free")
+        self.assertEqual((busy["rate_limited"], busy["stop_scope"]), (True, "model"))
+        self.assertEqual(self.bench("classify", "fake/acme/limit:free")["stop_scope"], "provider")
+        trains = self.bench("classify", "fake/acme/trains:free")
+        self.assertEqual((trains["code"], trains["rate_limited"]), ("privacy", False))
+        self.assertIn("keep or train", trains["skipped"])
+        models = {m["id"]: m["kind"] for m in providers.list_models("fake", self.known["fake"])}
+        self.assertEqual(models["acme/music:free"], "other")
+        self.conf["analysis"].update(runs=1)
+        state = analyze.run_plan(self.conf, self.local, {"ollama": {"up": False}, "opencode": {}}, {"models": []},
+                                 tasks=["classify", "extract"], say=lambda line: None, listings=self.listings, known=self.known,
+                                 models=["fake/acme/busy", "fake/acme/good"])
+        self.assertIn("api:fake/acme/busy:free", state["stopped"])
+        self.assertNotIn("fake", state["stopped"])
+        self.assertIn("not used again", state["done"]["extract|api|fake/acme/busy:free|1"]["skipped"])
+        rows = {(r["task"], r["model"]) for r in orchestrate.bench_rows()}
+        self.assertIn(("extract", "fake/acme/good:free"), rows)
+
     def test_another_model_answering_fails(self):
         row = self.bench("classify", "fake/acme/swap:free")
         self.assertFalse(row["verified"])

@@ -34,6 +34,8 @@ STANDARD_ROOT = Path(__file__).resolve().parents[1]
 SETTINGS = STANDARD_ROOT / "settings" / "providers.yml"
 NOT_CHAT = re.compile(r"embed|whisper|tts|speech|rerank|moderation|guard|imagen|flux|diffusion|transcri", re.IGNORECASE)
 UPGRADE = re.compile(r"upgrade|paid plan|billing|payment|insufficient (credit|balance|quota)|\b5035\b", re.IGNORECASE)
+DATA_POLICY = re.compile(r"data policy|data_collection|privacy settings", re.IGNORECASE)
+UPSTREAM = re.compile(r"upstream|provider returned error", re.IGNORECASE)
 UNSUPPORTED = re.compile(r"not support|unsupported|no endpoints found|does not accept|is not available for|invalid.*(tool|image|response_format)",
                          re.IGNORECASE)
 PLACEHOLDER = re.compile(r"\{([A-Z][A-Z0-9_]*)\}")
@@ -41,12 +43,13 @@ IMAGE_TYPES = (("iVBOR", "image/png"), ("/9j/", "image/jpeg"), ("R0lG", "image/g
 
 
 class ProviderError(Exception):
-    """One failure of a provider call. kind is no-key, config, auth, payment, rate-limit, unsupported, rejected,
-    not-found, unavailable, network or bad-reply."""
+    """One failure of a provider call. kind is no-key, config, auth, payment, rate-limit, privacy, unsupported, rejected,
+    not-found, unavailable, network or bad-reply. upstream is True when a limit belongs to the host behind a router,
+    which is one model's problem, not the account's."""
 
-    def __init__(self, kind: str, message: str, status: int | None = None, retry_after: str | None = None):
+    def __init__(self, kind: str, message: str, status: int | None = None, retry_after: str | None = None, upstream: bool = False):
         super().__init__(message)
-        self.kind, self.status, self.retry_after = kind, status, retry_after
+        self.kind, self.status, self.retry_after, self.upstream = kind, status, retry_after, upstream
 
 
 class NoRedirect(urllib.request.HTTPRedirectHandler):
@@ -153,6 +156,8 @@ def failure(status: int, text: str, headers: dict, conf: dict) -> ProviderError:
         kind = "payment"
     elif status == 429:
         kind = "rate-limit"
+    elif DATA_POLICY.search(text) and status in {200, 400, 403, 404}:
+        kind = "privacy"
     elif status in {401, 403}:
         kind = "auth"
     elif UNSUPPORTED.search(text) and status in {200, 400, 404, 422, 501}:
@@ -163,7 +168,8 @@ def failure(status: int, text: str, headers: dict, conf: dict) -> ProviderError:
         kind = "unavailable"
     else:
         kind = "rejected"
-    return ProviderError(kind, f"HTTP {status}: {detail}" if detail else f"HTTP {status}", status, lower.get("retry-after"))
+    return ProviderError(kind, f"HTTP {status}: {detail}" if detail else f"HTTP {status}", status, lower.get("retry-after"),
+                         upstream=kind == "rate-limit" and bool(UPSTREAM.search(text)))
 
 
 # Discovery
@@ -189,7 +195,7 @@ def normalize_model(provider: str, raw: dict) -> dict | None:
     parameters = raw.get("supported_parameters")
     if name.startswith(f"{provider}/") and provider == "openrouter":
         kind = "router"
-    elif NOT_CHAT.search(name) or (isinstance(outputs, list) and "text" not in outputs):
+    elif NOT_CHAT.search(name) or (isinstance(outputs, list) and set(outputs) != {"text"}):
         kind = "other"
     else:
         kind = "chat"

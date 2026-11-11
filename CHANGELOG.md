@@ -49,6 +49,10 @@ All notable changes to this standard are documented here. The format follows [Ke
 
 ### Fixed
 
+- A limit reached at the host behind a router stopped the whole provider for the night. It now stops only that model. A limit of the account still stops the provider. Found in the first real run against OpenRouter.
+- A refusal because a model is only served by hosts that train on what they receive was reported as "not evaluated". It is reported as privacy.
+- A model that also outputs audio or images was listed as a chat model. It is no longer a candidate.
+
 - An unknown task type returned Claude before any cost or privacy check, also for a restricted folder. It now passes the same rules as every task.
 - `bench` recorded its own model as checked by the owner. It now uses the owner's real checks.
 - An Ollama cloud tag, a model served from a remote host and an Ollama URL on another machine counted as local. They count as remote.

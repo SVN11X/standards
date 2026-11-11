@@ -1253,9 +1253,9 @@ def bench_chat(task: str, executor: str, model: str | None, conf: dict | None = 
 class RunInvalid(Exception):
     """The provider, not the model, stopped a bench run: a limit, a payment request, a wrong key or an outage."""
 
-    def __init__(self, reason: str, stop: bool = False):
+    def __init__(self, reason: str, stop: bool = False, scope: str = "provider"):
         super().__init__(reason)
-        self.stop = stop
+        self.stop, self.scope = stop, scope
 
 
 def loose_json(text: str):
@@ -1325,6 +1325,12 @@ def bench_api(task: str, model: str | None, row: dict, conf: dict, local: dict |
         except providers.ProviderError as error:
             if error.kind == "unsupported":
                 raise RunInvalid(f"not evaluated: {error}") from error
+            if error.kind == "privacy":
+                raise RunInvalid(f"privacy: the provider only serves {name} on hosts that keep or train on what they receive, "
+                                 "and the adapter refuses those") from error
+            if error.kind == "rate-limit" and error.upstream:
+                raise RunInvalid(f"rate-limit on this model only, at the host behind {pconf.get('name', provider)}: {error}",
+                                 stop=True, scope="model") from error
             if error.kind in {"rate-limit", "payment", "auth", "no-key"}:
                 raise RunInvalid(f"{error.kind}: {error}", stop=True) from error
             if error.kind in {"unavailable", "network", "not-found"}:
@@ -1347,8 +1353,10 @@ def bench_api(task: str, model: str | None, row: dict, conf: dict, local: dict |
     try:
         result = bench_tasks.run_chat(task, ask=ask, chat=lambda messages, tools: call(messages, tools) or None)
     except RunInvalid as error:
-        return {**row, "skipped": str(error), "code": "not-evaluated" if str(error).startswith("not evaluated") else "provider",
-                "rate_limited": error.stop, "requests": seen["requests"]}
+        text = str(error)
+        code = "not-evaluated" if text.startswith("not evaluated") else "privacy" if text.startswith("privacy") else "provider"
+        return {**row, "skipped": text, "code": code, "rate_limited": error.stop, "stop_scope": error.scope if error.stop else None,
+                "requests": seen["requests"]}
     wrong = sorted(answered for answered in seen["models"] if not providers.same_model(name, answered))
     row.update(task=result["task"], seconds=round(time.monotonic() - started, 2), accuracy=result["accuracy"], items=result["items"],
                failures=seen["failures"], notes=result["notes"], error=seen["error"], requests=seen["requests"],
