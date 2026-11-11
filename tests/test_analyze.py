@@ -88,6 +88,10 @@ class Analyzer(unittest.TestCase):
         text = "\n".join(analyze.plan_lines(steps, cut, left_out, self.conf, "existing-subscription"))
         self.assertIn("Longest it can take", text)
         self.assertIn("Remote in total", text)
+        self.assertIn("python scripts/analyze.py prepare", text)
+        self.assertIn("1 not installed", text)
+        self.assertNotIn("ollama pull", text)
+        self.assertIn("Cut by a budget", text)
 
     def test_local_only_plans_no_remote_step(self):
         ready, left_out = analyze.candidates(self.conf, self.local, self.caps, CATALOG, mode="local-only")

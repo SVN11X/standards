@@ -325,10 +325,17 @@ def plan_lines(steps: list[dict], cut: list[dict], left_out: list[dict], conf: d
         lines.append(f"Remote in total: {sessions} agent sessions, each of several requests, and about {requests} API requests.")
     else:
         lines.append("Remote: none. Nothing leaves this machine.")
-    if cut or left_out:
-        lines.append("Not in the plan:")
-        lines += [f"  {item['label']}: {item['why']}" + (f". To add it: {item['fix']}" if item.get("fix") else "")
-                  for item in grouped([*left_out, *cut])]
+    if cut:
+        lines.append("Cut by a budget:")
+        lines += [f"  {item['label']}: {item['why']}" for item in grouped(cut)]
+    if left_out:
+        places: dict[str, dict[str, int]] = {}
+        for item in left_out:
+            counts = places.setdefault(item.get("provider") or item["executor"], {})
+            counts[item.get("status") or "left out"] = counts.get(item.get("status") or "left out", 0) + 1
+        lines.append("Not in the plan, by provider. The reason and the fix for each one: python scripts/analyze.py prepare")
+        lines += [f"  {place}: " + ", ".join(f"{count} {STATUS_TEXT.get(status, status)}" for status, count in counts.items())
+                  for place, counts in places.items()]
     return lines
 
 

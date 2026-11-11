@@ -32,6 +32,8 @@ All notable changes to this standard are documented here. The format follows [Ke
 
 ### Changed
 
+- `analyze.py plan` and `run` list what is not in the plan as one line per provider with a count per state. The reason and the fix for each model stay in `prepare`.
+
 - `settings/models.yml` no longer decides which models exist. It holds settings and limits, and `blocked: <reason>` keeps a model out. Its `services` notes moved to `settings/providers.yml`.
 - Cerebras and the NVIDIA API catalog are listed as trials with credits, so they are never called. GitHub Models is listed as retired since 2026-07-30.
 - A task a model was not run on is reported as not evaluated with the reason, never as a failed run. A run that a provider cut short with a limit, a payment request or an outage is not kept.
