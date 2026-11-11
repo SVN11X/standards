@@ -205,6 +205,8 @@ class Graders(unittest.TestCase):
     def test_summary_with_an_invented_command_fails(self):
         item = bench_tasks.SUMMARIZE[0]
         good = {"summary": "Use a worktree per branch.", "commands": ["git worktree list"]}
+        self.assertTrue(bench_tasks.summarize_ok(bench_tasks.SUMMARIZE[1], {"summary": "Ollama keeps a model loaded for a while.", "commands": []})[0])
+        self.assertFalse(bench_tasks.summarize_ok(bench_tasks.SUMMARIZE[1], {"summary": "It is about cooking pasta.", "commands": []})[0])
         self.assertTrue(bench_tasks.summarize_ok(item, good)[0])
         for bad in ({"summary": "Use a worktree per branch with `git checkout --worktrees`.", "commands": []},
                     {"summary": "Use a worktree per branch.", "commands": ["git worktree nuke"]},
