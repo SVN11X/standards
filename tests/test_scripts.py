@@ -121,12 +121,14 @@ class Route(Base):
         classify = [{"task": "classify", "executor": "ollama", "model": "a:1b", "seconds": 5, "verified": True}]
         self.assertEqual(len(orchestrate.current_rows(classify)), 1)
 
-    def test_risk_and_size_keep_it_with_claude(self):
-        self.assertEqual(orchestrate.route("edit-small", self.tmp, risk="yellow", local=self.local(), caps=self.caps)["executor"], "claude")
-        self.assertEqual(orchestrate.route("edit-small", self.tmp, files=9, local=self.local(), caps=self.caps)["executor"], "claude")
+    def test_risk_and_size_block_without_proof(self):
+        yellow = orchestrate.route("edit-small", self.tmp, risk="yellow", local=self.local(), caps=self.caps)
+        self.assertEqual(yellow["executor"], "blocked")
+        self.assertEqual(yellow["review"], "owner")
+        self.assertEqual(orchestrate.route("edit-small", self.tmp, files=9, local=self.local(), caps=self.caps)["executor"], "blocked")
 
     def test_private_needs_explicit_consent(self):
-        self.assertEqual(orchestrate.route("edit-small", self.tmp, local=self.local("personal-private"), caps=self.caps)["executor"], "claude")
+        self.assertEqual(orchestrate.route("edit-small", self.tmp, local=self.local("personal-private"), caps=self.caps)["executor"], "blocked")
         allowed = self.local("personal-private", allow_remote_free=True)
         self.assertEqual(orchestrate.route("edit-small", self.tmp, local=allowed, caps=self.caps)["executor"], "opencode")
 
@@ -152,16 +154,20 @@ class CostAndData(Base):
         return orchestrate.route(task, self.tmp, **kwargs)
 
     def test_unknown_task_never_reaches_claude_in_a_free_mode(self):
-        self.assertEqual(self.route("no-such-task")["executor"], "claude")
-        blocked = self.route("no-such-task", mode="free-strict")
-        self.assertEqual(blocked["executor"], "blocked")
-        self.assertIn("free-strict", blocked["rejected"][0]["why"])
+        for mode in (None, "free-strict", "existing-subscription"):
+            blocked = self.route("no-such-task", mode=mode)
+            self.assertEqual(blocked["executor"], "blocked", mode)
+        self.assertIn("classify the task type or ask the planner", " ".join(blocked["reasons"]))
         self.assertEqual(self.route("no-such-task", local=self.local("restricted"))["executor"], "blocked")
 
-    def test_planner_only_tasks_are_blocked_without_a_subscription(self):
-        for task in ("plan", "review-deep", "web-direction"):
-            self.assertEqual(self.route(task, mode="free-strict")["executor"], "blocked", task)
-            self.assertEqual(self.route(task)["executor"], "claude", task)
+    def test_planner_types_route_to_the_planner_and_review_deep_stays_blocked(self):
+        for task in ("plan", "web-direction"):
+            for mode in (None, "free-strict", "existing-subscription"):
+                decision = self.route(task, mode=mode)
+                self.assertEqual(decision["executor"], "planner", (task, mode))
+                self.assertIn("planner work: the owner asks Claude directly", decision["reasons"])
+        self.assertEqual(self.route("review-deep", mode="free-strict")["executor"], "blocked")
+        self.assertEqual(self.route("review-deep")["executor"], "blocked")
 
     def test_free_strict_keeps_the_free_path(self):
         decision = self.route("edit-small", mode="free-strict")
@@ -178,16 +184,17 @@ class CostAndData(Base):
         local = self.local(cost_mode="free-strict")
         self.assertEqual(orchestrate.cost_mode(orchestrate.policy(), local, "existing-subscription")[0], "free-strict")
         self.assertEqual(orchestrate.cost_mode(orchestrate.policy(), local, "local-only")[0], "local-only")
-        self.assertEqual(self.route("plan", local=local, mode="existing-subscription")["executor"], "blocked")
+        stricter = self.local(cost_mode="local-only")
+        self.assertEqual(self.route("edit-small", local=stricter, mode="existing-subscription")["executor"], "blocked")
 
     def test_risk_needs_the_owner_and_a_proven_model_not_a_brand(self):
-        yellow = self.route("edit-small", risk="yellow", mode="free-strict")
-        self.assertEqual((yellow["executor"], yellow["review"]), ("blocked", "owner"))
+        for mode in (None, "free-strict"):
+            yellow = self.route("edit-small", risk="yellow", mode=mode)
+            self.assertEqual((yellow["executor"], yellow["review"]), ("blocked", "owner"), mode)
         rows = [{"task": "fix-bug", "executor": "opencode", "model": "opencode/glm-5.3-flash-free", "seconds": 20, "verified": True}] * 3
         orchestrate.bench_file().write_text("\n".join(json.dumps(r) for r in rows) + "\n", encoding="utf-8")
         proven = self.route("edit-small", risk="yellow", mode="free-strict")
         self.assertEqual((proven["executor"], proven["review"]), ("opencode", "owner"))
-        self.assertEqual(self.route("edit-small", risk="yellow")["executor"], "claude")
 
     def test_large_edits_need_the_large_bench(self):
         rows = [{"task": "fix-bug", "executor": "opencode", "model": "opencode/glm-5.3-flash-free", "seconds": 20, "verified": True}] * 3
@@ -268,12 +275,21 @@ class CostAndData(Base):
         self.assertNotIn("worktree", unchecked)
 
     def test_table_names_every_task(self):
+        conf = orchestrate.policy()
         rows = orchestrate.route_table(self.tmp, local=self.local(), caps=self.caps, mode="free-strict")
         by_task = {row["task"]: row for row in rows}
-        self.assertEqual(set(by_task), set(orchestrate.policy()["tasks"]))
-        self.assertEqual(by_task["plan"]["agent"], "blocked")
-        self.assertIn("free-strict", by_task["plan"]["why"])
+        self.assertEqual(set(by_task), set(conf["tasks"]) | set(conf["planner_tasks"]))
+        self.assertEqual(by_task["plan"]["agent"], "planner")
+        self.assertIn("planner work", by_task["plan"]["why"])
         self.assertEqual(by_task["edit-small"]["model"], "opencode/glm-5.3-flash-free")
+
+    def test_no_task_mode_or_class_ever_routes_to_claude(self):
+        conf = orchestrate.policy()
+        for task in [*conf["tasks"], *conf["planner_tasks"], "no-such-task"]:
+            for mode in conf["cost"]["order"]:
+                for cls in conf["privacy"]["order"]:
+                    decision = self.route(task, local=self.local(cls), caps=self.caps, mode=mode)
+                    self.assertNotEqual(decision["executor"], "claude", (task, mode, cls))
 
     def test_stale_notes_point_to_the_source(self):
         catalog = {"models": [{"id": "old-free", "executor": "opencode", "source": "https://example.com/models", "checked": "2020-01-01"}]}

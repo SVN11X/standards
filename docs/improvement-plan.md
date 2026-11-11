@@ -23,7 +23,7 @@ Progress of the free routing, model analyzer and web design work of November 202
 - [ ] Adapter for a gateway such as FreeLLMAPI, after the trial checks in the radar pass with a fake server
 - [ ] Locate the official repository and license of the impeccable detector before adding it to the radar
 - [ ] Second web change: site performance budget, chart palette for color blindness, form pattern, link preview
-- [ ] Remove Claude from routing. Drop `claude` from every `tasks` list, add `planner_tasks`, remove the risk reorder and the proof exemption, update the five tests
+- [x] Remove Claude from routing. Drop `claude` from every `tasks` list, add `planner_tasks`, remove the risk reorder and the proof exemption, update the five tests
 - [ ] Proof and tiers in policy. Move `ROUTE_BENCH` and `LARGE_BENCH` into `orchestration.yml` so `fix-multi` never qualifies for `refactor`
 - [ ] Evidence expiry and identity. Bench rows older than `bench_recheck_days` or from another OpenCode minor or GPU do not count
 - [ ] Model lifecycle command. `orchestrate.py models` prints discovered, tested and authorized states per task type with the expiry date
