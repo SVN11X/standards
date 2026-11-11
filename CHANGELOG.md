@@ -32,7 +32,7 @@ All notable changes to this standard are documented here. The format follows [Ke
 
 ### Changed
 
-- Every bench run records the version of the rule that graded it. When a grader is corrected its version goes up, and the runs graded by the older rule stay in the history and stop counting for the router and the report. `summarize` and `tool-call` are at version 2.
+- Every bench run records the version of the rule that graded it. When a grader is corrected its version goes up, and the runs graded by the older rule stay in the history and stop counting for the router and the report. `tool-call` is at version 2.
 - `analyze.py run` says so when no model was ready and nothing ran.
 
 - `analyze.py plan` and `run` list what is not in the plan as one line per provider with a count per state. The reason and the fix for each model stay in `prepare`.
@@ -51,6 +51,8 @@ All notable changes to this standard are documented here. The format follows [Ke
 - Ollama is in the radar for the web profile, limited to classifying, short text and screenshot review by a proven vision model.
 
 ### Fixed
+
+- The `summarize` grader failed a command that a model had wrapped in quotes, although the command was in the text word for word. Quotes and backticks around a command are ignored. `summarize` is at grader version 3. Found in a real run.
 
 - A model that failed the bench class of a task was still proposed for it, through a broader class it had passed. The broader class now counts only for a model that was never run in the specific one. Found in the first full night.
 - An agent run that passed the visible tests and failed the hidden ones reported the success note as its reason. It now says so.
