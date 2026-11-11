@@ -818,19 +818,25 @@ def route(task: str, repo: Path, risk: str = "green", files: int = 1, input_char
         decision["executor"] = "tools"
         decision["reasons"].append("a program without AI does this exactly and for free")
         return decision
-    candidates = list(conf["tasks"][task]) if known else list(conf.get("unknown_task") or ["claude"])
-    if not known:
-        decision["reasons"].append(f"unknown task type {task!r}: treated as planner work, under the same cost and privacy rules")
+    if task in (conf.get("planner_tasks") or []):
+        decision["executor"] = "planner"
+        decision["reasons"].append("planner work: the owner asks Claude directly")
+        return decision
+    candidates = list(conf["tasks"][task]) if known else list(conf.get("unknown_task") or [])
+    if not candidates:
+        decision["executor"] = "blocked"
+        decision["reasons"].append(f"task type {task!r} has no candidate executor: "
+                                   "classify the task type or ask the planner")
+        return decision
     proven = task in (conf.get("proven_only") or []) or rule.get("needs") == "proven"
     classes = None
     if rule.get("review") == "owner":
-        candidates = ["claude"] + [c for c in candidates if c != "claude"]
         decision["reasons"].append(f"risk {risk}: the owner reviews before integration, whoever does the work")
     if files > limits["edit_small_max_files"]:
         proven, classes = True, LARGE_BENCH
     measured = measured_models(task, conf, classes)
     for candidate in candidates:
-        needs_proof = proven and candidate != "claude"
+        needs_proof = proven
         ok, why, model = eligible(candidate, task, repo, input_chars, conf, local, caps, measured, mode, needs_proof, catalog)
         if ok:
             decision.update(executor=candidate, model=model)
@@ -855,7 +861,7 @@ def route_table(repo: Path, conf: dict | None = None, local: dict | None = None,
     """Who would do each task type on this machine today, with the exact model or the reason it is blocked."""
     conf = conf or policy()
     rows = []
-    for task in conf["tasks"]:
+    for task in [*conf["tasks"], *conf.get("planner_tasks", [])]:
         decision = route(task, repo, conf=conf, local=local, caps=caps, mode=mode, catalog=catalog)
         blocked = decision["executor"] == "blocked"
         refused = ". ".join(f"{r['executor']}: {r['why']}" for r in decision["rejected"])

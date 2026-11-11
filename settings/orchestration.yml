@@ -48,27 +48,29 @@ tasks:
   test: [tools]
   hash: [tools]
   schema: [tools]
-  classify: [ollama, api, claude]
-  summarize-short: [ollama, api, claude]
-  extract-short: [ollama, api, claude]
-  edit-small: [opencode, claude]
-  fix-test: [opencode, claude]
-  docs-small: [opencode, ollama, claude]
-  edit-large: [claude, opencode]
-  refactor: [claude, opencode]
-  plan: [claude]
-  review-deep: [claude]
+  classify: [ollama, api]
+  summarize-short: [ollama, api]
+  extract-short: [ollama, api]
+  edit-small: [opencode]
+  fix-test: [opencode]
+  docs-small: [opencode, ollama]
+  edit-large: [opencode]
+  refactor: [opencode]
   # Web work. Direction is a design decision. A pattern, a test or a check error is bounded code. Copy is short text.
-  web-direction: [claude]
-  web-pattern: [opencode, claude]
-  web-test: [opencode, claude]
-  web-copy: [ollama, opencode, api, claude]
-  web-classify: [ollama, api, claude]
-  web-visual-review: [ollama, api, claude]
-  fix-check: [opencode, claude]
+  web-pattern: [opencode]
+  web-test: [opencode]
+  web-copy: [ollama, opencode, api]
+  web-classify: [ollama, api]
+  web-visual-review: [ollama, api]
+  fix-check: [opencode]
 
-# A task type that is not listed above is planner work. It passes the same cost and privacy rules.
-unknown_task: [claude]
+# Task types that are architecture decisions. route() answers executor "planner": the owner asks
+# Claude directly and nothing runs on its own. They never appear in the candidate lists above.
+planner_tasks: [plan, web-direction]
+
+# A task type that is not listed above and is not planner work is blocked until it is classified.
+# No list may contain claude: Claude Code is the planner and a bench-only executor.
+unknown_task: []
 
 # Task types where a model other than the planner must first pass the bench class that measures the task.
 proven_only: [edit-large, refactor, web-visual-review]
