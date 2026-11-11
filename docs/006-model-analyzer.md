@@ -91,7 +91,7 @@ A task a model was not run on is "not evaluated", with the reason, never a score
 
 The first six rows are inference by API: one request per item, straight to the model. The last row is a full agent working in a repository. The report keeps the two apart, because they measure different things.
 
-Every fixture is synthetic. No model grades another. A model enters a real task only after 3 runs with a pass rate of 0.8 in the class that measures it. Three runs are a first signal on one machine, not strong statistics.
+Every fixture is synthetic. No model grades another. Each run records the version of the rule that graded it, and when a rule is corrected the runs it graded before stop counting. A model enters a real task only after 3 runs with a pass rate of 0.8 in the class that measures it. Three runs are a first signal on one machine, not strong statistics.
 
 The design judge needs your choices. Put pairs of screenshots in `~/.standards/design-pairs/` with a `pairs.yml`:
 

@@ -32,6 +32,9 @@ All notable changes to this standard are documented here. The format follows [Ke
 
 ### Changed
 
+- Every bench run records the version of the rule that graded it. When a grader is corrected its version goes up, and the runs graded by the older rule stay in the history and stop counting for the router and the report. `summarize` and `tool-call` are at version 2.
+- `analyze.py run` says so when no model was ready and nothing ran.
+
 - `analyze.py plan` and `run` list what is not in the plan as one line per provider with a count per state. The reason and the fix for each model stay in `prepare`.
 
 - `settings/models.yml` no longer decides which models exist. It holds settings and limits, and `blocked: <reason>` keeps a model out. Its `services` notes moved to `settings/providers.yml`.

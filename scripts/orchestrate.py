@@ -573,9 +573,14 @@ def percentile(values: list[float], share: float) -> float | None:
     return ordered[index]
 
 
+def current_rows(rows: list[dict]) -> list[dict]:
+    """Runs graded by the rule in force. A run graded by an older rule stays in the file and no longer counts."""
+    return [row for row in rows if row.get("grader", 1) >= bench_tasks.grader_version(row.get("task"))]
+
+
 def summarize_bench(rows: list[dict]) -> list[dict]:
     groups: dict[tuple, list[dict]] = {}
-    for row in rows:
+    for row in current_rows(rows):
         groups.setdefault((row.get("task"), row.get("executor"), row.get("model")), []).append(row)
     summary = []
     for (task, executor, model), items in sorted(groups.items(), key=lambda kv: tuple(str(x) for x in kv[0])):
@@ -1443,6 +1448,7 @@ def bench_classify(executor: str, model: str | None) -> dict:
 
 
 def append_bench(row: dict) -> None:
+    row.setdefault("grader", bench_tasks.grader_version(row.get("task")))
     with bench_file().open("a", encoding="utf-8") as handle:
         handle.write(json.dumps(row, ensure_ascii=False) + "\n")
 

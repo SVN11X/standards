@@ -438,6 +438,7 @@ def run_plan(conf: dict | None = None, local: dict | None = None, caps: dict | N
             unload_other_models(None, conf)
         orchestrate.write_json(state_file(), state)
     state["complete"] = all(step["key"] in state["done"] for step in steps) and not interrupted
+    state["planned"] = len(steps)
     if state["complete"]:
         state["finished"] = orchestrate.now()
         orchestrate.write_json(state_file().with_name(f"{state['id']}.json"), state)
@@ -537,6 +538,7 @@ def build_report(conf: dict | None = None, catalog: dict | None = None, rows: li
     rows = rows if rows is not None else orchestrate.bench_rows()
     limits = conf["limits"]
     summary = orchestrate.summarize_bench(rows)
+    outdated = len(rows) - len(orchestrate.current_rows(rows))
     hardware = next((r.get("hardware") for r in reversed(rows) if r.get("hardware")), {}) or {}
     gpu = hardware.get("gpu") or {}
     out = ["# Model analysis", "",
@@ -570,6 +572,8 @@ def build_report(conf: dict | None = None, catalog: dict | None = None, rows: li
                           "Passed the threshold"], body) + [""]
             if task == "design-judge-sample":
                 out += ["These pairs are a made-up sample that only proves the mechanism. They are nobody's taste and never decide who reviews design.", ""]
+    if outdated:
+        out += [f"{outdated} older runs are left out: the rule that graded them was corrected since, so they no longer count.", ""]
     out += ["A model and a task that do not appear above were not measured. That is not a score of zero: the reason is under Not tested or not evaluated.", ""]
     out += ["## Proposed split", "", "The router already reads this history: among the models you allowed, it takes the one that "
             "passed and is fastest. What stays your decision is which models you allow, and the order in `settings/orchestration.yml`.", ""]
@@ -701,6 +705,9 @@ def main(argv: list[str] | None = None) -> int:
     state = run_plan(conf, local, caps, catalog, args.mode, args.runs, args.tasks,
                      args.hours * 3600 if args.hours else None, args.local_agents, models=args.models, listings=listings)
     path = write_report(None, conf=conf, catalog=catalog, state=state)
+    if not state.get("planned"):
+        print("\nNothing ran: no model was ready to test. The lines above say why, and "
+              "python scripts/analyze.py prepare gives the fix for each one.")
     print(f"\n{'Finished' if state['complete'] else 'Not finished'}. Report: {path}")
     return 0 if state["complete"] else 4
 

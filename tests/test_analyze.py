@@ -154,6 +154,10 @@ class Analyzer(unittest.TestCase):
         keys = [(r["task"], r["executor"], r["model"]) for r in orchestrate.bench_rows()]
         self.assertEqual(len(keys), len(set(keys)))
 
+    def test_the_report_says_how_many_old_runs_it_left_out(self):
+        rows = [{"task": "summarize", "executor": "ollama", "model": "good:1b", "seconds": 5, "verified": False, "date": orchestrate.now()}]
+        self.assertIn("1 older runs are left out", analyze.build_report(self.conf, CATALOG, rows=rows))
+
     def test_one_local_model_at_a_time(self):
         fakes.Ollama.loaded.append("bad:1b")
         analyze.unload_other_models("good:1b", self.conf)
