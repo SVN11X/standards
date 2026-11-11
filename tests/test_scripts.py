@@ -98,13 +98,28 @@ class Route(Base):
 
     def test_a_failed_specific_class_is_not_rescued_by_a_broader_one(self):
         def rows(task, model, ok):
-            return [{"task": task, "executor": "ollama", "model": model, "seconds": 5, "verified": ok}] * 3
+            return [{"task": task, "executor": "ollama", "model": model, "seconds": 5, "verified": ok,
+                     "grader": bench_tasks.grader_version(task)}] * 3
         history = (rows("classify", "a:1b", True) + rows("summarize", "a:1b", False)
                    + rows("classify", "b:1b", True) + rows("classify", "c:1b", True) + rows("summarize", "c:1b", True))
         orchestrate.bench_file().write_text("\n".join(json.dumps(r) for r in history) + "\n", encoding="utf-8")
         passed = orchestrate.measured_models("summarize-short", orchestrate.policy())
         self.assertEqual({key[1]: row["task"] for key, row in passed.items()}, {"b:1b": "classify", "c:1b": "summarize"})
         self.assertEqual(len(orchestrate.measured_models("classify", orchestrate.policy())), 3)
+
+    def test_runs_graded_by_an_older_rule_do_not_count(self):
+        old = [{"task": "summarize", "executor": "ollama", "model": "a:1b", "seconds": 5, "verified": False}] * 3
+        new = [{"task": "summarize", "executor": "ollama", "model": "a:1b", "seconds": 6, "verified": True}] * 3
+        orchestrate.bench_file().write_text("\n".join(json.dumps(r) for r in old) + "\n", encoding="utf-8")
+        for row in new:
+            orchestrate.append_bench(dict(row))
+        rows = orchestrate.bench_rows()
+        self.assertEqual((len(rows), len(orchestrate.current_rows(rows))), (6, 3))
+        summary = orchestrate.summarize_bench(rows)[0]
+        self.assertEqual((summary["runs"], summary["pass_rate"]), (3, 1.0))
+        self.assertIn(("ollama", "a:1b"), orchestrate.measured_models("summarize-short", orchestrate.policy()))
+        classify = [{"task": "classify", "executor": "ollama", "model": "a:1b", "seconds": 5, "verified": True}]
+        self.assertEqual(len(orchestrate.current_rows(classify)), 1)
 
     def test_risk_and_size_keep_it_with_claude(self):
         self.assertEqual(orchestrate.route("edit-small", self.tmp, risk="yellow", local=self.local(), caps=self.caps)["executor"], "claude")

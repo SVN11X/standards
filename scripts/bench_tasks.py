@@ -23,6 +23,13 @@ PASS_ACCURACY = 0.75
 CHAT_TASKS = {"classify": [], "extract": [], "summarize": [], "web-subprofile": [], "tool-call": ["tools"],
               "vision": ["vision"], "design-judge": ["vision"]}
 BASELINES = {"classify", "extract", "web-subprofile"}
+# Version of the rule that grades each task. Raise it when a grader changes what it accepts: runs graded by an older
+# rule stay in the history and stop counting. A task that is not listed is at version 1.
+GRADERS = {"summarize": 2, "tool-call": 2}
+
+
+def grader_version(task: str | None) -> int:
+    return GRADERS.get(str(task), 1)
 
 
 class OutOfTime(Exception):
