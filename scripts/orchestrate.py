@@ -598,17 +598,24 @@ def summarize_bench(rows: list[dict]) -> list[dict]:
 
 
 def measured_models(task: str, conf: dict, classes: list[str] | None = None) -> dict:
-    """Bench results that count for this task type: enough runs and a high enough pass rate, in the class that measures it."""
+    """Bench results that count for this task type: enough runs and a high enough pass rate, in the class that measures it.
+
+    The first class a model was measured in decides. A broader class counts only for a model with no run in a more
+    specific one, so a model that failed the specific class never gets in through the broader one.
+    """
     limits = conf["limits"]
     classes = classes if classes is not None else ROUTE_BENCH.get(task, [])
     found: dict = {}
+    judged: set = set()
     summary = summarize_bench(bench_rows())
     for bench in classes:
-        for row in summary:
+        rows = [row for row in summary if row["task"] == bench]
+        for row in rows:
             key = (row["executor"], row["model"])
-            if (row["task"] == bench and key not in found and row["runs"] >= limits["bench_min_runs"]
+            if (key not in judged and row["runs"] >= limits["bench_min_runs"]
                     and row["pass_rate"] >= limits["bench_min_pass_rate"] and row["p50_s"] is not None):
                 found[key] = row
+        judged |= {(row["executor"], row["model"]) for row in rows}
     return found
 
 
@@ -1169,7 +1176,9 @@ def bench_agent(task: str, executor: str, model: str | None, command: list[str] 
             "seconds": seconds, "verified": result["state"] == "verified" and bool(hidden_ok), "state": result["state"],
             "checks": result.get("checks"), "hidden_tests": hidden_ok, "outside_scope": result.get("outside_scope"),
             "rate_limited": bool(outcome.get("rate_limited")), "timeout": bool(outcome.get("timeout")),
-            "error": (result.get("history") or [{}])[-1].get("note"), "hardware": hardware()}
+            "error": ("passed the tests it could see and failed the acceptance tests it never saw"
+                      if result["state"] == "verified" and not hidden_ok else (result.get("history") or [{}])[-1].get("note")),
+            "hardware": hardware()}
 
 
 def bench_chat(task: str, executor: str, model: str | None, conf: dict | None = None, caps: dict | None = None,

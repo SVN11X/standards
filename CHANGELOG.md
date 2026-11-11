@@ -49,6 +49,10 @@ All notable changes to this standard are documented here. The format follows [Ke
 
 ### Fixed
 
+- A model that failed the bench class of a task was still proposed for it, through a broader class it had passed. The broader class now counts only for a model that was never run in the specific one. Found in the first full night.
+- An agent run that passed the visible tests and failed the hidden ones reported the success note as its reason. It now says so.
+- The `summarize` grader asked for several exact words per text and failed correct summaries. It now asks for one word group on the subject, and still fails any command that is not in the text.
+
 - The `tool-call` grader failed a model that read more than one file before running the tests. It now checks that each required tool was called and in the right order, and allows repeats. Found in a real run.
 - `bench` prints why a run was not accepted.
 

@@ -92,16 +92,16 @@ SUMMARIZE = [
              "creates the folder ../hotfix on a new branch hotfix from main. List them with `git worktree list`. When the work "
              "is merged, delete the folder with `git worktree remove ../hotfix` and clean stale records with `git worktree prune`. "
              "A branch can be checked out in only one worktree at a time.",
-     "facts": [["worktree"], ["branch"]]},
+     "facts": [["worktree"]]},
     {"text": "Ollama keeps a model in memory for five minutes after the last request. `ollama ps` shows the loaded models and how "
              "much of each runs on the GPU. A model that does not fit in VRAM is split with the CPU and answers several times "
              "slower. `ollama stop qwen3.5:9b` unloads a model at once. Nothing here downloads a model: that is `ollama pull`, "
              "which needs the owner's approval.",
-     "facts": [["gpu", "vram"], ["cpu", "slower", "split"]]},
+     "facts": [["gpu", "vram", "memory", "loaded"]]},
     {"text": "Create an isolated environment with `python -m venv .venv`, activate it, then install the pinned dependencies with "
              "`pip install -r requirements.txt`. Run the tests with `python -m unittest discover -s tests`. Never install "
              "packages globally with sudo.",
-     "facts": [["environment", "venv"], ["test"]]},
+     "facts": [["environment", "venv", "dependenc"]]},
 ]
 SUMMARIZE_PROMPT = ("Summarize the text for a teammate in at most three sentences. Mention only commands that appear in the text, "
                     'exactly as written. Answer JSON {"summary": "...", "commands": ["..."]}.\nText: ')
@@ -113,6 +113,11 @@ def squeeze(text: str) -> str:
 
 
 def summarize_ok(item: dict, parsed) -> tuple[bool, str]:
+    """A summary passes when it has the right shape, names no command that is not in the text and stays on the subject.
+
+    The subject check is one word group per text on purpose. A short summary may leave a detail out, and asking for
+    several exact words failed correct summaries in a real run.
+    """
     if not isinstance(parsed, dict) or not isinstance(parsed.get("summary"), str) or not parsed["summary"].strip():
         return False, "no summary"
     summary = parsed["summary"]

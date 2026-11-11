@@ -96,6 +96,16 @@ class Route(Base):
         self.assertEqual(decision["model"], "opencode/deepseek-v4.1-flash-free")
         self.assertIn("measured on this machine", " ".join(decision["reasons"]))
 
+    def test_a_failed_specific_class_is_not_rescued_by_a_broader_one(self):
+        def rows(task, model, ok):
+            return [{"task": task, "executor": "ollama", "model": model, "seconds": 5, "verified": ok}] * 3
+        history = (rows("classify", "a:1b", True) + rows("summarize", "a:1b", False)
+                   + rows("classify", "b:1b", True) + rows("classify", "c:1b", True) + rows("summarize", "c:1b", True))
+        orchestrate.bench_file().write_text("\n".join(json.dumps(r) for r in history) + "\n", encoding="utf-8")
+        passed = orchestrate.measured_models("summarize-short", orchestrate.policy())
+        self.assertEqual({key[1]: row["task"] for key, row in passed.items()}, {"b:1b": "classify", "c:1b": "summarize"})
+        self.assertEqual(len(orchestrate.measured_models("classify", orchestrate.policy())), 3)
+
     def test_risk_and_size_keep_it_with_claude(self):
         self.assertEqual(orchestrate.route("edit-small", self.tmp, risk="yellow", local=self.local(), caps=self.caps)["executor"], "claude")
         self.assertEqual(orchestrate.route("edit-small", self.tmp, files=9, local=self.local(), caps=self.caps)["executor"], "claude")
