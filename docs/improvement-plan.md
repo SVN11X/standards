@@ -23,3 +23,19 @@ Progress of the free routing, model analyzer and web design work of November 202
 - [ ] Adapter for a gateway such as FreeLLMAPI, after the trial checks in the radar pass with a fake server
 - [ ] Locate the official repository and license of the impeccable detector before adding it to the radar
 - [ ] Second web change: site performance budget, chart palette for color blindness, form pattern, link preview
+- [ ] Remove Claude from routing. Drop `claude` from every `tasks` list, add `planner_tasks`, remove the risk reorder and the proof exemption, update the five tests
+- [ ] Proof and tiers in policy. Move `ROUTE_BENCH` and `LARGE_BENCH` into `orchestration.yml` so `fix-multi` never qualifies for `refactor`
+- [ ] Evidence expiry and identity. Bench rows older than `bench_recheck_days` or from another OpenCode minor or GPU do not count
+- [ ] Model lifecycle command. `orchestrate.py models` prints discovered, tested and authorized states per task type with the expiry date
+- [ ] Bench class `refactor-module`. A 6 to 8 file fixture that extracts a duplicated function into a module with hidden tests and an `ast` check
+- [ ] Bench class `review-diff`. Six synthetic diffs with seeded defects, graded on recall of file and line range and false high findings
+- [ ] Bench class `decompose`. Three task specs graded with `workplan.validate` on coverage, acyclicity and disjoint parallel sets
+- [ ] Health and failover. Failure codes, `~/.standards/health.json`, cooldowns, candidate switch and `fallbacks` in `route()`
+- [ ] Work plan contract. `schemas/work-plan.schema.json` plus `scripts/workplan.py` with validate, DAG, glob expansion, conflicts and parallel batches
+- [ ] Decomposition. `split_unit` in `workplan.py`: deterministic by files, by criteria, then model proposal, each validated
+- [ ] Review. `scripts/review.py` with a cross-model JSON verdict, finding validation and one fix round on a high finding
+- [ ] Executor loop. `scripts/execute.py` with check, run, status, resume and clean, under 600 lines by reusing `orchestrate`, `workplan` and `review`
+- [ ] Report. `schemas/execution-report.schema.json` and the `report` command, one consolidated report per plan
+- [ ] Adversarial scenarios. New cases in `adversarial.py` for planner types, claude calls, overlap, budget stops and invented review lines
+- [ ] Docs and agent texts. `docs/007`, `docs/005`, `docs/006`, `skills/repo-improve/SKILL.md` and a new `run-plan` OpenCode command
+- [ ] BLOCKED: Live validation on the owner's machine. Run the new bench classes and a pilot plan of 3 green units with `execute.py`
