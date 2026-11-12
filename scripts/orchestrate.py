@@ -860,6 +860,20 @@ def record_health(executor: str, model: str | None, code: str | None, conf: dict
     write_json(health_file(), data)
 
 
+PROVIDER_CODES = {"rate-limit": "rate_limit", "auth": "auth", "unavailable": "unavailable", "network": "unavailable"}
+
+
+def call_failure_code(error: Exception) -> str | None:
+    """Health code for a failed Ollama or API call. A reply the model got wrong says nothing about its health."""
+    if isinstance(error, providers.ProviderError):
+        return PROVIDER_CODES.get(error.kind)
+    if isinstance(error, TimeoutError) or isinstance(getattr(error, "reason", None), TimeoutError):
+        return "timeout"
+    if isinstance(error, (OSError, urllib.error.URLError)):
+        return "unavailable"
+    return None
+
+
 def cooling_set(at: dt.datetime | None = None) -> dict:
     """(executor, model) -> entry for everything whose cooldown has not ended."""
     at = at or dt.datetime.now(dt.timezone.utc)
@@ -1306,10 +1320,13 @@ def delegate_ollama(prompt: str, model: str | None = None, want_json: bool = Fal
     try:
         reply = ollama_chat(payload, conf)
     except (OSError, ValueError, urllib.error.URLError) as error:
+        if call_failure_code(error):
+            record_health("ollama", model, call_failure_code(error), conf)
         run_data["error"] = str(error)[:300]
         run_data["checks"]["reply"] = "ERROR"
         set_state(run_data, "failed", "Ollama did not answer")
         return run_data
+    record_health("ollama", model, None, conf)
     seconds = round(time.monotonic() - started, 2)
     answer = (reply.get("message") or {}).get("content", "")
     run_data.update(answer=answer, seconds=seconds, effective_model=reply.get("model"), metrics={k: reply.get(k) for k in (
@@ -1608,10 +1625,13 @@ def delegate_api(prompt: str, model: str, want_json: bool = False, untrusted: st
         reply = providers.chat(pconf, name, [{"role": "user", "content": content, **({"images": images} if images else {})}],
                                want_json=want_json, timeout=conf["limits"]["ollama_timeout_s"])
     except providers.ProviderError as error:
+        if call_failure_code(error):
+            record_health("api", model, call_failure_code(error), conf)
         run_data["error"] = f"{error.kind}: {error}"[:300]
         run_data["checks"]["reply"] = "ERROR"
         set_state(run_data, "failed", f"the provider did not answer ({error.kind})")
         return run_data
+    record_health("api", model, None, conf)
     answer = reply["message"].get("content", "")
     run_data.update(answer=answer, seconds=round(time.monotonic() - started, 2), effective_model=reply.get("model"), usage=reply.get("usage"))
     run_data["checks"]["reply"] = "PASS" if answer.strip() else "FAIL"

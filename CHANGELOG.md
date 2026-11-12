@@ -7,6 +7,7 @@ All notable changes to this standard are documented here. The format follows [Ke
 ### Added
 
 - Health and failover. A timeout, rate limit, auth or unavailable failure of an OpenCode or Colibri run is written to `~/.standards/health.json` with a cooldown from `health.cooldown_s` in `settings/orchestration.yml`. `route()` skips a model that rests and lists later candidates in `fallbacks`. A Colibri task gets no fallback and never moves to another model.
+- Health is recorded for Ollama and API delegates too: a network, timeout, rate limit or auth failure starts a cooldown and a reply clears it.
 - Cross-model review: `scripts/review.py` has a different model than the author return a JSON verdict on a diff. Findings that cite files or lines outside the diff are dropped, and one fix round runs when a high finding remains. The same model as the author is blocked before any call.
 - `split_unit` in `scripts/workplan.py` splits a unit by files, then by acceptance criteria, then with a model proposal passed in as a callable. Every candidate is validated and must stay inside the parent's files.
 - Measured Colibri on the RTX 2060 (6 GiB) with `qwen3-coder-30b`. Prefill runs at about 6 tokens per second (1009 tokens in 177 s, 3011 in 451 s), so the 12000 token OpenCode prompt needs about 30 minutes. `fix-bug` timed out at 600 s. Every model Colibri supports is a 27B or larger MoE, so Colibri stays installed and answers short prompts, and the router must not use it as a coding agent on this machine.

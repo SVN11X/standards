@@ -4,6 +4,8 @@ import os
 import sys
 import tempfile
 import unittest
+import urllib.error
+from unittest import mock
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -74,6 +76,47 @@ class HealthTests(unittest.TestCase):
                                           {}, None, False, {}, orchestrate.cooling_set())
         self.assertFalse(ok)
         self.assertIn("timeout", why)
+
+    def test_ollama_delegate_records_failure_and_success(self):
+        caps = {"models": [{"name": "m1"}]}
+        run = lambda: orchestrate.delegate_ollama("hi", model="m1", conf=self.conf, caps=caps, repo=self.tmp,  # noqa: E731
+                                                  local=self.local, catalog={})
+        with mock.patch.object(orchestrate, "ollama_chat", side_effect=urllib.error.URLError("connection refused")):
+            out = run()
+        if out["state"] == "blocked":
+            self.skipTest("gate blocked the fake model: " + out.get("reason", ""))
+        self.assertEqual(orchestrate.load_health()["ollama|m1"]["code"], "unavailable")
+        with mock.patch.object(orchestrate, "ollama_chat", return_value={"message": {"content": "ok"}, "model": "m1"}):
+            run()
+        self.assertEqual(orchestrate.load_health(), {})
+
+    def test_api_delegate_records_failure_and_success(self):
+        pconf = {"x": 1}
+        ready = (True, "ok", "", pconf)
+        error = orchestrate.providers.ProviderError("rate-limit", "slow down", status=429)
+        with mock.patch.object(orchestrate, "api_ready", return_value=ready),                 mock.patch.object(orchestrate.providers, "preflight", return_value={"ok": True}),                 mock.patch.object(orchestrate.providers, "chat", side_effect=error):
+            orchestrate.delegate_api("hi", "prov/m1", conf=self.conf, local=self.local, repo=self.tmp, catalog={})
+        self.assertEqual(orchestrate.load_health()["api|prov/m1"]["code"], "rate_limit")
+        reply = {"message": {"content": "ok"}, "model": "m1"}
+        with mock.patch.object(orchestrate, "api_ready", return_value=ready),                 mock.patch.object(orchestrate.providers, "preflight", return_value={"ok": True}),                 mock.patch.object(orchestrate.providers, "chat", return_value=reply):
+            orchestrate.delegate_api("hi", "prov/m1", conf=self.conf, local=self.local, repo=self.tmp, catalog={})
+        self.assertEqual(orchestrate.load_health(), {})
+
+    def test_opencode_delegate_writes_the_failure_code(self):
+        import subprocess
+        repo = self.tmp / "repo"
+        repo.mkdir()
+        for args in (["init", "-q"], ["-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "--allow-empty", "-m", "i"]):
+            subprocess.run(["git", "-C", str(repo), *args], check=True)
+        local = {**self.local, "folders": [{"path": str(repo), "class": "personal-public"}]}
+        fake = {"exit": 1, "seconds": 0, "timeout": False, "stdout": "", "stderr": "HTTP 429 too many requests"}
+        real = orchestrate.run
+        pick = lambda cmd, *a, **k: fake if cmd and cmd[0] == "fake" else real(cmd, *a, **k)  # noqa: E731
+        with mock.patch.object(orchestrate, "run", side_effect=pick):
+            out = orchestrate.delegate_opencode(repo, "task", ["*"], None, model="opencode/a-free", conf=self.conf,
+                                                local=local, command=["fake"], catalog={})
+        self.assertEqual(out["executor_result"]["failure_code"], "rate_limit")
+        self.assertEqual(orchestrate.load_health()["opencode|opencode/a-free"]["code"], "rate_limit")
 
 
 if __name__ == "__main__":
