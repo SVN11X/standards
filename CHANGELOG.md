@@ -6,6 +6,7 @@ All notable changes to this standard are documented here. The format follows [Ke
 
 ### Added
 
+- Fixed the CI `verify` failures: the policy check did not know `colibri` as an executor and two imports were unused. They failed since the Colibri commit. Run `python scripts/verify.py --level standard` before every push, not only the selftest.
 - `execute.py` records the commit the integration worktree was built on and refuses to continue when the repository moved, with the command to clean and restart. A real pilot run reused a worktree built on an old base after the fixture changed, and a second `run` silently reused the commits of the first.
 - `orchestrate.py models` also lists a model the bench proved but the coverage does not know, such as a local Ollama model run through OpenCode, so `ollama/qwen3.5-9b-ctx16k` with 3 of 3 `fix-bug` runs is no longer missing.
 - `colibri.py register` also adds Colibri's own MCP server to the OpenCode config and denies its `install`, `start` and `stop` tools, which could download a model of tens of gigabytes or stop a server in use. The tool names and the deny rules were checked with `opencode debug agent`.
