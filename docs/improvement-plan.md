@@ -22,7 +22,7 @@ Progress of the free routing, model analyzer and web design work of November 202
 - [ ] BLOCKED: confirm that `opencode run --file` sends an image. Two runs with `ollama/qwen3.5-9b-ctx16k` returned no answer in 280 s and in 850 s, with and without `modalities` declared, so nothing is proven. The 12000 token OpenCode prompt makes a local 9B too slow for this check. It needs a free vision model the owner has checked in `local.yml`, then one run with a synthetic image
 - [x] Adapter for a gateway such as FreeLLMAPI, after the trial checks in the radar pass with a fake server
 - [x] Locate the official repository and license of the impeccable detector. It is pbakaus/impeccable, Apache-2.0, and the radar lists it at assess
-- [ ] Second web change: site performance budget, chart palette for color blindness, form pattern, link preview
+- [x] Second web change: site performance budget, chart palette for color blindness, form pattern, link preview
 - [x] Remove Claude from routing. Drop `claude` from every `tasks` list, add `planner_tasks`, remove the risk reorder and the proof exemption, update the five tests
 - [x] Proof and tiers in policy. Move `ROUTE_BENCH` and `LARGE_BENCH` into `orchestration.yml` so `fix-multi` never qualifies for `refactor`
 - [x] Evidence expiry and identity. Bench rows older than `bench_recheck_days` or from another OpenCode minor or GPU do not count

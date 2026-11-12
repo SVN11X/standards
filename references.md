@@ -54,6 +54,13 @@ Sources behind the rules. Prefer the original source. The check verifies these l
 
 - WCAG 2.2: https://www.w3.org/TR/WCAG22/
 - Core Web Vitals: https://web.dev/articles/vitals
+- web.dev, performance budgets 101: https://web.dev/articles/performance-budgets-101
+- Okabe and Ito, Color Universal Design: https://jfly.uni-koeln.de/color/
+- Okabe-Ito palette with hex values, NYU Siegal lab: https://siegal.bio.nyu.edu/color-palette/
+- W3C WAI, Forms Tutorial: https://www.w3.org/WAI/tutorials/forms/
+- web.dev, Learn Forms: https://web.dev/learn/forms
+- MediaWiki, Page Previews: https://www.mediawiki.org/wiki/Page_Previews
+- W3C, Understanding SC 1.4.13 Content on Hover or Focus: https://www.w3.org/WAI/WCAG22/Understanding/content-on-hover-or-focus.html
 - Nielsen Norman Group, 10 usability heuristics: https://www.nngroup.com/articles/ten-usability-heuristics/
 - MDN, prefers-reduced-motion: https://developer.mozilla.org/en-US/docs/Web/CSS/@media/prefers-reduced-motion
 - WCAG 2.2, target size (minimum): https://www.w3.org/WAI/WCAG22/Understanding/target-size-minimum.html

@@ -47,6 +47,7 @@ fixed:
   - Load fonts with font-display, preload the one used above the fold, and give the fallback font similar metrics.
   - A first-time visitor can tell what the page offers and what to do within the first screen.
   - Give images and embeds a width and height so nothing jumps while loading. Measure Core Web Vitals before claiming performance (LCP under 2.5 s, INP under 200 ms, CLS under 0.1).
+  - Keep a site performance budget in docs/decisions/. The critical path (HTML, CSS, JavaScript and fonts above the fold) stays under 170 KB compressed, and each page is interactive in under 5 s on a Moto G4 class phone over slow 3G. Measure every page against it and name the page that breaks it.
   - No fabricated content. No invented statistics, testimonials, logos, or links to pages that do not exist. Label honest placeholders as placeholders.
   - No control without real behavior.
   - Visual direction comes from DESIGN.md, written by the owner. Without it, label the work as a draft.
@@ -72,6 +73,7 @@ options:
         rules:
           - Every value shows its unit and label. The calculation lives apart from the animation and has its own tests.
           - Label sample and simulated data, and offer a reset. A confidence or prediction figure states its method.
+          - Chart series use the Okabe-Ito colors listed in motion-and-foundations.md of web-improve, and each series also has a label, a line style or a marker. Check the chart in grayscale.
       reactive-object:
         rules:
           - Name the states of the object (for example idle, listening, working, error) and tie every visual change to one of them.
