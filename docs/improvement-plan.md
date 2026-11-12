@@ -19,7 +19,7 @@ Progress of the free routing, model analyzer and web design work of November 202
 - [x] Transport for OpenAI-compatible providers with settings per provider, and coverage with one state per model
 - [ ] BLOCKED: run each provider adapter against its real service with the owner's key. Only a fake server was used
 - [ ] BLOCKED: open each provider's pages and confirm what `settings/providers.yml` says. It came from a search of their sites
-- [ ] Confirm that `opencode run --file` sends an image, then test vision models served only through OpenCode
+- [ ] BLOCKED: confirm that `opencode run --file` sends an image. Two runs with `ollama/qwen3.5-9b-ctx16k` returned no answer in 280 s and in 850 s, with and without `modalities` declared, so nothing is proven. The 12000 token OpenCode prompt makes a local 9B too slow for this check. It needs a free vision model the owner has checked in `local.yml`, then one run with a synthetic image
 - [x] Adapter for a gateway such as FreeLLMAPI, after the trial checks in the radar pass with a fake server
 - [x] Locate the official repository and license of the impeccable detector. It is pbakaus/impeccable, Apache-2.0, and the radar lists it at assess
 - [ ] Second web change: site performance budget, chart palette for color blindness, form pattern, link preview
