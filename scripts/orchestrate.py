@@ -770,6 +770,20 @@ def model_states(found: list[dict], conf: dict, now: dt.datetime | None = None) 
                          "tested": f"yes ({evidence['task']})" if evidence else "no",
                          "authorized": "yes" if authorized else f"no ({record.get('status')})",
                          "expires": expires or ("no date" if evidence else "-")})
+        listed = {(r.get("executor"), r.get("model")) for r in found}
+        for key, evidence in sorted(proven.items(), key=lambda kv: (str(kv[0][0]), str(kv[0][1]))):
+            if key in listed:
+                continue
+            # Proven by the bench but not in the coverage, such as a local Ollama model run through OpenCode.
+            expires = None
+            if days is not None and evidence.get("last"):
+                try:
+                    expires = (dt.datetime.fromisoformat(evidence["last"]) + dt.timedelta(days=days)).date().isoformat()
+                except ValueError:
+                    pass
+            rows.append({"task": task, "executor": key[0], "model": key[1], "discovered": "not in the coverage",
+                         "tested": f"yes ({evidence['task']})", "authorized": "decided by the gate at run time",
+                         "expires": expires or "no date"})
     return rows
 
 

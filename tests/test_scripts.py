@@ -175,6 +175,14 @@ class Route(Base):
                                             "local-only", False, {}, set())
         self.assertFalse(ok)
 
+    def test_models_lists_a_proven_model_the_coverage_does_not_know(self):
+        rows = [{"task": "fix-bug", "executor": "opencode", "model": "ollama/m:9b", "seconds": 300, "verified": True,
+                 "date": dt.datetime.now(dt.timezone.utc).isoformat(), "grader": bench_tasks.grader_version("fix-bug")}] * 3
+        orchestrate.bench_file().write_text("\n".join(json.dumps(r) for r in rows) + "\n", encoding="utf-8")
+        table = {(r["task"], r["model"]): r for r in orchestrate.model_states([], orchestrate.policy())}
+        row = table[("edit-small", "ollama/m:9b")]
+        self.assertEqual((row["tested"], row["discovered"]), ("yes (fix-bug)", "not in the coverage"))
+
     def test_stale_history_does_not_prove_a_model(self):
         old = (dt.datetime.now(dt.timezone.utc) - dt.timedelta(days=90)).isoformat()
         rows = [{"task": "classify", "executor": "ollama", "model": "a:1b", "seconds": 5, "verified": True, "date": old,
