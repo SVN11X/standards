@@ -7,7 +7,7 @@ State of the local AI ecosystem of this repository after the implementation sess
 - The standard now orchestrates Ollama, OpenCode, Colibri and free cloud models behind one policy, with a loop that plans, executes, tests and reviews work units.
 - A real pilot on a throwaway repository, local models only, passed 2 of 3 units with their tests and a review by a second model. The third failed on a stale base and the loop now refuses that case.
 - Colibri is installed, serving and connected as a provider and an MCP server, but it is **not usable as a coding agent on this GPU**. Measured, not assumed.
-- Pull request 18 holds all the work. The CI is green (`selftest` and `verify`). Nothing is merged.
+- Pull requests 18 and 19 hold all the work and are merged with a green CI (`selftest` and `verify`). The last item, a p90 ceiling per task type and a night refresh of expiring evidence, came in with pull request 19.
 
 ## Environment and versions
 
@@ -79,11 +79,11 @@ python scripts\execute.py check|run|status|resume|clean|report PLAN.json --revie
 | Automatic model selection | Met, checked in normal and `local-only` modes |
 | Dashboard with real metrics | Met, unavailable metrics show as null |
 | Claude kept out of ordinary implementation | Met, removed from routing and covered by tests |
-| 16 original items recovered | Met, 32 plan items done and none open without a block |
-| Pending items done or blocked with a cause | Met, 12 blocked |
+| 16 original items recovered | Met, 33 plan items done and none open without a block |
+| Pending items done or blocked with a cause | Met, 11 blocked |
 | Privacy, cost and approval policies kept | Met, and a path that downgraded the privacy class was closed, see below |
 | Reproducible install, diagnosis and repair | Met through `standards.ps1` |
-| Integration and regression passed | Met, 220 unit tests, `verify` 53 pass and 0 fail, CI green |
+| Integration and regression passed | Met, 223 unit tests, `verify` 53 pass and 0 fail, CI green |
 | Evidence and consolidated report | This file |
 
 ## Defects found and fixed during the session
