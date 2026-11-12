@@ -11,6 +11,7 @@ import argparse
 import http.server
 import json
 import os
+import secrets
 import shutil
 import sys
 import threading
@@ -18,6 +19,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import orchestrate  # noqa: E402
+import control_jobs  # noqa: E402
+import next_actions  # noqa: E402
 
 PAGE = Path(__file__).resolve().parent.parent / "ui" / "control" / "index.html"
 STAGES = ["planned", "approved", "running"]
@@ -152,25 +155,41 @@ def collect(repo: Path) -> dict:
             "counts": {state: sum(1 for t in tasks if t["state"] == state) for state in
                        ["planned", "approved", "running", "verified", "failed", "blocked"]},
             "telemetry": telemetry(),
-            "cost": {"mode": mode, "mode_source": mode_source, "privacy": cls, "api_cost_usd": 0.0,
-                     "note": "Local models cost 0 in API fees. Electricity and hardware are not counted."},
-            "bench": orchestrate.summarize_bench(orchestrate.bench_rows())[:80]}
+            "cost": {"mode": mode, "mode_source": mode_source, "privacy": cls, "api_cost_usd": 0.0 if mode == "local-only" else None,
+                     "note": "0 API cost is guaranteed only in local-only mode; electricity is excluded. "
+                              "Other modes require provider-specific accounting."},
+            "bench": orchestrate.summarize_bench(orchestrate.bench_rows())[:80],
+             "next_actions": next_actions.snapshot(),
+             "operations": Handler.manager.snapshot() if Handler.manager else {"active": False, "job": None, "log": ""}}
 
 
 class Handler(http.server.BaseHTTPRequestHandler):
     repo = Path.cwd()
+    manager: control_jobs.JobManager | None = None
+    token = ""
 
     def send(self, code: int, body: bytes, kind: str) -> None:
         self.send_response(code)
         self.send_header("Content-Type", kind)
         self.send_header("Cache-Control", "no-store")
+        self.send_header("X-Content-Type-Options", "nosniff")
         self.end_headers()
         self.wfile.write(body)
 
+    def safe_host(self) -> bool:
+        return self.headers.get("Host") in {f"127.0.0.1:{self.server.server_port}",
+                                            f"localhost:{self.server.server_port}"}
+
     def do_GET(self):  # noqa: N802
+        if not self.safe_host():
+            self.send(403, b"loopback host required", "text/plain")
+            return
         path, _, query = self.path.partition("?")
         if path == "/":
-            self.send(200, PAGE.read_bytes(), "text/html; charset=utf-8")
+            # A per-process token is readable only from this loopback-served page.
+            content = PAGE.read_text(encoding="utf-8").replace(
+                "const NA=", "const CONTROL_TOKEN=" + json.dumps(self.token) + ";const NA=", 1)
+            self.send(200, content.encode("utf-8"), "text/html; charset=utf-8")
         elif path == "/api/state":
             self.send(200, json.dumps(collect(self.repo), default=str).encode(), "application/json")
         elif path == "/api/logs":
@@ -178,6 +197,40 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self.send(200, json.dumps({"name": name, "lines": log_tail(name)}).encode(), "application/json")
         else:
             self.send(404, b"not found", "text/plain")
+
+    def do_POST(self):  # noqa: N802
+        expected = {f"http://127.0.0.1:{self.server.server_port}",
+                    f"http://localhost:{self.server.server_port}"}
+        authorized = (self.safe_host() and self.headers.get("Origin") in expected
+                      and bool(self.token) and secrets.compare_digest(
+                          self.headers.get("X-Standards-Token", ""), self.token))
+        if not authorized:
+            self.send(403, b"forbidden", "text/plain")
+            return
+        if not (self.headers.get("Content-Type") or "").startswith("application/json"):
+            self.send(415, b"JSON required", "text/plain")
+            return
+        try:
+            length = int(self.headers.get("Content-Length", "0"))
+            if not 0 < length <= 1024:
+                raise ValueError("request too large or empty")
+            data = json.loads(self.rfile.read(length))
+            if not isinstance(data, dict) or self.manager is None:
+                raise ValueError("invalid operation")
+            if self.path == "/api/jobs/start":
+                kind = data.get("kind")
+                if kind == "bench-run" and data.get("confirmed") is not True:
+                    raise ValueError("explicit benchmark confirmation required")
+                result = self.manager.start(kind)
+            elif self.path == "/api/jobs/cancel":
+                result = self.manager.cancel(data.get("id", ""))
+            else:
+                self.send(404, b"not found", "text/plain")
+                return
+        except (ValueError, RuntimeError, FileNotFoundError, OSError) as error:
+            self.send(409, json.dumps({"error": str(error)[:240]}).encode(), "application/json")
+            return
+        self.send(200, json.dumps(result).encode(), "application/json")
 
     def log_message(self, *args):
         pass
@@ -213,6 +266,8 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps(collect(Path.cwd()), indent=2, default=str))
         return 0
     Handler.repo = args.repo
+    Handler.manager = control_jobs.JobManager(args.repo, orchestrate.home() / "control-jobs")
+    Handler.token = secrets.token_urlsafe(32)
     server = http.server.ThreadingHTTPServer(("127.0.0.1", args.port), Handler)
     print(f"Standards AI Control on http://127.0.0.1:{args.port}", flush=True)
     threading.Thread(target=collect, args=(args.repo,), daemon=True).start()
