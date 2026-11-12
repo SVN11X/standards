@@ -6,6 +6,7 @@ All notable changes to this standard are documented here. The format follows [Ke
 
 ### Added
 
+- Radar entry for Impeccable at assess. The official repository is pbakaus/impeccable, the license file and the npm package are Apache-2.0, and its detector has 62 deterministic rules that need no model or key.
 - Routing fix. A model with `bench_fail_runs` fresh failed runs in the class of a task is refused, where before it counted as not measured and `local-only` sent `edit-small` to Colibri (0 of 2 passed). A local Ollama model that passed the bench is now a candidate of the OpenCode executor, so `local-only` picks `ollama/qwen3.5-9b-ctx16k` (3 of 3, p50 334 s).
 - Docs and agent texts. `docs/007` now describes the executor loop as built, `docs/005`, `docs/006` and the `repo-improve` skill no longer keep Claude as a worker, and the new `/run-plan` OpenCode command checks and runs a work plan.
 - Bench class `decompose`: three task specs where a model returns work units. `workplan.validate` rejects a bad schema, an unknown type or a cycle, then the grader checks the unit count, that every file to change is covered and that units able to run together share no file. A program grades it, grader version 1.
