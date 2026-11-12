@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/SVN11X/standards/schemas/execution-report.schema.json",
+  "title": "Execution report of SVN11X/standards",
+  "type": "object",
+  "required": ["schema", "plan_id", "finished", "integration_branch", "counts", "units"],
+  "properties": {
+    "schema": {"type": "string", "enum": ["standards/execution-report/v1"]},
+    "plan_id": {"type": "string"},
+    "finished": {"type": ["string", "null"]},
+    "integration_branch": {"type": ["string", "null"]},
+    "counts": {"type": "object", "additionalProperties": {"type": "integer"}},
+    "units": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "status", "commit", "tests", "review", "findings", "retries", "executor", "model", "note"],
+        "properties": {
+          "id": {"type": "string"},
+          "status": {"type": "string"},
+          "commit": {"type": ["string", "null"]},
+          "tests": {"type": ["string", "null"]},
+          "review": {"type": ["string", "null"]},
+          "findings": {"type": ["array", "null"], "items": {"type": "object"}},
+          "retries": {"type": ["integer", "null"]},
+          "executor": {"type": ["string", "null"]},
+          "model": {"type": ["string", "null"]},
+          "note": {"type": ["string", "null"]}
+        }
+      }
+    }
+  }
+}

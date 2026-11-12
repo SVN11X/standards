@@ -6,6 +6,7 @@ Usage: python scripts/execute.py check PLAN.json [--repo DIR]
        python scripts/execute.py status PLAN.json
        python scripts/execute.py resume PLAN.json --reviewer MODEL [--repo DIR]
        python scripts/execute.py clean PLAN.json [--repo DIR]
+       python scripts/execute.py report PLAN.json
 """
 from __future__ import annotations
 
@@ -162,7 +163,9 @@ class Executor:
             if decision.get("executor") != "colibri":
                 choices += [{**decision, **f} for f in decision.get("fallbacks", [])]
             status, note, data = "blocked", "no executor", {}
+            tried = 0
             for choice in choices[:self.attempts]:
+                tried += 1
                 status, note, data = self.attempt(unit, choice, test)
                 if status in (DONE, "blocked") or choice.get("executor") == "colibri":
                     break
@@ -172,7 +175,7 @@ class Executor:
                     status, note = "failed", problem
             self.mark(uid, status, note=note, executor=data.get("executor"), model=data.get("model"),
                       commit=data.get("commit"), branch=data.get("branch"), worktree=data.get("worktree"),
-                      review=data.get("review"))
+                      review=data.get("review"), checks=data.get("checks"), attempts=tried)
         except Exception as error:  # one broken unit must not stop the independent ones
             self.mark(uid, "failed", note=f"{type(error).__name__}: {error}")
 
@@ -193,6 +196,31 @@ def summary(state: dict) -> dict:
     for entry in state["units"].values():
         counts[entry["status"]] = counts.get(entry["status"], 0) + 1
     return counts
+
+
+def report(plan: dict, state: dict) -> dict:
+    """One report per plan, built only from the saved state. A value the state does not hold is null."""
+    units = []
+    for unit in plan["units"]:
+        entry = state["units"].get(unit["id"])
+        if entry is None:
+            units.append({"id": unit["id"], "status": "not_run", "commit": None, "tests": None, "review": None,
+                          "findings": None, "retries": None, "executor": None, "model": None, "note": None})
+            continue
+        found = entry.get("review")
+        checks = entry.get("checks")
+        tried = entry.get("attempts")
+        units.append({"id": unit["id"], "status": entry["status"], "commit": entry.get("commit"),
+                      "tests": checks.get("tests") if checks else None,
+                      "review": found.get("verdict") if found else None,
+                      "findings": found.get("findings", []) if found else None,
+                      "retries": max(0, tried - 1) if isinstance(tried, int) else None,
+                      "executor": entry.get("executor"), "model": entry.get("model"), "note": entry.get("note")})
+    counts: dict[str, int] = {}
+    for item in units:
+        counts[item["status"]] = counts.get(item["status"], 0) + 1
+    return {"schema": "standards/execution-report/v1", "plan_id": plan["plan_id"], "finished": state.get("finished"),
+            "integration_branch": (state.get("integration") or {}).get("branch"), "counts": counts, "units": units}
 
 
 def check(plan: dict, repo: Path, route=None, conf=None, local=None) -> dict:
@@ -224,7 +252,7 @@ def clean(plan: dict, repo: Path) -> list[str]:
 
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("command", choices=["check", "run", "status", "resume", "clean"])
+    parser.add_argument("command", choices=["check", "run", "status", "resume", "clean", "report"])
     parser.add_argument("plan")
     parser.add_argument("--repo", default=".")
     parser.add_argument("--reviewer", help="model that reviews each unit, different from the author")
@@ -234,6 +262,9 @@ def main(argv=None) -> int:
     if args.command == "status":
         state = load_state(plan["plan_id"])
         print(json.dumps({"summary": summary(state), "units": state["units"]}, indent=2))
+        return 0
+    if args.command == "report":
+        print(json.dumps(report(plan, load_state(plan["plan_id"])), indent=2))
         return 0
     repo = orchestrate.repo_root(Path(args.repo))
     if args.command == "clean":

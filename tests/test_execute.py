@@ -190,6 +190,32 @@ class ExecuteTests(unittest.TestCase):
         self.assertFalse(execute.state_file("plan1").exists())
         self.assertFalse(Path(run.state["integration"]["worktree"]).exists())
 
+    def test_report_comes_from_saved_state_and_gaps_are_null(self):
+        work = plan(unit("u1", ["a.txt"]), unit("u2", ["b.txt"]), unit("u3", ["c.txt"], ["u2"]))
+        run = self.executor(work, FakeAgent(fail=["u2"]))
+        run.run()
+        rep = execute.report(work, execute.load_state("plan1"))
+        by = {u["id"]: u for u in rep["units"]}
+        self.assertEqual(rep["counts"], {"passed": 1, "failed": 1, "skipped": 1})
+        self.assertEqual(by["u1"]["review"], "pass")
+        self.assertEqual(by["u1"]["retries"], 0)
+        self.assertEqual(by["u1"]["model"], "author:1b")
+        self.assertRegex(by["u1"]["commit"], "^[0-9a-f]{40}$")
+        self.assertEqual(by["u2"]["tests"], "FAIL")
+        self.assertIsNone(by["u2"]["review"])
+        self.assertIsNone(by["u3"]["executor"])
+        empty = execute.report(work, {"plan_id": "plan1", "units": {}})
+        self.assertEqual(empty["counts"], {"not_run": 3})
+        self.assertIsNone(empty["units"][0]["tests"])
+        self.assertIsNone(empty["finished"])
+
+    def test_report_matches_its_schema_keys(self):
+        import json
+        schema = json.loads((ROOT / "schemas" / "execution-report.schema.json").read_text(encoding="utf-8"))
+        rep = execute.report(plan(unit("u1", ["a.txt"])), {"plan_id": "plan1", "units": {}})
+        self.assertTrue(set(schema["required"]) <= set(rep))
+        self.assertTrue(set(schema["properties"]["units"]["items"]["required"]) <= set(rep["units"][0]))
+
 
 class PrivacyInheritanceTests(unittest.TestCase):
     def test_worktree_keeps_the_class_the_owner_set_for_the_repository(self):
