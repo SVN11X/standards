@@ -622,6 +622,43 @@ def current_rows(rows: list[dict]) -> list[dict]:
     return [row for row in rows if row.get("grader", 1) >= bench_tasks.grader_version(row.get("task"))]
 
 
+def minor_of(version) -> str | None:
+    match = re.match(r"v?(\d+)\.(\d+)", str(version or ""))
+    return f"{match.group(1)}.{match.group(2)}" if match else None
+
+
+def row_age_days(row: dict, now: dt.datetime) -> int | None:
+    try:
+        stamp = dt.datetime.fromisoformat(str(row["date"]))
+    except (KeyError, ValueError):
+        return None
+    return (now - (stamp if stamp.tzinfo else stamp.replace(tzinfo=dt.timezone.utc))).days
+
+
+def fresh_rows(rows: list[dict], limit_days: int | None, current: dict | None = None, now: dt.datetime | None = None) -> list[dict]:
+    """Runs that still prove something: not older than `bench_recheck_days`, and measured with this OpenCode minor
+    (opencode rows) or this GPU (ollama rows). A run that never recorded its date or identity, or an identity that
+    is unknown today, cannot be judged and keeps counting."""
+    now = now or dt.datetime.now(dt.timezone.utc)
+    current = current or {}
+    keep = []
+    for row in rows:
+        age = row_age_days(row, now)
+        if limit_days is not None and age is not None and age > limit_days:
+            continue
+        seen = row.get("hardware") or {}
+        if row.get("executor") == "opencode":
+            then, today = minor_of(seen.get("opencode")), minor_of(current.get("opencode"))
+        elif row.get("executor") == "ollama":
+            then, today = (seen.get("gpu") or {}).get("name"), (current.get("gpu") or {}).get("name")
+        else:
+            then = today = None
+        if then and today and then != today:
+            continue
+        keep.append(row)
+    return keep
+
+
 def summarize_bench(rows: list[dict]) -> list[dict]:
     groups: dict[tuple, list[dict]] = {}
     for row in current_rows(rows):
@@ -647,7 +684,7 @@ def summarize_bench(rows: list[dict]) -> list[dict]:
 
 
 def measured_models(task: str, conf: dict, classes: list[str] | None = None) -> dict:
-    """Bench results that count for this task type: enough runs and a high enough pass rate, in the class that measures it.
+    """Bench results that count for this task type: recent runs of this OpenCode minor and GPU, enough of them and a high enough pass rate, in the class that measures it.
 
     The first class a model was measured in decides. A broader class counts only for a model with no run in a more
     specific one, so a model that failed the specific class never gets in through the broader one.
@@ -656,7 +693,7 @@ def measured_models(task: str, conf: dict, classes: list[str] | None = None) -> 
     classes = classes if classes is not None else conf.get("proof", {}).get(task, [])
     found: dict = {}
     judged: set = set()
-    summary = summarize_bench(bench_rows())
+    summary = summarize_bench(fresh_rows(bench_rows(), limits.get("bench_recheck_days"), hardware()))
     for bench in classes:
         rows = [row for row in summary if row["task"] == bench]
         for row in rows:

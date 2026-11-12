@@ -122,6 +122,27 @@ class Route(Base):
         self.assertEqual({key[1]: row["task"] for key, row in passed.items()}, {"b:1b": "classify", "c:1b": "summarize"})
         self.assertEqual(len(orchestrate.measured_models("classify", orchestrate.policy())), 3)
 
+    def test_old_runs_and_other_identities_do_not_count(self):
+        now = dt.datetime.now(dt.timezone.utc)
+        def row(executor, days=1, **hardware):
+            return {"task": "fix-bug", "executor": executor, "model": "m", "seconds": 5, "verified": True,
+                    "date": (now - dt.timedelta(days=days)).isoformat(), "hardware": hardware}
+        current = {"opencode": "1.4.2", "gpu": {"name": "RTX A"}}
+        keep = orchestrate.fresh_rows([row("opencode", opencode="1.4.9"), row("opencode", 31, opencode="1.4.9"),
+                                       row("opencode", opencode="1.5.0"), row("ollama", gpu={"name": "RTX A"}),
+                                       row("ollama", gpu={"name": "RTX B"}), row("opencode", opencode=None)], 30, current, now)
+        self.assertEqual([(r["executor"], r["hardware"]) for r in keep],
+                         [("opencode", {"opencode": "1.4.9"}), ("ollama", {"gpu": {"name": "RTX A"}}), ("opencode", {"opencode": None})])
+        legacy = {"task": "fix-bug", "executor": "opencode", "model": "m", "seconds": 5, "verified": True}
+        self.assertEqual(orchestrate.fresh_rows([legacy], 30, current, now), [legacy])
+
+    def test_stale_history_does_not_prove_a_model(self):
+        old = (dt.datetime.now(dt.timezone.utc) - dt.timedelta(days=90)).isoformat()
+        rows = [{"task": "classify", "executor": "ollama", "model": "a:1b", "seconds": 5, "verified": True, "date": old,
+                 "grader": bench_tasks.grader_version("classify")}] * 3
+        orchestrate.bench_file().write_text("\n".join(json.dumps(r) for r in rows) + "\n", encoding="utf-8")
+        self.assertEqual(orchestrate.measured_models("classify", orchestrate.policy()), {})
+
     def test_runs_graded_by_an_older_rule_do_not_count(self):
         old = [{"task": "summarize", "executor": "ollama", "model": "a:1b", "seconds": 5, "verified": False}] * 3
         new = [{"task": "summarize", "executor": "ollama", "model": "a:1b", "seconds": 6, "verified": True}] * 3

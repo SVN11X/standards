@@ -113,6 +113,7 @@ limits:
   free_recheck_days: 30
   bench_min_runs: 3
   bench_min_pass_rate: 0.8
+  # A bench run older than this, or measured with another OpenCode minor (opencode) or GPU (ollama), no longer counts.
   bench_recheck_days: 30
   # A provider's price list older than this no longer proves that a model is free.
   provider_list_max_age_h: 24
