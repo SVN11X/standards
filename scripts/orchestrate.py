@@ -7,6 +7,7 @@ of settings/providers.yml, named provider/model) and claude.
 Commands:
   doctor             list the executors, models and limits on this machine, and who would do each task. Installs nothing.
   route              choose an executor for a task and say why, from settings/orchestration.yml. --all prints every task type
+  models             per task type: discovered, tested and authorized models with the evidence expiry date
   delegate           run one task on OpenCode (in its own worktree) or on Ollama, then verify it
   runs               list delegated runs and their state, or show one
   bench              compare executors on synthetic tasks and keep the history, or print the report
@@ -703,6 +704,37 @@ def measured_models(task: str, conf: dict, classes: list[str] | None = None) -> 
                 found[key] = row
         judged |= {(row["executor"], row["model"]) for row in rows}
     return found
+
+
+def model_states(found: list[dict], conf: dict, now: dt.datetime | None = None) -> list[dict]:
+    """Per model and task type: discovered (a coverage record exists), authorized (cost and privacy allow it and the
+    task is listed for it) and tested (fresh bench evidence passes), with the date that evidence expires.
+
+    `found` is the coverage of scripts/analyze.py. The evidence comes from `measured_models`, so expiry and identity
+    follow `fresh_rows`.
+    """
+    now = now or dt.datetime.now(dt.timezone.utc)
+    days = conf["limits"].get("bench_recheck_days")
+    rows = []
+    for task in conf.get("proof", {}):
+        proven = measured_models(task, conf)
+        for record in sorted(found, key=lambda r: (str(r.get("executor")), str(r.get("model")))):
+            key = (record.get("executor"), record.get("model"))
+            evidence = proven.get(key)
+            authorized = record.get("status") == "eligible" and task in (record.get("tasks") or [])
+            if not (evidence or authorized):
+                continue
+            expires = None
+            if evidence and days is not None and evidence.get("last"):
+                try:
+                    expires = (dt.datetime.fromisoformat(evidence["last"]) + dt.timedelta(days=days)).date().isoformat()
+                except ValueError:
+                    pass
+            rows.append({"task": task, "executor": key[0], "model": key[1], "discovered": "yes",
+                         "tested": f"yes ({evidence['task']})" if evidence else "no",
+                         "authorized": "yes" if authorized else f"no ({record.get('status')})",
+                         "expires": expires or ("no date" if evidence else "-")})
+    return rows
 
 
 def is_installed(model: str | None, info: dict) -> bool:
@@ -1800,6 +1832,9 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--input-chars", type=int, default=0)
     p.add_argument("--mode", choices=modes, help="a stricter cost mode for this run")
     p.add_argument("--json", action="store_true")
+    p = sub.add_parser("models")
+    p.add_argument("--mode", choices=modes, help="a stricter cost mode for this run")
+    p.add_argument("--json", action="store_true")
     p = sub.add_parser("delegate")
     p.add_argument("executor", choices=["opencode", "ollama", "colibri", "api"])
     p.add_argument("--repo", type=Path, default=Path.cwd())
@@ -1863,6 +1898,18 @@ def main(argv: list[str] | None = None) -> int:
         decision = route(args.task, args.repo, args.risk, args.files, args.input_chars, mode=args.mode)
         emit(decision, args.json)
         return 0 if decision["executor"] != "blocked" else 3
+    if args.command == "models":
+        import analyze
+        conf, local = policy(), local_config()
+        found = analyze.coverage(conf, local, cached_capabilities() or doctor(), model_catalog(), args.mode)
+        rows = model_states(found, conf)
+        if args.json:
+            emit(rows, True)
+        elif rows:
+            print_table(rows, ["task", "executor", "model", "discovered", "tested", "authorized", "expires"])
+        else:
+            print("no model is tested or authorized for any task type yet")
+        return 0
     if args.command == "delegate":
         task = args.task_file.read_text(encoding="utf-8") if args.task_file else (args.task or "")
         if not task.strip():

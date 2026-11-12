@@ -136,6 +136,22 @@ class Route(Base):
         legacy = {"task": "fix-bug", "executor": "opencode", "model": "m", "seconds": 5, "verified": True}
         self.assertEqual(orchestrate.fresh_rows([legacy], 30, current, now), [legacy])
 
+    def test_models_lifecycle_states_and_expiry(self):
+        now = dt.datetime.now(dt.timezone.utc)
+        stamp = (now - dt.timedelta(days=10)).isoformat()
+        rows = [{"task": "classify", "executor": "ollama", "model": "a:1b", "seconds": 5, "verified": True, "date": stamp,
+                 "grader": bench_tasks.grader_version("classify")}] * 3
+        orchestrate.bench_file().write_text("\n".join(json.dumps(r) for r in rows) + "\n", encoding="utf-8")
+        found = [{"executor": "ollama", "model": "a:1b", "status": "eligible", "tasks": ["classify"]},
+                 {"executor": "ollama", "model": "b:1b", "status": "eligible", "tasks": ["classify"]},
+                 {"executor": "ollama", "model": "c:1b", "status": "unknown-cost", "tasks": []}]
+        table = {(r["task"], r["model"]): r for r in orchestrate.model_states(found, orchestrate.policy(), now)}
+        tested = table[("classify", "a:1b")]
+        self.assertEqual((tested["tested"], tested["authorized"]), ("yes (classify)", "yes"))
+        self.assertEqual(tested["expires"], (dt.datetime.fromisoformat(stamp) + dt.timedelta(days=30)).date().isoformat())
+        self.assertEqual(table[("classify", "b:1b")]["tested"], "no")
+        self.assertNotIn(("classify", "c:1b"), table)
+
     def test_stale_history_does_not_prove_a_model(self):
         old = (dt.datetime.now(dt.timezone.utc) - dt.timedelta(days=90)).isoformat()
         rows = [{"task": "classify", "executor": "ollama", "model": "a:1b", "seconds": 5, "verified": True, "date": old,
