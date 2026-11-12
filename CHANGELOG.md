@@ -6,6 +6,7 @@ All notable changes to this standard are documented here. The format follows [Ke
 
 ### Added
 
+- Executor loop: `scripts/execute.py` has check, run, status, resume and clean. Each unit runs in its own worktree, batches come from `workplan`, and a unit passes only when its tests pass and cross-model review has no high finding. State is written after every unit so `resume` skips finished ones. A blocked unit never stops independent units, and a Colibri unit is never replaced by another model.
 - Health and failover. A timeout, rate limit, auth or unavailable failure of an OpenCode or Colibri run is written to `~/.standards/health.json` with a cooldown from `health.cooldown_s` in `settings/orchestration.yml`. `route()` skips a model that rests and lists later candidates in `fallbacks`. A Colibri task gets no fallback and never moves to another model.
 - Health is recorded for Ollama and API delegates too: a network, timeout, rate limit or auth failure starts a cooldown and a reply clears it.
 - Cross-model review: `scripts/review.py` has a different model than the author return a JSON verdict on a diff. Findings that cite files or lines outside the diff are dropped, and one fix round runs when a high finding remains. The same model as the author is blocked before any call.
