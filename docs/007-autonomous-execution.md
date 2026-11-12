@@ -31,7 +31,7 @@ Nothing is pushed, merged or opened as a pull request by the loop. Claude is lis
 
 Two units share a batch only when neither depends on the other, their expanded `allowed` files (globs expanded against `git ls-files`) are disjoint and neither touches a serial file (`package.json`, `package-lock.json`, `pyproject.toml`, `requirements*.txt`, `.standard.yml`). `execute.py run --parallel N` caps the batch size.
 
-`split_unit` splits a unit by files, then by acceptance criteria, then with a proposal from a model passed in as a callable. Each candidate is validated with the plan rules and must stay inside the parent's files. The first valid one wins, else the result is `none`. The loop calls it for a unit whose input (task text plus the files it may touch) is larger than its `max_input_chars`. The parts run in order, each in its own worktree. The parent passes only when every part passed, and a failed part fails the parent while independent units go on. A part is never split again, and nothing valid to split blocks the unit. A Colibri unit is blocked instead of split, because its parts could route to another model.
+`split_unit` splits a unit by files, then by acceptance criteria, then with a proposal from a model passed in as a callable. Each candidate is validated with the plan rules and must stay inside the parent's files. The first valid one wins, else the result is `none`. The loop calls it for a unit whose input (task text plus the files it may touch) is larger than its `max_input_chars`. The parts run in order, each in its own worktree. The parent passes only when every part passed, and a failed part fails the parent while independent units go on. A part is split again only while `budgets.max_split_depth` allows it (default 1, so never), and nothing valid to split blocks the unit. A Colibri unit is blocked instead of split, because its parts could route to another model.
 
 ## Routing and proof
 
@@ -79,7 +79,15 @@ python scripts/execute.py report PLAN.json
 - `clean` removes the unit worktrees, the integration worktree and the state file. Branches stay.
 - `report` prints one consolidated JSON report built only from the saved state (`schemas/execution-report.schema.json`): per unit the status, commit, tests, review verdict and findings, retries, executor and model. A value the state does not hold is null.
 
-The `budgets` fields other than `max_attempts_per_unit`, and `final_regression`, are accepted by the schema and not enforced by the loop yet.
+Budgets of the plan, all checked before an attempt starts or a split is made. A unit stopped by a budget is `blocked` with the budget in its note, and independent units go on. A Colibri unit is never moved to another model by a budget.
+
+- `max_attempts_per_unit`: choices tried for one unit (default 1).
+- `max_total_attempts`: attempts across the whole run. Counters are per `run` or `resume` call and start at zero.
+- `max_wall_s`: seconds since the call started. It is checked before each attempt and cannot interrupt one that is running, so the last attempt may end after the limit.
+- `max_remote_sessions`: attempts whose channel is not local. A remote choice over the limit is skipped and a local fallback may still run. The channel comes from the model name and the policy only, so a remote Ollama host that the name does not show counts as local.
+- `max_split_depth`: how deep a split may go (default 1). `max_units_after_split`: the cap on units after a split, parts counted and split parents not. A split over either limit blocks the unit.
+
+`final_regression` is accepted by the schema and the loop does not run it yet.
 
 ## Bench classes for the loop
 

@@ -42,6 +42,6 @@ Progress of the free routing, model analyzer and web design work of November 202
 - [x] Fix: a timeout kills the whole process tree of the executor, so a stuck OpenCode no longer hangs the run
 - [x] Fix: a command run in a folder gets PWD set to that folder, so OpenCode launched from a Bash session works in its own worktree
 - [x] Executor loop calls `split_unit` when a unit is too large, instead of only failing it
-- [ ] Executor loop enforces every budget declared in the work plan, not only `max_attempts_per_unit` and `final_regression`
+- [x] Executor loop enforces every budget declared in the work plan, not only `max_attempts_per_unit` and `final_regression`
 - [ ] BLOCKED: pilot plan of 3 green units with `execute.py` and one `review.py` run with real models need the GPU and a time slot
 - [ ] BLOCKED: map the gateway adapter to FreeLLMAPI's real request and reply fields and prove the four radar conditions against the real service at trial. The adapter was proven only against a fake server with its own field names. It needs the owner to approve installing it

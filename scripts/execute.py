@@ -122,6 +122,7 @@ class Executor:
         self.budgets = plan.get("budgets") or {}
         self.attempts = max(1, self.budgets.get("max_attempts_per_unit", 1))
         self.propose, self.clock, self.started = propose, clock, clock()
+        self.used = {"attempts": 0, "remote": 0}
         self.depth: dict[str, int] = {}
         self.split_parents: set[str] = set()
 
@@ -153,15 +154,35 @@ class Executor:
                 return "cherry-pick conflict: " + orchestrate.tail(result["stderr"], 300)
         return None
 
+    def reserve(self, choice: dict) -> str | None:
+        """Count one attempt against the plan budgets. Returns the budget that refuses it, or None."""
+        budgets = self.budgets
+        with self.lock:
+            if "max_wall_s" in budgets and self.clock() - self.started >= budgets["max_wall_s"]:
+                return "max_wall_s"
+            if "max_total_attempts" in budgets and self.used["attempts"] >= budgets["max_total_attempts"]:
+                return "max_total_attempts"
+            if "max_remote_sessions" in budgets:
+                where = orchestrate.channel(choice.get("executor", ""), choice.get("model"), self.conf)
+                if where not in ("local", "tools"):
+                    if self.used["remote"] >= budgets["max_remote_sessions"]:
+                        return "max_remote_sessions"
+                    self.used["remote"] += 1
+            self.used["attempts"] += 1
+        return None
+
     def split(self, unit: dict) -> tuple[list[dict], str]:
-        """Parts for a unit that is too large, or ([], reason). A part is never split again."""
+        """Parts for a unit that is too large, or ([], reason). Split depth and total units are budgets."""
         uid = unit["id"]
-        if self.depth.get(uid, 0) >= 1:
+        if self.depth.get(uid, 0) >= self.budgets.get("max_split_depth", 1):
             return [], "max_split_depth"
         method, parts = workplan.split_unit(unit, workplan.tracked_files(self.work_repo), self.propose, self.conf)
         if not parts:
             return [], "no valid split"
         with self.lock:
+            left = len(self.units) - len(self.split_parents) - 1 + len(parts)
+            if left > self.budgets.get("max_units_after_split", left):
+                return [], "max_units_after_split"
             self.split_parents.add(uid)
             for part in parts:
                 self.units[part["id"]] = part
@@ -220,6 +241,12 @@ class Executor:
             status, note, data = "blocked", "no executor", {}
             tried = 0
             for choice in choices[:self.attempts]:
+                refused = self.reserve(choice)
+                if refused:
+                    status, note = "blocked", f"budget {refused} reached"
+                    if refused == "max_remote_sessions":
+                        continue
+                    break
                 tried += 1
                 status, note, data = self.attempt(unit, choice, test)
                 if status in (DONE, "blocked") or choice.get("executor") == "colibri":

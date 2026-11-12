@@ -247,12 +247,27 @@ class BudgetTests(Base):
         self.assertEqual(self.statuses(first)["u1"], "failed")
         self.assertEqual(self.statuses(first)["u2"], "passed")
 
+    def test_split_depth_budget_blocks_instead_of_splitting(self):
+        agent = FakeAgent()
+        run = self.executor(self.budget_plan(self.big("u1", ["a.txt", "b.txt"]), max_split_depth=0), agent)
+        run.run()
+        self.assertEqual(self.statuses(run), {"u1": "blocked"})
+        self.assertIn("max_split_depth", run.state["units"]["u1"]["note"])
+        self.assertEqual(agent.calls, [])
+
     def test_children_of_a_split_are_not_split_again_by_default(self):
         agent = FakeAgent()
         run = self.executor(plan(self.big("u1", ["a.txt", "b.txt"], limit=1)), agent)
         run.run()
         self.assertEqual(self.statuses(run)["u1"], "failed")
         self.assertEqual(agent.calls, [])
+
+    def test_units_after_split_budget_blocks(self):
+        agent = FakeAgent()
+        run = self.executor(self.budget_plan(self.big("u1", ["a.txt", "b.txt"]), unit("u2", ["c.txt"]), max_units_after_split=2), agent)
+        run.run()
+        self.assertEqual(self.statuses(run), {"u1": "blocked", "u2": "passed"})
+        self.assertIn("max_units_after_split", run.state["units"]["u1"]["note"])
 
     def test_unit_with_nothing_to_split_is_blocked(self):
         agent = FakeAgent()
@@ -267,6 +282,47 @@ class BudgetTests(Base):
         run.run()
         self.assertEqual(self.statuses(run), {"u1": "blocked"})
         self.assertEqual(agent.calls, [])
+
+    def test_total_attempts_budget(self):
+        agent = FakeAgent()
+        run = self.executor(self.budget_plan(unit("u1", ["a.txt"]), unit("u2", ["b.txt"]), max_total_attempts=1), agent, parallel=1)
+        run.run()
+        self.assertEqual(len(agent.calls), 1)
+        self.assertEqual(sorted(self.statuses(run).values()), ["blocked", "passed"])
+        self.assertIn("max_total_attempts", [v["note"] for v in run.state["units"].values() if v["status"] == "blocked"][0])
+
+    def test_wall_budget_blocks_before_the_attempt(self):
+        agent = FakeAgent()
+        now = [0]
+        run = self.executor(self.budget_plan(unit("u1", ["a.txt"]), max_wall_s=10), agent, clock=lambda: now[0])
+        now[0] = 11
+        run.run()
+        self.assertEqual(self.statuses(run), {"u1": "blocked"})
+        self.assertEqual(agent.calls, [])
+
+    def test_wall_budget_lets_work_inside_the_limit_run(self):
+        agent = FakeAgent()
+        run = self.executor(self.budget_plan(unit("u1", ["a.txt"]), max_wall_s=10), agent, clock=lambda: 5)
+        run.run()
+        self.assertEqual(self.statuses(run), {"u1": "passed"})
+
+    def test_remote_session_budget_skips_remote_and_uses_a_local_fallback(self):
+        agent = FakeAgent(fail=["u1"])
+        conf = {**CONF, "executors": {"ollama": {"url": "http://127.0.0.1:11434"}, "colibri": {"url": "http://127.0.0.1:1"}}}
+        route = lambda u: {"executor": "opencode", "model": "cloud-model", "fallbacks": [{"model": "ollama/small"}]}  # noqa: E731
+        work = self.budget_plan(unit("u1", ["a.txt"]), max_remote_sessions=0, max_attempts_per_unit=2)
+        run = execute.Executor(work, self.repo, "rev:1b", Reviewer(DIFF_OK), agent, route, conf, {})
+        run.run()
+        self.assertEqual([c[0] for c in agent.calls], ["u1"])
+        self.assertEqual(run.used["remote"], 0)
+
+    def test_remote_session_budget_blocks_when_only_remote_is_left(self):
+        agent = FakeAgent()
+        work = self.budget_plan(unit("u1", ["a.txt"]), unit("u2", ["b.txt"]), max_remote_sessions=1)
+        run = self.executor(work, agent, parallel=1)
+        run.run()
+        self.assertEqual(len(agent.calls), 1)
+        self.assertEqual(sorted(self.statuses(run).values()), ["blocked", "passed"])
 
 
 def workplan_parts(run, uid):
