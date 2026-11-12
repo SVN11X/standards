@@ -103,7 +103,7 @@ class Analyzer(unittest.TestCase):
         self.assertTrue(state["complete"])
         rows = orchestrate.bench_rows()
         by = {(r["task"], r["model"]): r for r in rows}
-        for task in ("classify", "extract", "summarize", "web-subprofile", "tool-call", "vision"):
+        for task in ("classify", "extract", "summarize", "web-subprofile", "tool-call", "vision", "review-diff"):
             self.assertTrue(by[(task, "good:1b")]["verified"], task)
             self.assertFalse(by[(task, "bad:1b")]["verified"], task)
         self.assertTrue(by[("design-judge-sample", "good:1b")]["verified"])

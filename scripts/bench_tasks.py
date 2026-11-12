@@ -21,11 +21,12 @@ SUBPROFILES = STANDARD_ROOT / "profiles" / "web" / "subprofiles.yml"
 PASS_ACCURACY = 0.75
 # What a model must be able to do for a chat task. Tasks with a baseline also run on a program without AI.
 CHAT_TASKS = {"classify": [], "extract": [], "summarize": [], "web-subprofile": [], "tool-call": ["tools"],
-              "vision": ["vision"], "design-judge": ["vision"]}
+              "vision": ["vision"], "design-judge": ["vision"],
+              "review-diff": []}
 BASELINES = {"classify", "extract", "web-subprofile"}
 # Version of the rule that grades each task. Raise it when a grader changes what it accepts: runs graded by an older
 # rule stay in the history and stop counting. A task that is not listed is at version 1.
-GRADERS = {"summarize": 3, "tool-call": 2, "refactor-module": 1}
+GRADERS = {"summarize": 3, "tool-call": 2, "refactor-module": 1, "review-diff": 1}
 
 
 def grader_version(task: str | None) -> int:
@@ -317,7 +318,85 @@ def judge_ok(pair: dict, ask) -> bool:
 def request_estimate(task: str) -> int:
     """About how many requests one run of a chat task sends, to plan against a provider's daily limit."""
     return {"classify": len(CLASSIFY), "extract": len(EXTRACT), "summarize": len(SUMMARIZE), "web-subprofile": len(subprofile_items()),
-            "tool-call": 3 * len(TOOL_CASES), "vision": len(VISION), "design-judge": 2 * len(design_pairs()[0])}.get(task, 1)
+            "tool-call": 3 * len(TOOL_CASES), "vision": len(VISION), "design-judge": 2 * len(design_pairs()[0]),
+            "review-diff": len(REVIEW_CASES)}.get(task, 1)
+
+
+# review-diff
+
+# Each case is a new file added in one diff with one seeded defect. `defect` is the line range of the new file where it sits.
+REVIEW_CASES = [
+    {"id": "sql-injection", "file": "app/db.py", "defect": (6, 7), "lines": [
+        "import sqlite3", "", "", "def find_user(conn, name):", "    cursor = conn.cursor()",
+        "    query = f\"SELECT id, email FROM users WHERE name = '{name}'\"", "    cursor.execute(query)",
+        "    return cursor.fetchall()"]},
+    {"id": "off-by-one", "file": "app/pages.py", "defect": (3, 3), "lines": [
+        "def page_slice(items, page, size):", "    \"\"\"Return the items of a 1-based page.\"\"\"", "    start = page * size",
+        "    return items[start:start + size]"]},
+    {"id": "mutable-default", "file": "app/tags.py", "defect": (1, 3), "lines": [
+        "def add_tag(item, tags=[]):", "    tags.append(item)", "    return tags"]},
+    {"id": "hardcoded-credential", "file": "app/settings.py", "defect": (3, 3), "lines": [
+        "import os", "", "DB_PASSWORD = \"hunter2-prod\"", "DB_HOST = os.environ.get(\"DB_HOST\", \"localhost\")"]},
+    {"id": "inverted-permission", "file": "app/perms.py", "defect": (2, 2), "lines": [
+        "def can_delete(user, post):", "    return user.is_admin or post.author_id != user.id"]},
+    {"id": "divide-by-zero", "file": "app/stats.py", "defect": (3, 3), "lines": [
+        "def average(values):", "    \"\"\"Mean of a list of numbers.\"\"\"", "    return sum(values) / len(values)"]},
+]
+REVIEW_PROMPT = ("Review this diff. Report real defects only. Answer JSON "
+                 '{"findings": [{"file": "path", "line_start": 1, "line_end": 1, "severity": "high|medium|low", "note": "..."}]} '
+                 "with line numbers of the new file. Use high only for a defect that must be fixed before merge.\nDiff:\n")
+MAX_FINDING_LINES = 10
+
+
+def review_diff_text(case: dict) -> str:
+    """The unified diff of a new file, so the line numbers in the diff are the line numbers of the new file."""
+    name, lines = case["file"], case["lines"]
+    head = f"diff --git a/{name} b/{name}\nnew file mode 100644\n--- /dev/null\n+++ b/{name}\n@@ -0,0 +1,{len(lines)} @@\n"
+    return head + "".join(f"+{line}\n" for line in lines)
+
+
+def review_reference(case: dict) -> dict:
+    start, end = case["defect"]
+    return {"findings": [{"file": case["file"], "line_start": start, "line_end": end, "severity": "high",
+                          "note": "seeded defect"}]}
+
+
+def finding_span(finding) -> tuple[str, int, int, str] | None:
+    """(file, first line, last line, severity) of a well formed finding, else None."""
+    if not isinstance(finding, dict) or not isinstance(finding.get("file"), str):
+        return None
+    try:
+        start = int(finding.get("line_start", finding.get("line")))
+        end = int(finding.get("line_end", start))
+    except (TypeError, ValueError):
+        return None
+    name = finding["file"].strip()
+    name = name[2:] if name[:2] in ("a/", "b/") else name
+    return name, start, max(start, end), str(finding.get("severity", "")).strip().lower()
+
+
+def review_ok(case: dict, parsed) -> tuple[bool, str]:
+    """A diff passes when a finding names its file and overlaps the defect lines and no high finding sits elsewhere.
+
+    A finding that spans more than MAX_FINDING_LINES lines does not count as a hit, so flagging the whole file never passes.
+    """
+    findings = parsed.get("findings") if isinstance(parsed, dict) else None
+    if not isinstance(findings, list):
+        return False, "no findings list"
+    start, end = case["defect"]
+    hit, false_high = False, None
+    for raw in findings:
+        span = finding_span(raw)
+        if span is None:
+            continue
+        name, first, last, severity = span
+        on_defect = name == case["file"] and first <= end and last >= start and last - first < MAX_FINDING_LINES
+        hit = hit or on_defect
+        if severity == "high" and not on_defect and false_high is None:
+            false_high = f"{name}:{first}"
+    if false_high:
+        return False, f"false high finding at {false_high} in {case['id']}"
+    return hit, "" if hit else f"missed {case['id']} at {case['file']}:{start}-{end}"
 
 
 # Running a chat task
@@ -368,6 +447,9 @@ def run_chat(task: str, ask=None, chat=None, baseline: bool = False, home: Path 
         name = "design-judge-sample" if sample else "design-judge"
         for pair in pairs:
             attempt(lambda: (judge_ok(pair, ask), f"disagreed on {pair['id']}"))
+    elif task == "review-diff":
+        for case in REVIEW_CASES:
+            attempt(lambda: review_ok(case, ask(REVIEW_PROMPT + review_diff_text(case), None)))
     else:
         raise ValueError(f"unknown chat task {task}")
     return {"task": name, "accuracy": round(passed / total, 2) if total else 0.0, "items": total, "notes": notes}
