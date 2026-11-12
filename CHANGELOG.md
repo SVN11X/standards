@@ -6,6 +6,7 @@ All notable changes to this standard are documented here. The format follows [Ke
 
 ### Added
 
+- Measured Colibri on the RTX 2060 (6 GiB) with `qwen3-coder-30b`. Prefill runs at about 6 tokens per second (1009 tokens in 177 s, 3011 in 451 s), so the 12000 token OpenCode prompt needs about 30 minutes. `fix-bug` timed out at 600 s. Every model Colibri supports is a 27B or larger MoE, so Colibri stays installed and answers short prompts, and the router must not use it as a coding agent on this machine.
 - Ollama context variants in `settings/ecosystem.yml`. OpenCode sends a prompt of about 12000 tokens and Ollama cut it to 2050, so no model saw the task. With a 16K variant `qwen3.5-9b` passed the `fix-bug` bench through OpenCode in 334 s. `qwen2.5-coder:7b` changed nothing. One run each is a first signal, not statistics.
 - Standards AI Control: `scripts/control.py serve` opens a read-only dashboard on 127.0.0.1:8765 with providers, tasks, resources, measured tokens, history, settings and logs. `control.py statusline` prints a compact line for the Claude Code `statusLine` setting. A metric a provider does not report shows "Not available".
 - Colibri as a local provider. `scripts/colibri.py` starts, checks, stops and registers it in OpenCode, and `orchestrate.py delegate colibri` runs a task with its model. A stopped Colibri blocks the run and no other model replaces it. `scripts/ecosystem.py` (entry `scripts/standards.ps1`) has the modes doctor, status, install, repair, update and verify, driven by `settings/ecosystem.yml`.
