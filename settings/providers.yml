@@ -12,6 +12,8 @@
 #   owner's check is the only evidence.
 # features: what the adapter may send. A task that needs a feature that is not listed is not evaluated there.
 # data: what the provider does with what it receives, as in settings/models.yml.
+# gateway: marks a router that forwards to other providers. allow lists the provider/model pairs it may use. Nothing is sent
+#   without it, fusion, caching and billing are always sent off, and orchestrate.py counts the address as remote.
 # confirmed: what a search of the provider's own site stated on the `checked` date. No page was opened directly and
 #   no endpoint was called from the session that wrote this file. Nothing here was tested against the service.
 version: 1

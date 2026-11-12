@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/SVN11X/standards/schemas/work-plan.schema.json",
+  "title": "Work plan written by the planner and run by the orchestrator",
+  "type": "object",
+  "required": ["plan_id", "goal", "units"],
+  "properties": {
+    "plan_id": {"type": "string", "minLength": 1},
+    "repo": {"type": "string"},
+    "base": {"type": "string"},
+    "goal": {"type": "string", "minLength": 1},
+    "defaults": {
+      "type": "object",
+      "properties": {"risk": {"type": "string", "enum": ["green", "yellow", "red"]}, "test": {"type": "string"}}
+    },
+    "budgets": {
+      "type": "object",
+      "properties": {
+        "max_attempts_per_unit": {"type": "integer"}, "max_total_attempts": {"type": "integer"},
+        "max_wall_s": {"type": "integer"}, "max_remote_sessions": {"type": "integer"},
+        "max_split_depth": {"type": "integer"}, "max_units_after_split": {"type": "integer"}
+      }
+    },
+    "final_regression": {"type": "array", "items": {"type": "string"}},
+    "units": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["id", "title", "task_type", "goal", "allowed", "acceptance"],
+        "properties": {
+          "id": {"type": "string", "minLength": 1},
+          "title": {"type": "string"},
+          "task_type": {"type": "string", "minLength": 1},
+          "goal": {"type": "string", "minLength": 1},
+          "read": {"type": "array", "items": {"type": "string"}},
+          "allowed": {"type": "array", "minItems": 1, "items": {"type": "string"}},
+          "new_files": {"type": "array", "items": {"type": "string"}},
+          "protect": {"type": "array", "items": {"type": "string"}},
+          "acceptance": {
+            "type": "object",
+            "properties": {"test": {"type": "string"}, "criteria": {"type": "array", "items": {"type": "string"}}}
+          },
+          "depends_on": {"type": "array", "items": {"type": "string"}},
+          "risk": {"type": "string", "enum": ["green", "yellow", "red"]},
+          "max_input_chars": {"type": "integer", "minimum": 1}
+        }
+      }
+    }
+  }
+}

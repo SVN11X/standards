@@ -56,15 +56,17 @@ The owner approves the list once. After that, do not ask again for approved item
 
 ## Hand-off and autopilot
 
-By default, hand the green items to another executor to save Claude usage, and keep verifying them yourself. For each item:
+Claude plans and verifies. Hand the green items to another executor and keep verifying them yourself. Never do an item on Claude's own account because a router answer was inconvenient. For each item:
 
-1. Ask the router: `python <standard>/scripts/orchestrate.py route <task-type> --repo . --files <n> --risk <green|yellow|red>`. Task types are in `settings/orchestration.yml`. It answers tools, ollama, opencode, claude or blocked, with the reason. It never sends client or work code to a free model, and only uses free models the owner checked recently.
-2. When it says tools, use the program. When it says claude, do the item yourself.
+1. Ask the router: `python <standard>/scripts/orchestrate.py route <task-type> --repo . --files <n> --risk <green|yellow|red>`. Task types are in `settings/orchestration.yml`. It answers tools, ollama, opencode, colibri, planner or blocked, with the reason. It never sends client or work code to a free model, and only uses free models the owner checked recently.
+2. When it says tools, use the program. When it says planner, the item is a design decision: mark it BLOCKED with one question for the owner. When it says blocked, report the reason and mark the item BLOCKED.
 3. When it says opencode, delegate for real: `python <standard>/scripts/orchestrate.py delegate opencode --task "<item>" --allow <files> --test "<check and tests>"`. It runs OpenCode in its own worktree, then checks the diff, the protected files, the scope and the tests itself, and commits on a `delegate/<id>` branch only when everything passed. Integrate a verified run with `git cherry-pick <commit>` and run the check again. A failed run leaves its worktree for you to read: fix it yourself or mark the item BLOCKED.
 4. When it says ollama, use `delegate ollama` for short local work such as classifying or summarizing, and check the answer.
 5. Never take an executor's own summary as evidence. The run record (`orchestrate.py runs <id>`) holds the exit code, the diff and the test output.
 
-The owner can still run `/next-item` in OpenCode by hand, one item at a time. Keep every item green, small and concrete, so a small model can do it. Mark the items that need judgment yellow or red, so they stay with Claude.
+The owner can still run `/next-item` in OpenCode by hand, one item at a time. Keep every item green, small and concrete, so a small model can do it. Mark the items that need judgment yellow or red: they need the owner's review and a model that passed the bench class, never Claude as a silent fallback.
+
+For a list of several items with dependencies, write a work plan (`schemas/work-plan.schema.json`) instead and let the owner run it: `python <standard>/scripts/execute.py check PLAN.json`, then `run PLAN.json --reviewer <ollama model>`, and later `status`, `resume`, `report` and `clean`. The loop never pushes or merges. See `docs/007-autonomous-execution.md`. In OpenCode the owner can use `/run-plan`.
 
 Before closing a run, use adversarial-testing at the level the risk needs, and data-preservation when the repository protects data.
 

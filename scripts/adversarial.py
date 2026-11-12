@@ -30,6 +30,7 @@ ROOT = HERE.parent
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(ROOT / "hooks"))
 import evidence  # noqa: E402
+import execute  # noqa: E402
 import orchestrate  # noqa: E402
 import preserve  # noqa: E402
 import safe_patch  # noqa: E402
@@ -532,6 +533,89 @@ def run_suite(level: str = "standard", repo: Path = ROOT, only: str | None = Non
             rows = orchestrate.bench_rows()
             return len(rows) == 1, f"{len(rows)} readable rows out of 2 lines"
         add("F.corrupt-bench-history", "resilience", f5, expected="a broken history line is skipped")
+
+        # X. Executor loop: planner types, Claude calls, overlap, budgets, review lines, privacy of worktrees, stopped Colibri
+        def e_repo(name: str) -> Path:
+            return orchestrate.make_bench_repo(tmp / name)
+
+        def e_unit(uid, files, kind="edit-small", deps=()):
+            return {"id": uid, "title": uid, "task_type": kind, "goal": f"edit {uid}", "allowed": list(files),
+                    "depends_on": list(deps), "acceptance": {"test": "true"}}
+
+        def e_plan(name, *units, **extra):
+            return {"plan_id": f"adv-{name}", "goal": "g", "units": list(units), **extra}
+
+        def e1():
+            planner = orchestrate.route("plan", tmp, conf=conf, local=public(), caps=offline, mode="existing-subscription")
+            plan = e_plan("planner", e_unit("u1", ["calc.py"], kind="plan"))
+            routes = execute.check(plan, tmp, conf=conf, local=public())["routes"]
+            listed = [t for t, names in conf["tasks"].items() if "claude" in names]
+            return (planner["executor"] == "planner" and not routes.get("u1", {}).get("ready") and not listed), \
+                f"plan routes to {planner['executor']}, ready as a coding unit: {routes.get('u1', {}).get('ready')}, tasks listing claude: {listed}"
+        add("X.planner-type-never-executes", "executor", e1, expected="a planner task type never becomes a unit an agent executes, and no task list names claude")
+
+        def e2():
+            found = execute.default_delegate(tmp, e_unit("u1", ["calc.py"]), {"executor": "claude", "model": None}, "true", conf, public())
+            locked = orchestrate.gate("claude", None, tmp, conf, {"folders": [{"path": str(tmp), "class": "restricted"}]}, "existing-subscription")[0]
+            return found.get("state") == "blocked" and not locked, \
+                f"claude as a unit executor: {found.get('state')}, claude on a restricted folder allowed: {locked}"
+        add("X.claude-never-a-unit-executor", "executor", e2, expected="the loop never starts Claude as a coding agent, and a restricted folder never reaches Claude")
+
+        def e3():
+            plan = e_plan("overlap", e_unit("u1", ["calc.py"]), e_unit("u2", ["calc.py"]), e_unit("u3", ["other.py"]))
+            files = ["calc.py", "other.py"]
+            clash = [c[:2] for c in execute.workplan.conflicts(plan, files)]
+            together = [b for b in execute.workplan.batches(plan, files) if "u1" in b and "u2" in b]
+            return clash == [("u1", "u2")] and not together, f"conflicts: {clash}, batches holding both: {together}"
+        add("X.overlapping-units-never-parallel", "executor", e3, expected="two independent units that edit the same file never run in the same batch")
+
+        def e4():
+            calls: list = []
+
+            def failing(repo, unit, decision, test):
+                calls.append(decision.get("model"))
+                return {"state": "failed", "checks": {"tests": "FAIL"}}
+            route = lambda unit: {"executor": "opencode", "model": "m1", "fallbacks": [{"model": "m2"}, {"model": "m3"}]}  # noqa: E731
+            plan = e_plan("budget", e_unit("u1", ["calc.py"]), budgets={"max_attempts_per_unit": 2})
+            run = execute.Executor(plan, e_repo("budget-repo"), delegate=failing, route=route, conf=conf, local=public()).run()
+            return len(calls) == 2 and run["units"]["u1"]["status"] == "failed", f"attempts: {calls}, status: {run['units']['u1']['status']}"
+        add("X.attempt-budget-stops", "executor", e4, expected="a failing unit stops at max_attempts_per_unit and never tries every fallback")
+
+        def e5():
+            diff = "diff --git a/calc.py b/calc.py\n--- a/calc.py\n+++ b/calc.py\n@@ -1,1 +1,2 @@\n x = 1\n+y = 2\n"
+            made_up = [{"severity": "high", "file": "secrets.py", "line_start": 1, "line_end": 1, "message": "invented file"},
+                       {"severity": "high", "file": "calc.py", "line_start": 90, "line_end": 95, "message": "invented lines"}]
+            result = execute.review_mod.review(diff, "author:1b", "judge:9b", lambda prompt: {"findings": made_up})
+            return result["verdict"] == "pass" and not result["findings"] and len(result["dropped"]) == 2, \
+                f"verdict {result['verdict']}, kept {len(result['findings'])}, dropped {len(result['dropped'])}"
+        add("X.invented-review-lines", "review", e5, expected="a review finding that cites a file or lines the diff does not show is dropped and cannot fail a unit")
+
+        def e6():
+            found = {}
+            for cls in ("work", "restricted"):
+                source, work = tmp / f"src-{cls}", tmp / f"wt-{cls}"
+                source.mkdir(exist_ok=True)
+                work.mkdir(exist_ok=True)
+                local = {"folders": [{"path": str(source.resolve()), "class": cls}]}
+                found[cls] = orchestrate.privacy_class(work, conf, execute.inherit_folder(local, source, work))[0]
+            return found == {"work": "work", "restricted": "restricted"}, f"worktree classes: {found}"
+        add("X.worktree-keeps-privacy-class", "privacy", e6, expected="a worktree of a work or restricted repository keeps that class instead of the looser default")
+
+        def e7():
+            down = orchestrate.policy()
+            down["executors"]["colibri"]["url"] = "http://127.0.0.1:1"
+            calls: list = []
+
+            def delegate(repo, unit, decision, test):
+                calls.append(decision["executor"])
+                return execute.default_delegate(repo, unit, decision, test, down, public())
+            route = lambda unit: {"executor": "colibri", "model": "colibri/q", "fallbacks": [{"executor": "opencode", "model": "o"}]}  # noqa: E731
+            plan = e_plan("colibri", e_unit("u1", ["calc.py"], kind="colibri-task"), budgets={"max_attempts_per_unit": 3})
+            run = execute.Executor(plan, e_repo("colibri-repo"), delegate=delegate, route=route, conf=down, local=public()).run()
+            entry = run["units"]["u1"]
+            return calls == ["colibri"] and entry["status"] == "blocked" and "No other model was used" in entry["note"], \
+                f"executors tried: {calls}, status: {entry['status']}, note: {entry['note'][:70]}"
+        add("X.stopped-colibri-no-fallback", "executor", e7, expected="a Colibri unit with Colibri stopped is blocked and never moves to another model")
 
         # G. Pipeline
         if not only or only.startswith("G."):

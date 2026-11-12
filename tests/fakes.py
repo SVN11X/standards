@@ -25,6 +25,12 @@ if Path("shop").is_dir():
     cart.write_text(cart.read_text().replace("line_total(price, quantity)", "line_total(price, quantity, discount)"))
     receipt = Path("shop/receipt.py")
     receipt.write_text(receipt.read_text().replace("{total % 100}", "{total % 100:02d}"))
+elif Path("app").is_dir():
+    for name in ("posts", "users", "tags"):
+        mod = Path("app/" + name + ".py")
+        body = mod.read_text().split(chr(10) * 3, 1)[1]
+        mod.write_text("from app.text import slugify\n\n\n" + body.lstrip("\n"))
+    Path("app/text.py").write_text('def slugify(text):\n    words = "".join(c.lower() if c.isalnum() else " " for c in text).split()\n    return "-".join(words)\n')
 elif "README.md" in task and "Usage" in task:
     readme = Path("README.md")
     readme.write_text(readme.read_text() + "\n## Usage\n\n`sum_even([1, 2])` returns 2. `count_words('a b')` returns 2.\n")
@@ -109,6 +115,12 @@ def answer(body: dict) -> dict:
     if prompt.startswith("This image is a screenshot"):
         expected = next(i["expected"] for i in bench_tasks.vision_items() if i["image"] == images[0])
         return {"content": json.dumps(expected)}
+    if prompt.startswith("Review this diff"):
+        case = next(c for c in bench_tasks.REVIEW_CASES if f"+++ b/{c['file']}" in prompt)
+        return {"content": json.dumps(bench_tasks.review_reference(case))}
+    if prompt.startswith("Split this task"):
+        spec = next(s for s in bench_tasks.DECOMPOSE_SPECS if f"Task: {s['task']}" in prompt)
+        return {"content": json.dumps({"units": spec["reference"]})}
     if prompt.startswith("Two versions"):
         pair = next(p for p in bench_tasks.sample_pairs() if {p["a"], p["b"]} == set(images))
         return {"content": json.dumps({"choice": "a" if images[0] == pair[pair["choice"]] else "b", "reason": "clearer"})}
@@ -270,3 +282,62 @@ def provider_settings(url: str) -> dict:
         "gone": {"name": "Gone Models", "status": "retired", "cost": "unknown", "confirmed": "Retired last summer."},
         "cli": {"name": "Some CLI", "status": "no-adapter", "cost": "unknown", "notes": "A command line tool, not an API."},
     }
+
+
+class Gateway(http.server.BaseHTTPRequestHandler):
+    """A fake gateway such as FreeLLMAPI. It forwards to upstream providers in order and falls back to the next one
+    that is up. It honors the allowed list of the request unless `leaky` is set. The key is test-key."""
+    upstream = ["groq/llama-3", "mistral/small", "openai/gpt-x"]
+    down: set = set()
+    leaky = False            # ignores the allowed list, as a gateway without the feature would
+    silent = False           # does not say which provider answered
+    fusion = False
+    cached = False
+    charge = False
+    bodies: list = []
+
+    def log_message(self, *args):
+        pass
+
+    def reply(self, code, body):
+        data = json.dumps(body).encode("utf-8")
+        self.send_response(code)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(data)))
+        self.end_headers()
+        self.wfile.write(data)
+
+    def do_POST(self):
+        body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+        Gateway.bodies.append(body)
+        if self.headers.get("Authorization") != "Bearer test-key":
+            return self.reply(401, {"error": {"message": "Invalid key"}})
+        options = body.get("gateway") or {}
+        allow = options.get("allow")
+        pool = [name for name in Gateway.upstream if name not in Gateway.down]
+        if allow is not None and not Gateway.leaky:
+            pool = [name for name in pool if name in allow]
+        if not pool:
+            return self.reply(503, {"error": {"message": "no provider is up in the allowed list"}})
+        provider, _, model = pool[0].partition("/")
+        info = {"provider": provider, "model": model, "fusion": Gateway.fusion, "cached": Gateway.cached}
+        message = to_openai_reply(answer(from_openai_request(body)))
+        usage = {"prompt_tokens": 10, "completion_tokens": 5, **({"cost": 0.02} if Gateway.charge else {})}
+        self.reply(200, {"model": model, "usage": usage, **({} if Gateway.silent else {"gateway": info}),
+                         "choices": [{"index": 0, "message": message, "finish_reason": "stop"}]})
+
+
+def start_gateway():
+    Gateway.down, Gateway.leaky, Gateway.silent = set(), False, False
+    Gateway.fusion, Gateway.cached, Gateway.charge, Gateway.bodies = False, False, False, []
+    server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Gateway)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    return server, f"http://127.0.0.1:{server.server_address[1]}"
+
+
+def gateway_settings(url: str, allow: list[str] | None = None) -> dict:
+    """A settings/providers.yml for tests with one gateway on a loopback address. It still forwards to remote providers."""
+    return {"gate": {"name": "Fake Gateway", "status": "adapter", "protocol": "openai", "base_url": f"{url}/v1", "key_env": "FAKE_API_KEY",
+                     "cost": "free-quota", "free_rule": "plan", "preflight": "owner", "features": ["chat", "json"],
+                     "data": {"stores": "no", "trains": "no"}, "limits": {"requests_per_day": None, "requests_per_minute": None},
+                     "gateway": {"allow": ["groq/llama-3", "mistral/small"] if allow is None else allow}}}

@@ -374,7 +374,7 @@ entries:
     cost: not verified
     privacy: not verified
     expression: []
-    notes: "Optional gateway that routes requests among free providers. First candidate to evaluate as a backend. Listening on localhost does not make it local: the requests go to remote providers, so orchestrate.py counts any gateway as remote. Before trial: prove with a fake server that it can be limited to an allowed list of provider and model before anything is sent, that its internal fallback stays inside that list, which provider answered, and that no charge is possible. Keep fusion and caching of private data off."
+    notes: "Optional gateway that routes requests among free providers. First candidate to evaluate as a backend. Listening on localhost does not make it local: the requests go to remote providers, so orchestrate.py counts any gateway as remote. Before trial: prove with a fake server that it can be limited to an allowed list of provider and model before anything is sent, that its internal fallback stays inside that list, which provider answered, and that no charge is possible. Keep fusion and caching of private data off. The adapter and these four checks pass against a fake gateway (tests/test_gateway.py), the real service is still unproven."
     evaluated: 2026-11-10
   - name: Paperclip
     url: https://github.com/paperclipai/paperclip
@@ -585,3 +585,14 @@ entries:
     expression: []
     notes: "Image generator used by hand in the browser. No official interface for automation was confirmed. Never build scraping, an unofficial proxy or a way around its CAPTCHA. Use images prepared by hand, with their credit."
     evaluated: 2026-11-10
+  - name: Impeccable
+    url: https://github.com/pbakaus/impeccable
+    status: assess
+    profiles: [web]
+    kind: tool
+    license: Apache-2.0
+    cost: free
+    privacy: the detector runs locally with no LLM and no API key, and a URL scan opens a page in the installed Chrome or Edge
+    expression: [sober, balanced, expressive]
+    notes: Official repository, homepage impeccable.style, npm package impeccable 4.8.2 with one maintainer, license file and package both Apache-2.0. Its detector in crates/detect has 62 deterministic rules for AI slop, run with npx impeccable detect --json. Trial only the detect command on a throwaway copy of a site, and do not run npx impeccable install, which writes hooks and files for more than a dozen agents. Compare its findings with the standard's own web judgment before any adoption.
+    evaluated: 2026-11-12

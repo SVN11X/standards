@@ -51,18 +51,18 @@ tasks:
   classify: [ollama, api]
   summarize-short: [ollama, api]
   extract-short: [ollama, api]
-  edit-small: [opencode]
-  fix-test: [opencode]
-  docs-small: [opencode, ollama]
-  edit-large: [opencode]
-  refactor: [opencode]
+  edit-small: [opencode, colibri]
+  fix-test: [opencode, colibri]
+  docs-small: [opencode, colibri, ollama]
+  edit-large: [opencode, colibri]
+  refactor: [opencode, colibri]
   # Web work. Direction is a design decision. A pattern, a test or a check error is bounded code. Copy is short text.
-  web-pattern: [opencode]
-  web-test: [opencode]
+  web-pattern: [opencode, colibri]
+  web-test: [opencode, colibri]
   web-copy: [ollama, opencode, api]
   web-classify: [ollama, api]
   web-visual-review: [ollama, api]
-  fix-check: [opencode]
+  fix-check: [opencode, colibri]
 
 # Task types that are architecture decisions. route() answers executor "planner": the owner asks
 # Claude directly and nothing runs on its own. They never appear in the candidate lists above.
@@ -113,6 +113,9 @@ limits:
   free_recheck_days: 30
   bench_min_runs: 3
   bench_min_pass_rate: 0.8
+  # Runs enough to call a model failed in a class. A failed model is refused, a model nobody measured is not.
+  bench_fail_runs: 2
+  # A bench run older than this, or measured with another OpenCode minor (opencode) or GPU (ollama), no longer counts.
   bench_recheck_days: 30
   # A provider's price list older than this no longer proves that a model is free.
   provider_list_max_age_h: 24
@@ -133,6 +136,14 @@ executors:
     num_predict: 400
     # How long Ollama keeps the model loaded after a call. Unset keeps Ollama's own default.
     # keep_alive: 10m
+  colibri:
+    # Local inference engine with an OpenAI-compatible API. OpenCode runs its model as colibri/<id>.
+    # home is the clone that scripts/standards.ps1 installs. A stopped server blocks the run, it is never replaced.
+    url: http://127.0.0.1:8000
+    home: ~/.standards/tools/colibri
+    command: [opencode, run, --model, "{model}", "{message}"]
+    ready_timeout_s: 300
+    chat_timeout_s: 600
   opencode:
     # {model} and {message} are filled in. The message points to a task file in the worktree.
     command: [opencode, run, --model, "{model}", "{message}"]
@@ -142,6 +153,12 @@ executors:
   claude:
     # Used by bench only. Claude Code itself is the planner and does not delegate to itself.
     command: [claude, -p, --permission-mode, acceptEdits, "{message}"]
+
+# A model or program that fails with one of these codes is skipped until the cooldown (seconds) ends.
+# The state lives in ~/.standards/health.json. A later success clears it. Colibri is never replaced by another
+# model: its cooldown blocks Colibri tasks and the router offers no fallback for them.
+health:
+  cooldown_s: {rate_limit: 3600, timeout: 900, unavailable: 600, auth: 86400}
 
 # The night run of scripts/analyze.py. It tests what is installed and allowed, one local model at a time.
 analysis:

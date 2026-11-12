@@ -19,25 +19,29 @@ Progress of the free routing, model analyzer and web design work of November 202
 - [x] Transport for OpenAI-compatible providers with settings per provider, and coverage with one state per model
 - [ ] BLOCKED: run each provider adapter against its real service with the owner's key. Only a fake server was used
 - [ ] BLOCKED: open each provider's pages and confirm what `settings/providers.yml` says. It came from a search of their sites
-- [ ] Confirm that `opencode run --file` sends an image, then test vision models served only through OpenCode
-- [ ] Adapter for a gateway such as FreeLLMAPI, after the trial checks in the radar pass with a fake server
-- [ ] Locate the official repository and license of the impeccable detector before adding it to the radar
-- [ ] Second web change: site performance budget, chart palette for color blindness, form pattern, link preview
+- [ ] BLOCKED: confirm that `opencode run --file` sends an image. Two runs with `ollama/qwen3.5-9b-ctx16k` returned no answer in 280 s and in 850 s, with and without `modalities` declared, so nothing is proven. The 12000 token OpenCode prompt makes a local 9B too slow for this check. It needs a free vision model the owner has checked in `local.yml`, then one run with a synthetic image
+- [x] Adapter for a gateway such as FreeLLMAPI, after the trial checks in the radar pass with a fake server
+- [x] Locate the official repository and license of the impeccable detector. It is pbakaus/impeccable, Apache-2.0, and the radar lists it at assess
+- [x] Second web change: site performance budget, chart palette for color blindness, form pattern, link preview
 - [x] Remove Claude from routing. Drop `claude` from every `tasks` list, add `planner_tasks`, remove the risk reorder and the proof exemption, update the five tests
 - [x] Proof and tiers in policy. Move `ROUTE_BENCH` and `LARGE_BENCH` into `orchestration.yml` so `fix-multi` never qualifies for `refactor`
-- [ ] Evidence expiry and identity. Bench rows older than `bench_recheck_days` or from another OpenCode minor or GPU do not count
-- [ ] Model lifecycle command. `orchestrate.py models` prints discovered, tested and authorized states per task type with the expiry date
-- [ ] Bench class `refactor-module`. A 6 to 8 file fixture that extracts a duplicated function into a module with hidden tests and an `ast` check
-- [ ] Bench class `review-diff`. Six synthetic diffs with seeded defects, graded on recall of file and line range and false high findings
-- [ ] Bench class `decompose`. Three task specs graded with `workplan.validate` on coverage, acyclicity and disjoint parallel sets
-- [ ] Health and failover. Failure codes, `~/.standards/health.json`, cooldowns, candidate switch and `fallbacks` in `route()`
-- [ ] Work plan contract. `schemas/work-plan.schema.json` plus `scripts/workplan.py` with validate, DAG, glob expansion, conflicts and parallel batches
-- [ ] Decomposition. `split_unit` in `workplan.py`: deterministic by files, by criteria, then model proposal, each validated
-- [ ] Review. `scripts/review.py` with a cross-model JSON verdict, finding validation and one fix round on a high finding
-- [ ] Executor loop. `scripts/execute.py` with check, run, status, resume and clean, under 600 lines by reusing `orchestrate`, `workplan` and `review`
-- [ ] Report. `schemas/execution-report.schema.json` and the `report` command, one consolidated report per plan
-- [ ] Adversarial scenarios. New cases in `adversarial.py` for planner types, claude calls, overlap, budget stops and invented review lines
-- [ ] Docs and agent texts. `docs/007`, `docs/005`, `docs/006`, `skills/repo-improve/SKILL.md` and a new `run-plan` OpenCode command
-- [ ] BLOCKED: Live validation on the owner's machine. Run the new bench classes and a pilot plan of 3 green units with `execute.py`
+- [x] Evidence expiry and identity. Bench rows older than `bench_recheck_days` or from another OpenCode minor or GPU do not count
+- [x] Model lifecycle command. `orchestrate.py models` prints discovered, tested and authorized states per task type with the expiry date
+- [x] Bench class `refactor-module`. A 6 to 8 file fixture that extracts a duplicated function into a module with hidden tests and an `ast` check
+- [x] Bench class `review-diff`. Six synthetic diffs with seeded defects, graded on recall of file and line range and false high findings
+- [x] Bench class `decompose`. Three task specs graded with `workplan.validate` on coverage, acyclicity and disjoint parallel sets
+- [x] Health and failover. Failure codes, `~/.standards/health.json`, cooldowns, candidate switch and `fallbacks` in `route()`
+- [x] Work plan contract. `schemas/work-plan.schema.json` plus `scripts/workplan.py` with validate, DAG, glob expansion, conflicts and parallel batches
+- [x] Review. `scripts/review.py` with a cross-model JSON verdict, finding validation and one fix round on a high finding
+- [x] Decomposition. `split_unit` in `workplan.py`: deterministic by files, by criteria, then model proposal, each validated
+- [x] Executor loop. `scripts/execute.py` with check, run, status, resume and clean, under 600 lines by reusing `orchestrate`, `workplan` and `review`
+- [x] Adversarial scenarios. New cases in `adversarial.py` for planner types, claude calls, overlap, budget stops and invented review lines
+- [x] Report. `schemas/execution-report.schema.json` and the `report` command, one consolidated report per plan
+- [x] Docs and agent texts. `docs/007`, `docs/005`, `docs/006`, `skills/repo-improve/SKILL.md` and a new `run-plan` OpenCode command
+- [ ] BLOCKED: run the three new bench classes `refactor-module`, `review-diff` and `decompose` against real models. Their graders are tested with fakes only. It needs the GPU and the owner's time slot. The pilot plan part is done
 - [x] Fix: a timeout kills the whole process tree of the executor, so a stuck OpenCode no longer hangs the run
 - [x] Fix: a command run in a folder gets PWD set to that folder, so OpenCode launched from a Bash session works in its own worktree
+- [x] Executor loop calls `split_unit` when a unit is too large, instead of only failing it
+- [x] Executor loop enforces every budget declared in the work plan, not only `max_attempts_per_unit` and `final_regression`
+- [x] Pilot plan of 3 green units with `execute.py` and a real `review.py` run, local-only. Two units passed with their tests and a review by `qwen2.5:7b` with no findings, and one failed `inside_scope` on a stale integration base, which the loop now refuses
+- [ ] BLOCKED: map the gateway adapter to FreeLLMAPI's real request and reply fields and prove the four radar conditions against the real service at trial. The adapter was proven only against a fake server with its own field names. It needs the owner to approve installing it

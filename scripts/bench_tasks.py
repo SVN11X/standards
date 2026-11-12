@@ -3,7 +3,7 @@
 
 Chat tasks send short prompts and check the reply: classify, extract, summarize, web-subprofile, tool-call,
 vision and design-judge. Agent tasks give a coding agent a small repository and check it with acceptance
-tests the agent never saw: fix-bug, fix-multi and docs-small. scripts/orchestrate.py runs them.
+tests the agent never saw: fix-bug, fix-multi, docs-small and refactor-module (its hidden tests include an `ast` check). scripts/orchestrate.py runs them.
 """
 from __future__ import annotations
 
@@ -21,11 +21,12 @@ SUBPROFILES = STANDARD_ROOT / "profiles" / "web" / "subprofiles.yml"
 PASS_ACCURACY = 0.75
 # What a model must be able to do for a chat task. Tasks with a baseline also run on a program without AI.
 CHAT_TASKS = {"classify": [], "extract": [], "summarize": [], "web-subprofile": [], "tool-call": ["tools"],
-              "vision": ["vision"], "design-judge": ["vision"]}
+              "vision": ["vision"], "design-judge": ["vision"],
+              "review-diff": [], "decompose": []}
 BASELINES = {"classify", "extract", "web-subprofile"}
 # Version of the rule that grades each task. Raise it when a grader changes what it accepts: runs graded by an older
 # rule stay in the history and stop counting. A task that is not listed is at version 1.
-GRADERS = {"summarize": 3, "tool-call": 2}
+GRADERS = {"summarize": 3, "tool-call": 2, "refactor-module": 1, "review-diff": 1, "decompose": 1}
 
 
 def grader_version(task: str | None) -> int:
@@ -317,7 +318,149 @@ def judge_ok(pair: dict, ask) -> bool:
 def request_estimate(task: str) -> int:
     """About how many requests one run of a chat task sends, to plan against a provider's daily limit."""
     return {"classify": len(CLASSIFY), "extract": len(EXTRACT), "summarize": len(SUMMARIZE), "web-subprofile": len(subprofile_items()),
-            "tool-call": 3 * len(TOOL_CASES), "vision": len(VISION), "design-judge": 2 * len(design_pairs()[0])}.get(task, 1)
+            "tool-call": 3 * len(TOOL_CASES), "vision": len(VISION), "design-judge": 2 * len(design_pairs()[0]),
+            "review-diff": len(REVIEW_CASES),
+            "decompose": len(DECOMPOSE_SPECS)}.get(task, 1)
+
+
+# review-diff
+
+# Each case is a new file added in one diff with one seeded defect. `defect` is the line range of the new file where it sits.
+REVIEW_CASES = [
+    {"id": "sql-injection", "file": "app/db.py", "defect": (6, 7), "lines": [
+        "import sqlite3", "", "", "def find_user(conn, name):", "    cursor = conn.cursor()",
+        "    query = f\"SELECT id, email FROM users WHERE name = '{name}'\"", "    cursor.execute(query)",
+        "    return cursor.fetchall()"]},
+    {"id": "off-by-one", "file": "app/pages.py", "defect": (3, 3), "lines": [
+        "def page_slice(items, page, size):", "    \"\"\"Return the items of a 1-based page.\"\"\"", "    start = page * size",
+        "    return items[start:start + size]"]},
+    {"id": "mutable-default", "file": "app/tags.py", "defect": (1, 3), "lines": [
+        "def add_tag(item, tags=[]):", "    tags.append(item)", "    return tags"]},
+    {"id": "hardcoded-credential", "file": "app/settings.py", "defect": (3, 3), "lines": [
+        "import os", "", "DB_PASSWORD = \"hunter2-prod\"", "DB_HOST = os.environ.get(\"DB_HOST\", \"localhost\")"]},
+    {"id": "inverted-permission", "file": "app/perms.py", "defect": (2, 2), "lines": [
+        "def can_delete(user, post):", "    return user.is_admin or post.author_id != user.id"]},
+    {"id": "divide-by-zero", "file": "app/stats.py", "defect": (3, 3), "lines": [
+        "def average(values):", "    \"\"\"Mean of a list of numbers.\"\"\"", "    return sum(values) / len(values)"]},
+]
+REVIEW_PROMPT = ("Review this diff. Report real defects only. Answer JSON "
+                 '{"findings": [{"file": "path", "line_start": 1, "line_end": 1, "severity": "high|medium|low", "note": "..."}]} '
+                 "with line numbers of the new file. Use high only for a defect that must be fixed before merge.\nDiff:\n")
+MAX_FINDING_LINES = 10
+
+
+def review_diff_text(case: dict) -> str:
+    """The unified diff of a new file, so the line numbers in the diff are the line numbers of the new file."""
+    name, lines = case["file"], case["lines"]
+    head = f"diff --git a/{name} b/{name}\nnew file mode 100644\n--- /dev/null\n+++ b/{name}\n@@ -0,0 +1,{len(lines)} @@\n"
+    return head + "".join(f"+{line}\n" for line in lines)
+
+
+def review_reference(case: dict) -> dict:
+    start, end = case["defect"]
+    return {"findings": [{"file": case["file"], "line_start": start, "line_end": end, "severity": "high",
+                          "note": "seeded defect"}]}
+
+
+def finding_span(finding) -> tuple[str, int, int, str] | None:
+    """(file, first line, last line, severity) of a well formed finding, else None."""
+    if not isinstance(finding, dict) or not isinstance(finding.get("file"), str):
+        return None
+    try:
+        start = int(finding.get("line_start", finding.get("line")))
+        end = int(finding.get("line_end", start))
+    except (TypeError, ValueError):
+        return None
+    name = finding["file"].strip()
+    name = name[2:] if name[:2] in ("a/", "b/") else name
+    return name, start, max(start, end), str(finding.get("severity", "")).strip().lower()
+
+
+def review_ok(case: dict, parsed) -> tuple[bool, str]:
+    """A diff passes when a finding names its file and overlaps the defect lines and no high finding sits elsewhere.
+
+    A finding that spans more than MAX_FINDING_LINES lines does not count as a hit, so flagging the whole file never passes.
+    """
+    findings = parsed.get("findings") if isinstance(parsed, dict) else None
+    if not isinstance(findings, list):
+        return False, "no findings list"
+    start, end = case["defect"]
+    hit, false_high = False, None
+    for raw in findings:
+        span = finding_span(raw)
+        if span is None:
+            continue
+        name, first, last, severity = span
+        on_defect = name == case["file"] and first <= end and last >= start and last - first < MAX_FINDING_LINES
+        hit = hit or on_defect
+        if severity == "high" and not on_defect and false_high is None:
+            false_high = f"{name}:{first}"
+    if false_high:
+        return False, f"false high finding at {false_high} in {case['id']}"
+    return hit, "" if hit else f"missed {case['id']} at {case['file']}:{start}-{end}"
+
+
+# decompose
+
+def _unit(uid: str, title: str, files: list[str], deps: list[str] | None = None) -> dict:
+    return {"id": uid, "title": title, "task_type": "edit-small", "goal": title, "allowed": files,
+            "acceptance": {"test": "python -m unittest"}, "depends_on": deps or []}
+
+
+DECOMPOSE_SPECS = [
+    {"id": "tax", "task": "Add tax support: pricing computes the tax, the cart total includes it, the receipt prints it and the README documents it.",
+     "files": ["shop/pricing.py", "shop/cart.py", "shop/receipt.py", "tests/test_shop.py", "README.md"],
+     "must_touch": ["shop/pricing.py", "shop/cart.py", "shop/receipt.py", "README.md"], "min_units": 3,
+     "reference": [_unit("u1", "Tax in pricing", ["shop/pricing.py"]), _unit("u2", "Tax in the cart", ["shop/cart.py"], ["u1"]),
+                   _unit("u3", "Tax on the receipt", ["shop/receipt.py"], ["u2"]), _unit("u4", "Document tax", ["README.md"])]},
+    {"id": "verbose", "task": "Add a --verbose flag: the argument parser reads it, the logger gets debug levels, the config sets a default, "
+                              "main wires all three and docs/usage.md describes it.",
+     "files": ["cli/args.py", "cli/config.py", "cli/log.py", "cli/main.py", "docs/usage.md", "tests/test_cli.py"],
+     "must_touch": ["cli/args.py", "cli/config.py", "cli/log.py", "cli/main.py", "docs/usage.md"], "min_units": 4,
+     "reference": [_unit("u1", "Parse the flag", ["cli/args.py"]), _unit("u2", "Debug levels", ["cli/log.py"]),
+                   _unit("u3", "Config default", ["cli/config.py"]),
+                   _unit("u4", "Wire it in main", ["cli/main.py"], ["u1", "u2", "u3"]), _unit("u5", "Document the flag", ["docs/usage.md"])]},
+    {"id": "rename", "task": "Rename parse to parse_text in lib/a.py. lib/b.py and lib/c.py import it and must follow. Bump the version in "
+                             "pyproject.toml and add a line to CHANGELOG.md.",
+     "files": ["lib/a.py", "lib/b.py", "lib/c.py", "pyproject.toml", "CHANGELOG.md", "tests/test_lib.py"],
+     "must_touch": ["lib/a.py", "lib/b.py", "lib/c.py", "pyproject.toml", "CHANGELOG.md"], "min_units": 4,
+     "reference": [_unit("u1", "Rename in a", ["lib/a.py"]), _unit("u2", "Follow in b", ["lib/b.py"], ["u1"]),
+                   _unit("u3", "Follow in c", ["lib/c.py"], ["u1"]), _unit("u4", "Bump the version", ["pyproject.toml"]),
+                   _unit("u5", "Changelog line", ["CHANGELOG.md"], ["u4"])]},
+]
+DECOMPOSE_PROMPT = ("Split this task into work units for coding agents. Answer JSON "
+                    '{"units": [{"id": "u1", "title": "...", "task_type": "edit-small", "goal": "...", "allowed": ["path"], '
+                    '"acceptance": {"test": "python -m unittest"}, "depends_on": []}]}. Use only files from the list. Every file under '
+                    "Must change must be in the allowed list of some unit. Units that do not depend on each other, directly or "
+                    "through others, must not share a file.\n")
+
+
+def decompose_prompt(spec: dict) -> str:
+    return (DECOMPOSE_PROMPT + f"Task: {spec['task']}\nFiles: {', '.join(spec['files'])}\n"
+            f"Must change: {', '.join(spec['must_touch'])}")
+
+
+def decompose_ok(spec: dict, parsed) -> tuple[bool, str]:
+    """A split passes when workplan.validate accepts it, it has enough units, every file to change is in some unit and
+    units that may run together share no file. validate also rejects a cycle in depends_on."""
+    import workplan
+    units = parsed.get("units") if isinstance(parsed, dict) else None
+    if not isinstance(units, list) or not units:
+        return False, "no units"
+    plan = {"plan_id": spec["id"], "goal": spec["task"], "units": units}
+    errors = workplan.validate(plan)
+    if errors:
+        return False, f"invalid plan: {errors[0]}"
+    if len(units) < spec["min_units"]:
+        return False, f"{len(units)} units, at least {spec['min_units']} needed"
+    covered = set().union(*(workplan.expand(unit, spec["files"]) for unit in units))
+    missing = sorted(set(spec["must_touch"]) - covered)
+    if missing:
+        return False, f"not covered: {missing[0]}"
+    clash = workplan.conflicts(plan, spec["files"])
+    if clash:
+        return False, f"parallel units {clash[0][0]} and {clash[0][1]}: {clash[0][2]}"
+    return True, ""
 
 
 # Running a chat task
@@ -368,6 +511,12 @@ def run_chat(task: str, ask=None, chat=None, baseline: bool = False, home: Path 
         name = "design-judge-sample" if sample else "design-judge"
         for pair in pairs:
             attempt(lambda: (judge_ok(pair, ask), f"disagreed on {pair['id']}"))
+    elif task == "review-diff":
+        for case in REVIEW_CASES:
+            attempt(lambda: review_ok(case, ask(REVIEW_PROMPT + review_diff_text(case), None)))
+    elif task == "decompose":
+        for spec in DECOMPOSE_SPECS:
+            attempt(lambda: decompose_ok(spec, ask(decompose_prompt(spec), None)))
     else:
         raise ValueError(f"unknown chat task {task}")
     return {"task": name, "accuracy": round(passed / total, 2) if total else 0.0, "items": total, "notes": notes}
@@ -505,6 +654,81 @@ class Hidden(unittest.TestCase):
 if __name__ == "__main__":
     unittest.main()
 '''
+SLUG = """def slugify(text):
+    words = "".join(c.lower() if c.isalnum() else " " for c in text).split()
+    return "-".join(words)
+"""
+POSTS = SLUG + '''
+
+def post_url(title):
+    return "/posts/" + slugify(title)
+'''
+USERS = SLUG + '''
+
+def profile_url(name):
+    return "/u/" + slugify(name)
+'''
+TAGS = SLUG + '''
+
+def tag_url(tag):
+    return "/tags/" + slugify(tag)
+'''
+APP_TESTS = """import unittest
+from app.posts import post_url
+from app.tags import tag_url
+from app.users import profile_url
+
+
+class App(unittest.TestCase):
+    def test_urls(self):
+        self.assertEqual(post_url("Hello, World!"), "/posts/hello-world")
+        self.assertEqual(profile_url("Ada  Lovelace"), "/u/ada-lovelace")
+        self.assertEqual(tag_url("C++ tips"), "/tags/c-tips")
+
+
+if __name__ == "__main__":
+    unittest.main()
+"""
+APP_HIDDEN = """import ast
+import unittest
+from pathlib import Path
+
+
+def tree(name):
+    return ast.parse(Path("app", name).read_text(encoding="utf-8"))
+
+
+class Hidden(unittest.TestCase):
+    def test_behavior_kept(self):
+        from app.posts import post_url
+        from app.tags import tag_url
+        from app.text import slugify
+        from app.users import profile_url
+        self.assertEqual(slugify("  Mixed CASE--text 42 "), "mixed-case-text-42")
+        self.assertEqual(slugify("***"), "")
+        self.assertEqual(post_url("A b"), "/posts/a-b")
+        self.assertEqual(profile_url("Zoe_Q"), "/u/zoe-q")
+        self.assertEqual(tag_url("x/y"), "/tags/x-y")
+
+    def test_defined_once_in_text(self):
+        defined = [name for name in ("posts.py", "users.py", "tags.py", "text.py", "__init__.py")
+                   if any(isinstance(n, ast.FunctionDef) and n.name == "slugify" for n in ast.walk(tree(name)))]
+        self.assertEqual(defined, ["text.py"])
+
+    def test_modules_import_it(self):
+        for name in ("posts.py", "users.py", "tags.py"):
+            imports = [n for n in ast.walk(tree(name)) if isinstance(n, ast.ImportFrom) and n.module == "app.text"
+                       and any(a.name == "slugify" for a in n.names)]
+            self.assertTrue(imports, name)
+
+    def test_public_functions_kept(self):
+        for name, func in (("posts.py", "post_url"), ("users.py", "profile_url"), ("tags.py", "tag_url")):
+            self.assertIn(func, [n.name for n in tree(name).body if isinstance(n, ast.FunctionDef)])
+
+
+if __name__ == "__main__":
+    unittest.main()
+"""
 IGNORE = "__pycache__/\n*.pyc\n"
 README = "# calc\n\nSmall helpers.\n"
 AGENT_TASKS = {
@@ -524,4 +748,11 @@ AGENT_TASKS = {
         "task": "Add a '## Usage' section to README.md that documents sum_even and count_words with one example call each. "
                 "Change only README.md.",
         "allowed": ["README.md"], "test": "test_calc", "hidden": DOCS_HIDDEN},
+    "refactor-module": {
+        "files": {"app/__init__.py": "", "app/posts.py": POSTS, "app/users.py": USERS, "app/tags.py": TAGS,
+                  "test_app.py": APP_TESTS, "README.md": "# app\n\nURL helpers.\n", ".gitignore": IGNORE},
+        "task": "The function slugify is copied into app/posts.py, app/users.py and app/tags.py. Move it into a new module "
+                "app/text.py and import it from the three modules with `from app.text import slugify`. Keep every public "
+                "function and its behavior. Do not change the tests.",
+        "allowed": ["app/*.py"], "test": "test_app", "hidden": APP_HIDDEN},
 }

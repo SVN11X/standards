@@ -102,6 +102,43 @@ def base_url(conf: dict) -> str:
     return url
 
 
+def is_gateway(conf: dict) -> bool:
+    """A gateway routes one request among several providers behind one address. Listening on localhost does not make it local."""
+    return isinstance(conf.get("gateway"), dict)
+
+
+def gateway_allow(conf: dict) -> list[str]:
+    """The provider/model pairs a gateway may use, from settings. Nothing is sent to a gateway without a non-empty list."""
+    allow = (conf.get("gateway") or {}).get("allow")
+    if not isinstance(allow, list) or not allow or not all(isinstance(item, str) and "/" in item.strip("/") for item in allow):
+        raise ProviderError("config", "a gateway needs an allowed list of provider/model pairs before anything is sent")
+    return list(allow)
+
+
+def gateway_request(conf: dict) -> dict:
+    """What a gateway receives besides the chat: the allowed list for its routing and its own fallback, and fusion, caching and billing off.
+    The names are this adapter's contract. A real gateway needs them mapped and proven at trial."""
+    settings = conf["gateway"]
+    if settings.get("fusion") or settings.get("cache"):
+        raise ProviderError("config", "fusion and caching of private data stay off for a gateway")
+    return {"allow": gateway_allow(conf), "fusion": False, "cache": False, "billing": "refuse"}
+
+
+def gateway_answer(conf: dict, reply: dict) -> str:
+    """The provider/model that answered, checked against the allowed list. A gateway that does not say, or answered
+    from outside the list, or fused or served a cached reply, is refused."""
+    info = reply.get("gateway") if isinstance(reply, dict) else None
+    provider, model = (info or {}).get("provider"), (info or {}).get("model")
+    if not isinstance(provider, str) or not isinstance(model, str) or not provider or not model:
+        raise ProviderError("bad-reply", "the gateway did not say which provider answered")
+    if info.get("fusion") or info.get("cached"):
+        raise ProviderError("privacy", "the gateway fused several providers or served a cached reply")
+    answered = f"{provider}/{model}"
+    if answered not in gateway_allow(conf):
+        raise ProviderError("privacy", f"the gateway answered from {answered}, which is not in the allowed list")
+    return answered
+
+
 def redact(text: str, conf: dict) -> str:
     """Remove the key and any bearer value from text that will be shown or stored."""
     for name in [conf.get("key_env"), *PLACEHOLDER.findall(str(conf.get("base_url", "")))]:
@@ -322,6 +359,8 @@ def chat(conf: dict, model: str, messages: list[dict], tools: list | None = None
         raise ProviderError("unsupported", f"the adapter for {conf.get('name', 'this provider')} does not send {', '.join(needs)}")
     payload = {"model": model, "messages": to_openai(messages), conf.get("max_tokens_field", "max_tokens"): max_tokens,
                **(conf.get("request_extra") or {})}
+    if is_gateway(conf):
+        payload["gateway"] = gateway_request(conf)
     if tools:
         payload["tools"] = tools
     if want_json:
@@ -332,7 +371,8 @@ def chat(conf: dict, model: str, messages: list[dict], tools: list | None = None
         raise ProviderError("bad-reply", "the reply has no choices")
     usage = reply.get("usage") if isinstance(reply.get("usage"), dict) else {}
     charged = usage.get("cost")
-    return {"message": from_openai(choices[0].get("message") or {}), "model": reply.get("model"), "usage": usage,
+    answered_by = gateway_answer(conf, reply) if is_gateway(conf) else None
+    return {"provider": answered_by, "message": from_openai(choices[0].get("message") or {}), "model": reply.get("model"), "usage": usage,
             "charged": charged if isinstance(charged, (int, float)) and charged > 0 else None,
             "limits": {name: value for name, value in headers.items() if name.startswith("x-ratelimit") or name == "retry-after"}}
 

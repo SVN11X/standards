@@ -56,7 +56,7 @@ When the site teaches something, such as a diagram, a model, a simulation or tec
 - Build reusable components. Cut repeated text. One idea per block.
 - An interactive demo must work, start in a meaningful state, show current values with units, offer a reset, and have a static fallback.
 - Use motion only to show continuity, state or cause. Always respect `prefers-reduced-motion`, in CSS and in the JavaScript that animates. `references/motion-and-foundations.md` lists what motion must survive, the foundations (tokens, native CSS first, fonts, empty states, first visit) and when a library is justified.
-- For buttons and microinteractions, copy a pattern from `references/interaction-patterns.md`. Each one runs in `gallery/index.html`, which opens straight from the file on a computer or a phone.
+- For buttons and microinteractions, copy a pattern from `references/interaction-patterns.md`. Patterns 1 to 6 run in `gallery/index.html`, which opens straight from the file on a computer or a phone. Patterns 7 and 8 (form and link preview) are written out without a demo.
 - A structural redesign shows two short versions with real content. Record the owner's choice and its reason in `DESIGN.md` under Examples.
 - Choose technology with the matrix in `references/stack-and-hosting.md`: the simplest option that meets the goal. Prefer tools marked adopt or trial in the radar of the standard, and only those whose expression levels include the one in `DESIGN.md`. A tool outside the radar is evaluated with tool-radar first.
 - Keep the output static when the host is GitHub Pages. Never put secrets in frontend code.

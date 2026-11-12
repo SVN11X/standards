@@ -111,7 +111,7 @@ def check_settings(repo: Path) -> list[dict]:
     conf = yaml.safe_load((repo / "settings" / "orchestration.yml").read_text(encoding="utf-8"))
     problems = [key for key in ("privacy", "tasks", "limits", "executors", "protected") if key not in conf]
     for task, candidates in (conf.get("tasks") or {}).items():
-        unknown = set(candidates) - {"tools", "ollama", "opencode", "api", "claude"}
+        unknown = set(candidates) - {"tools", "ollama", "opencode", "api", "claude", "colibri"}
         if unknown:
             problems.append(f"task {task}: unknown executors {sorted(unknown)}")
     classes = conf.get("privacy", {}).get("classes", {})

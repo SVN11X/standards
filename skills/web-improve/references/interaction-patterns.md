@@ -1,6 +1,6 @@
 # Interaction patterns
 
-Six small patterns for buttons and microinteractions. Each one runs in the gallery at `gallery/index.html` of this skill, so it can be opened on a phone and read as working code. A small model may copy a pattern as it is written. It does not invent a new one.
+Eight small patterns for buttons, forms and links. Patterns 1 to 6 run in the gallery at `gallery/index.html` of this skill, so they can be opened on a phone and read as working code. Patterns 7 and 8 are not in the gallery yet. A small model may copy a pattern as it is written. It does not invent a new one.
 
 ## Rules for every pattern
 
@@ -68,3 +68,29 @@ Six small patterns for buttons and microinteractions. Each one runs in the galle
 - Behavior: a short mark or a bar that fills, next to a text that says what was completed. The text is the message, the motion is the accent.
 - Reduced motion: the final state shows with no animation.
 - Use it after real progress. Never for an action that did nothing.
+
+## 7. Form
+
+- Purpose: collect input and tell the visitor what went wrong and how to fix it.
+- Events: typing, leaving a field, submit.
+- States: rest, filled, invalid, submitting, success and error of the whole form.
+- Structure: every control has a visible `label`. Related controls sit in a `fieldset` with a `legend`. Instructions and the required mark sit in the label or in text linked with `aria-describedby`. Set `autocomplete` on fields that browsers know, and an `inputmode` or `type` that opens the right keyboard.
+- Validation: use the native `required`, `type` and `pattern` first, and repeat every check on the server. Check a field when the visitor leaves it, not on every key press. Accept different input formats where the meaning is clear.
+- Errors: each message names the field, says what is wrong and how to fix it, and sits next to the field linked with `aria-describedby`. After a failed submit, show a summary with links to each field and move focus to it or to the first invalid field. Do not use color alone.
+- Submit: the button follows pattern 3, so nothing is sent twice. Keep what the visitor typed after an error. Success says what was received and what happens next.
+- Reduced motion: messages appear at once.
+- Use it for any input. Do not replace a native control with a custom one without the same keyboard and screen reader behavior.
+- Sources: W3C WAI, Forms Tutorial (https://www.w3.org/WAI/tutorials/forms/) and web.dev, Learn Forms (https://web.dev/learn/forms).
+
+## 8. Link preview
+
+- Purpose: show a short summary of a linked page before the visitor leaves the current one.
+- Events: pointer hover, keyboard focus, long press on touch, Escape.
+- States: closed, loading, open and failed.
+- Behavior: the link stays a real link that works without the preview. The preview is extra, never the only way to read the information. A preview shows a title, one or two lines and, if useful, one small image with `alt`. It never contains controls.
+- Keep to WCAG 1.4.13: the preview can be dismissed with Escape without moving focus or pointer, the pointer can move over it without it closing, and it stays until the trigger is removed or the visitor dismisses it.
+- Touch: a tap follows the link. There is no hover on touch, so the summary is also available as text near the link or on the target page.
+- Failure: when the summary cannot load, show nothing and leave the link as it is. Do not fetch other sites on hover without the owner's decision, because it sends the visitor's address to them.
+- Reduced motion: the preview appears at once.
+- Use it for links to articles or entries whose summary helps the choice. Do not use it on navigation menus or on every link of a page.
+- Sources: MediaWiki, Page Previews (https://www.mediawiki.org/wiki/Page_Previews) and W3C, Understanding SC 1.4.13 Content on Hover or Focus (https://www.w3.org/WAI/WCAG22/Understanding/content-on-hover-or-focus.html).

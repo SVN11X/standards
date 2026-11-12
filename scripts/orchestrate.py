@@ -7,6 +7,7 @@ of settings/providers.yml, named provider/model) and claude.
 Commands:
   doctor             list the executors, models and limits on this machine, and who would do each task. Installs nothing.
   route              choose an executor for a task and say why, from settings/orchestration.yml. --all prints every task type
+  models             per task type: discovered, tested and authorized models with the evidence expiry date
   delegate           run one task on OpenCode (in its own worktree) or on Ollama, then verify it
   runs               list delegated runs and their state, or show one
   bench              compare executors on synthetic tasks and keep the history, or print the report
@@ -260,6 +261,27 @@ def detect_ollama(conf: dict, timeout: float = 1.5, show: bool = False) -> dict:
     return info
 
 
+def detect_colibri(conf: dict, timeout: float = 1.5) -> dict:
+    """What the local Colibri API answers. It only reads. A model is listed under the id the server expects."""
+    url = str(conf.get("url", "http://127.0.0.1:8000")).rstrip("/")
+    info = {"url": url, "up": False, "models": []}
+    try:
+        listing = http_json(f"{url}/v1/models", timeout=timeout)
+        info["models"] = sorted(str(m["id"]) for m in listing.get("data", []) if m.get("id"))
+        info["up"] = True
+    except (OSError, ValueError, urllib.error.URLError) as error:
+        info["error"] = str(error)[:200]
+    return info
+
+
+def append_telemetry(row: dict) -> None:
+    """One line per measured request, from the provider's own usage block. The dashboard reads this file."""
+    path = home() / "telemetry.jsonl"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps(row) + "\n")
+
+
 def detect_gpu() -> dict | None:
     if not shutil.which("nvidia-smi"):
         return None
@@ -294,7 +316,8 @@ def doctor(full: bool = False, conf: dict | None = None) -> dict:
             "git": version_of(["git", "--version"]), "node": version_of(["node", "--version"]),
             "npx": shutil.which("npx"), "uvx": shutil.which("uvx"), "claude": shutil.which("claude"),
             "sqlite_fts5": fts5_available(), "gpu": detect_gpu(), "ram_bytes": memory_bytes(),
-            "ollama": detect_ollama(conf.get("executors", {}).get("ollama", {}), show=full)}
+            "ollama": detect_ollama(conf.get("executors", {}).get("ollama", {}), show=full),
+            "colibri": detect_colibri(conf.get("executors", {}).get("colibri", {}))}
     opencode = shutil.which("opencode")
     caps["opencode"] = {"path": opencode, "version": version_of(["opencode", "--version"]) if opencode else None}
     if opencode and full:
@@ -390,6 +413,8 @@ def catalog_entry(executor: str, model: str | None, catalog: dict | None = None)
         return None
     if executor == "opencode" and model.startswith("ollama/"):
         executor, model = "ollama", model.split("/", 1)[1]
+    if executor == "colibri":
+        model = model.split("/", 1)[1] if model.startswith("colibri/") else model
     name = model.split("/")[-1] if executor == "opencode" else model
     for entry in (catalog if catalog is not None else model_catalog()).get("models") or []:
         if entry.get("executor") == executor and entry.get("id") == name:
@@ -428,17 +453,35 @@ def is_cloud_tag(model: str) -> bool:
     return bool(re.search(r"(^|[:-])cloud$", model.lower()))
 
 
+def gateway_address(url: str) -> bool:
+    """True when the address is the base_url of a gateway in settings/providers.yml, whatever executor is configured to use it."""
+    wanted = urllib.parse.urlparse(url)
+    for pconf in providers.load().values():
+        if providers.is_gateway(pconf):
+            theirs = urllib.parse.urlparse(str(pconf.get("base_url") or ""))
+            if theirs.hostname and (theirs.hostname, theirs.port) == (wanted.hostname, wanted.port):
+                return True
+    return False
+
+
 def channel(executor: str, model: str | None, conf: dict, caps: dict | None = None) -> str:
-    """Where a request ends up: tools, local, remote_free or remote_claude. Listening on localhost is not enough to be local."""
+    """Where a request ends up: tools, local, remote_free or remote_claude. Listening on localhost is not enough to be local.
+    A gateway forwards to remote providers, so an address that belongs to one is remote whatever executor reaches it."""
     if executor == "tools":
         return "tools"
     if executor == "claude":
         return "remote_claude"
     if executor == "opencode" and model and model.startswith("ollama/"):
         executor, model = "ollama", model.split("/", 1)[1]
+    if executor == "opencode" and model and model.startswith("colibri/"):
+        executor = "colibri"
+    if executor == "colibri":
+        url = conf["executors"]["colibri"].get("url", "")
+        return "local" if is_loopback(url) and not gateway_address(url) else "remote_free"
     if executor == "ollama":
         remote = set(((caps or {}).get("ollama") or {}).get("remote") or [])
-        local_url = is_loopback(conf["executors"]["ollama"].get("url", "http://127.0.0.1:11434"))
+        url = conf["executors"]["ollama"].get("url", "http://127.0.0.1:11434")
+        local_url = is_loopback(url) and not gateway_address(url)
         return "local" if local_url and model not in remote and not is_cloud_tag(model or "") else "remote_free"
     return "remote_free"
 
@@ -594,6 +637,43 @@ def current_rows(rows: list[dict]) -> list[dict]:
     return [row for row in rows if row.get("grader", 1) >= bench_tasks.grader_version(row.get("task"))]
 
 
+def minor_of(version) -> str | None:
+    match = re.match(r"v?(\d+)\.(\d+)", str(version or ""))
+    return f"{match.group(1)}.{match.group(2)}" if match else None
+
+
+def row_age_days(row: dict, now: dt.datetime) -> int | None:
+    try:
+        stamp = dt.datetime.fromisoformat(str(row["date"]))
+    except (KeyError, ValueError):
+        return None
+    return (now - (stamp if stamp.tzinfo else stamp.replace(tzinfo=dt.timezone.utc))).days
+
+
+def fresh_rows(rows: list[dict], limit_days: int | None, current: dict | None = None, now: dt.datetime | None = None) -> list[dict]:
+    """Runs that still prove something: not older than `bench_recheck_days`, and measured with this OpenCode minor
+    (opencode rows) or this GPU (ollama rows). A run that never recorded its date or identity, or an identity that
+    is unknown today, cannot be judged and keeps counting."""
+    now = now or dt.datetime.now(dt.timezone.utc)
+    current = current or {}
+    keep = []
+    for row in rows:
+        age = row_age_days(row, now)
+        if limit_days is not None and age is not None and age > limit_days:
+            continue
+        seen = row.get("hardware") or {}
+        if row.get("executor") == "opencode":
+            then, today = minor_of(seen.get("opencode")), minor_of(current.get("opencode"))
+        elif row.get("executor") == "ollama":
+            then, today = (seen.get("gpu") or {}).get("name"), (current.get("gpu") or {}).get("name")
+        else:
+            then = today = None
+        if then and today and then != today:
+            continue
+        keep.append(row)
+    return keep
+
+
 def summarize_bench(rows: list[dict]) -> list[dict]:
     groups: dict[tuple, list[dict]] = {}
     for row in current_rows(rows):
@@ -619,7 +699,7 @@ def summarize_bench(rows: list[dict]) -> list[dict]:
 
 
 def measured_models(task: str, conf: dict, classes: list[str] | None = None) -> dict:
-    """Bench results that count for this task type: enough runs and a high enough pass rate, in the class that measures it.
+    """Bench results that count for this task type: recent runs of this OpenCode minor and GPU, enough of them and a high enough pass rate, in the class that measures it.
 
     The first class a model was measured in decides. A broader class counts only for a model with no run in a more
     specific one, so a model that failed the specific class never gets in through the broader one.
@@ -628,7 +708,7 @@ def measured_models(task: str, conf: dict, classes: list[str] | None = None) -> 
     classes = classes if classes is not None else conf.get("proof", {}).get(task, [])
     found: dict = {}
     judged: set = set()
-    summary = summarize_bench(bench_rows())
+    summary = summarize_bench(fresh_rows(bench_rows(), limits.get("bench_recheck_days"), hardware()))
     for bench in classes:
         rows = [row for row in summary if row["task"] == bench]
         for row in rows:
@@ -638,6 +718,73 @@ def measured_models(task: str, conf: dict, classes: list[str] | None = None) -> 
                 found[key] = row
         judged |= {(row["executor"], row["model"]) for row in rows}
     return found
+
+
+def failed_models(task: str, conf: dict, classes: list[str] | None = None) -> dict:
+    """Models with fresh runs in the class of this task type that did not reach the pass rate.
+
+    A model that failed is not the same as a model nobody measured. The first class a model was measured in decides,
+    as in `measured_models`, and `bench_fail_runs` runs are enough to call it failed.
+    """
+    limits = conf["limits"]
+    classes = classes if classes is not None else conf.get("proof", {}).get(task, [])
+    found: dict = {}
+    judged: set = set()
+    summary = summarize_bench(fresh_rows(bench_rows(), limits.get("bench_recheck_days"), hardware()))
+    for bench in classes:
+        rows = [row for row in summary if row["task"] == bench]
+        for row in rows:
+            key = (row["executor"], row["model"])
+            if (key not in judged and row["runs"] >= limits.get("bench_fail_runs", 2)
+                    and row["pass_rate"] < limits["bench_min_pass_rate"]):
+                found[key] = row
+        judged |= {(row["executor"], row["model"]) for row in rows}
+    return found
+
+
+def model_states(found: list[dict], conf: dict, now: dt.datetime | None = None) -> list[dict]:
+    """Per model and task type: discovered (a coverage record exists), authorized (cost and privacy allow it and the
+    task is listed for it) and tested (fresh bench evidence passes), with the date that evidence expires.
+
+    `found` is the coverage of scripts/analyze.py. The evidence comes from `measured_models`, so expiry and identity
+    follow `fresh_rows`.
+    """
+    now = now or dt.datetime.now(dt.timezone.utc)
+    days = conf["limits"].get("bench_recheck_days")
+    rows = []
+    for task in conf.get("proof", {}):
+        proven = measured_models(task, conf)
+        for record in sorted(found, key=lambda r: (str(r.get("executor")), str(r.get("model")))):
+            key = (record.get("executor"), record.get("model"))
+            evidence = proven.get(key)
+            authorized = record.get("status") == "eligible" and task in (record.get("tasks") or [])
+            if not (evidence or authorized):
+                continue
+            expires = None
+            if evidence and days is not None and evidence.get("last"):
+                try:
+                    expires = (dt.datetime.fromisoformat(evidence["last"]) + dt.timedelta(days=days)).date().isoformat()
+                except ValueError:
+                    pass
+            rows.append({"task": task, "executor": key[0], "model": key[1], "discovered": "yes",
+                         "tested": f"yes ({evidence['task']})" if evidence else "no",
+                         "authorized": "yes" if authorized else f"no ({record.get('status')})",
+                         "expires": expires or ("no date" if evidence else "-")})
+        listed = {(r.get("executor"), r.get("model")) for r in found}
+        for key, evidence in sorted(proven.items(), key=lambda kv: (str(kv[0][0]), str(kv[0][1]))):
+            if key in listed:
+                continue
+            # Proven by the bench but not in the coverage, such as a local Ollama model run through OpenCode.
+            expires = None
+            if days is not None and evidence.get("last"):
+                try:
+                    expires = (dt.datetime.fromisoformat(evidence["last"]) + dt.timedelta(days=days)).date().isoformat()
+                except ValueError:
+                    pass
+            rows.append({"task": task, "executor": key[0], "model": key[1], "discovered": "not in the coverage",
+                         "tested": f"yes ({evidence['task']})", "authorized": "decided by the gate at run time",
+                         "expires": expires or "no date"})
+    return rows
 
 
 def is_installed(model: str | None, info: dict) -> bool:
@@ -744,10 +891,94 @@ def pick_ollama_model(oconf: dict, info: dict, measured: dict | None = None, nee
     return None, "no preferred chat model is installed, or it runs partly on the CPU"
 
 
+# Health: what failed recently, so a failing model is skipped until its cooldown ends
+
+
+AUTH_FAIL = re.compile(r"\b40[13]\b|unauthori[sz]ed|forbidden|invalid api key|api key", re.IGNORECASE)
+DOWN = re.compile(r"connection refused|econnrefused|could not connect|\b50[234]\b|service unavailable|overloaded|unreachable", re.IGNORECASE)
+
+
+def failure_code(exit_code: int, timeout: bool, text: str) -> str | None:
+    """timeout, rate_limit, auth or unavailable. None for success or a failure that says nothing about the provider."""
+    if timeout:
+        return "timeout"
+    if exit_code == 0:
+        return None
+    for code, pattern in (("rate_limit", RATE_LIMIT), ("auth", AUTH_FAIL), ("unavailable", DOWN)):
+        if pattern.search(text):
+            return code
+    return None
+
+
+def health_file() -> Path:
+    return home() / "health.json"
+
+
+def load_health() -> dict:
+    try:
+        data = json.loads(health_file().read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def health_key(executor: str, model: str | None) -> str:
+    return f"{executor}|{model or ''}"
+
+
+def record_health(executor: str, model: str | None, code: str | None, conf: dict, at: dt.datetime | None = None) -> None:
+    """A failure code starts a cooldown taken from policy. Success (code None) clears the entry."""
+    data = load_health()
+    key = health_key(executor, model)
+    if code is None:
+        if data.pop(key, None) is None:
+            return
+    else:
+        at = at or dt.datetime.now(dt.timezone.utc)
+        seconds = ((conf.get("health") or {}).get("cooldown_s") or {}).get(code, 0)
+        data[key] = {"code": code, "at": at.replace(microsecond=0).isoformat(),
+                     "until": (at + dt.timedelta(seconds=seconds)).replace(microsecond=0).isoformat(),
+                     "count": int((data.get(key) or {}).get("count", 0)) + 1}
+    write_json(health_file(), data)
+
+
+PROVIDER_CODES = {"rate-limit": "rate_limit", "auth": "auth", "unavailable": "unavailable", "network": "unavailable"}
+
+
+def call_failure_code(error: Exception) -> str | None:
+    """Health code for a failed Ollama or API call. A reply the model got wrong says nothing about its health."""
+    if isinstance(error, providers.ProviderError):
+        return PROVIDER_CODES.get(error.kind)
+    if isinstance(error, TimeoutError) or isinstance(getattr(error, "reason", None), TimeoutError):
+        return "timeout"
+    if isinstance(error, (OSError, urllib.error.URLError)):
+        return "unavailable"
+    return None
+
+
+def cooling_set(at: dt.datetime | None = None) -> dict:
+    """(executor, model) -> entry for everything whose cooldown has not ended."""
+    at = at or dt.datetime.now(dt.timezone.utc)
+    found = {}
+    for key, entry in load_health().items():
+        try:
+            if dt.datetime.fromisoformat(entry["until"]) > at:
+                executor, _, model = key.partition("|")
+                found[(executor, model)] = entry
+        except (KeyError, TypeError, ValueError):
+            continue
+    return found
+
+
 def eligible(candidate, task, repo, input_chars, conf, local, caps, measured=None, mode=None, proven=False,
-             catalog=None) -> tuple[bool, str, str | None]:
+             catalog=None, cool=None) -> tuple[bool, str, str | None]:
     """Whether a candidate may do the task, why, and with which model. Cost and privacy go through gate()."""
     measured = measured or {}
+    cool = cool or {}
+
+    def cooled(executor, model):
+        entry = cool.get((executor, model or ""))
+        return f"{model or executor} failed with {entry['code']} and rests until {entry['until']}" if entry else None
     if candidate == "claude":
         ok, why = gate("claude", None, repo, conf, local, mode, caps, catalog)
         return ok, why, None
@@ -761,16 +992,42 @@ def eligible(candidate, task, repo, input_chars, conf, local, caps, measured=Non
         model, note = pick_ollama_model(oconf, info, measured, (conf.get("needs") or {}).get(task), proven, catalog)
         if not model:
             return False, note, None
+        if cooled("ollama", model):
+            return False, cooled("ollama", model), None
         ok, why = gate("ollama", model, repo, conf, local, mode, caps, catalog)
         return ok, (note if ok else why), (model if ok else None)
+    if candidate == "colibri":
+        info = caps.get("colibri") or {}
+        if not (caps.get("opencode") or {}).get("path"):
+            return False, "OpenCode is not installed, and it is what runs Colibri's model", None
+        if not info.get("up") or not info.get("models"):
+            return False, "Colibri is not running (python scripts/colibri.py ensure)", None
+        model = f"colibri/{info['models'][0]}"
+        if cooled("colibri", model):
+            return False, cooled("colibri", model), None
+        stats = measured.get(("colibri", model))
+        failed = failed_models(task, conf).get(("colibri", model))
+        if failed and not stats:
+            return False, f"{model} failed the bench class of this task (pass rate {failed['pass_rate']} in {failed['runs']} runs)", None
+        if proven and not stats:
+            return False, f"{model} has not passed the bench class of this task", None
+        ok, why = gate("colibri", model, repo, conf, local, mode, caps, catalog)
+        if not ok:
+            return False, why, None
+        return True, why + (". Verified on this machine" if stats else ". Not measured yet"), model
     if candidate == "opencode":
         if not (caps.get("opencode") or {}).get("path"):
             return False, "OpenCode is not installed", None
-        models = checked_free_models(local, conf)
+        # Local Ollama models that passed the bench of this task also run through OpenCode, with no remote call.
+        local_proven = [m for (e, m) in measured if e == "opencode" and m.startswith("ollama/")]
+        models = [*checked_free_models(local, conf), *[m for m in local_proven if m not in checked_free_models(local, conf)]]
         if not models:
             return False, "no free model checked by the owner in the last days (local.yml free_models)", None
         pool, refused = [], []
         for model in models:
+            if cooled("opencode", model):
+                refused.append((model, cooled("opencode", model)))
+                continue
             ok, why = gate("opencode", model, repo, conf, local, mode, caps, catalog)
             (pool if ok else refused).append((model, why))
         if not pool:
@@ -799,6 +1056,9 @@ def eligible(candidate, task, repo, input_chars, conf, local, caps, measured=Non
             if provider not in known:
                 refused.append(f"{model}: no provider named {provider!r} in settings/providers.yml")
                 continue
+            if cooled("api", model):
+                refused.append(cooled("api", model))
+                continue
             lacking = providers.missing_env(known[provider])
             listed = next((m for m in (providers.cached(provider) or {}).get("models", []) if m["id"] == name), {})
             if lacking:
@@ -817,7 +1077,7 @@ def eligible(candidate, task, repo, input_chars, conf, local, caps, measured=Non
 
 def route(task: str, repo: Path, risk: str = "green", files: int = 1, input_chars: int = 0,
           conf: dict | None = None, local: dict | None = None, caps: dict | None = None, mode: str | None = None,
-          catalog: dict | None = None) -> dict:
+          catalog: dict | None = None, cool: dict | None = None) -> dict:
     """Hard limits first (a program, cost, privacy, capability, proof), then the fastest candidate that passed them."""
     conf = conf or policy()
     local = local if local is not None else local_config()
@@ -828,7 +1088,7 @@ def route(task: str, repo: Path, risk: str = "green", files: int = 1, input_char
     cls, cls_source = privacy_class(repo, conf, local)
     rule = (conf.get("risk") or {}).get(risk) or {}
     decision = {"task": task, "risk": risk, "mode": mode_name, "privacy": cls, "review": rule.get("review", "checks"),
-                "executor": None, "model": None, "reasons": [], "rejected": []}
+                "executor": None, "model": None, "reasons": [], "rejected": [], "fallbacks": []}
     known = task in conf["tasks"]
     if known and task in TOOL_TASKS:
         decision["executor"] = "tools"
@@ -854,9 +1114,15 @@ def route(task: str, repo: Path, risk: str = "green", files: int = 1, input_char
         # The file count raises the proof class, never lowers it.
         proven, classes = True, list(tier["classes"])
     measured = measured_models(task, conf, classes)
+    cool = cooling_set() if cool is None else cool
     for candidate in candidates:
         needs_proof = proven
-        ok, why, model = eligible(candidate, task, repo, input_chars, conf, local, caps, measured, mode, needs_proof, catalog)
+        ok, why, model = eligible(candidate, task, repo, input_chars, conf, local, caps, measured, mode, needs_proof, catalog, cool)
+        if ok and decision["executor"]:
+            # Later candidates that also qualify. A Colibri task has none: it never moves to another model on its own.
+            if decision["executor"] != "colibri" and candidate != "colibri":
+                decision["fallbacks"].append({"executor": candidate, "model": model})
+            continue
         if ok:
             decision.update(executor=candidate, model=model)
             decision["reasons"].append(why)
@@ -864,14 +1130,16 @@ def route(task: str, repo: Path, risk: str = "green", files: int = 1, input_char
             if stats:
                 decision["reasons"].append(f"measured on this machine: {stats['runs']} runs, pass rate {stats['pass_rate']}, "
                                            f"p50 {stats['p50_s']}s, p90 {stats['p90_s']}s")
-            break
+            continue
         if needs_proof and tier and tier.get("classes"):
             why = f"{files} files is more than {limits['edit_small_max_files']}. {why[0].upper()}{why[1:]}"
         decision["rejected"].append({"executor": candidate, "why": why})
     if decision["executor"] is None:
         decision["executor"] = "blocked"
+        refused = " ".join(f"{item['executor']}: {item['why']}." for item in decision["rejected"])
         decision["reasons"].append(f"no executor is allowed in cost mode {mode_name} ({mode_source}) for a {cls} folder ({cls_source}). "
-                                   "Do it with tools, reduce the task, or ask the owner. Nothing paid is used on its own")
+                                   + (f"Refused: {refused} " if refused else "")
+                                   + "Do it with tools, reduce the task, or ask the owner. Nothing paid is used on its own")
     return decision
 
 
@@ -1007,6 +1275,13 @@ def delegate_opencode(repo: Path, task: str, allowed: list[str], test: str | Non
                 "repo": str(repo), "task": task, "allowed": allowed, "test": test, "checks": {},
                 "cost_mode": cost_mode(conf, local, mode)[0]}
     set_state(run_data, "planned")
+    if executor == "colibri":
+        # No silent substitution: a stopped Colibri blocks the run, it never falls back to another model.
+        found = detect_colibri(conf["executors"]["colibri"])
+        if not found["up"] or not found["models"]:
+            set_state(run_data, "blocked", "Colibri is not running (python scripts/colibri.py ensure). No other model was used")
+            return run_data
+        model = model or f"colibri/{found['models'][0]}"
     if executor == "opencode" and not model:
         models = checked_free_models(local, conf)
         model = models[0] if models else None
@@ -1037,6 +1312,10 @@ def delegate_opencode(repo: Path, task: str, allowed: list[str], test: str | Non
     run_data["executor_result"] = {"exit": result["exit"], "seconds": result["seconds"], "timeout": result["timeout"],
                                    "stdout_tail": tail(result["stdout"], size), "stderr_tail": tail(result["stderr"], size),
                                    "rate_limited": result["exit"] != 0 and bool(RATE_LIMIT.search(result["stdout"] + result["stderr"]))}
+    code = failure_code(result["exit"], result["timeout"], result["stdout"] + result["stderr"])
+    run_data["executor_result"]["failure_code"] = code
+    if executor in ("opencode", "colibri") and (code or result["exit"] == 0):
+        record_health(executor, model, code, conf)
     (worktree / TASK_FILE).unlink(missing_ok=True)
     changes, ignored = changed_files(worktree, base, conf.get("generated"))
     for rel in ignored:
@@ -1130,10 +1409,13 @@ def delegate_ollama(prompt: str, model: str | None = None, want_json: bool = Fal
     try:
         reply = ollama_chat(payload, conf)
     except (OSError, ValueError, urllib.error.URLError) as error:
+        if call_failure_code(error):
+            record_health("ollama", model, call_failure_code(error), conf)
         run_data["error"] = str(error)[:300]
         run_data["checks"]["reply"] = "ERROR"
         set_state(run_data, "failed", "Ollama did not answer")
         return run_data
+    record_health("ollama", model, None, conf)
     seconds = round(time.monotonic() - started, 2)
     answer = (reply.get("message") or {}).get("content", "")
     run_data.update(answer=answer, seconds=seconds, effective_model=reply.get("model"), metrics={k: reply.get(k) for k in (
@@ -1432,14 +1714,17 @@ def delegate_api(prompt: str, model: str, want_json: bool = False, untrusted: st
         reply = providers.chat(pconf, name, [{"role": "user", "content": content, **({"images": images} if images else {})}],
                                want_json=want_json, timeout=conf["limits"]["ollama_timeout_s"])
     except providers.ProviderError as error:
+        if call_failure_code(error):
+            record_health("api", model, call_failure_code(error), conf)
         run_data["error"] = f"{error.kind}: {error}"[:300]
         run_data["checks"]["reply"] = "ERROR"
         set_state(run_data, "failed", f"the provider did not answer ({error.kind})")
         return run_data
+    record_health("api", model, None, conf)
     answer = reply["message"].get("content", "")
-    run_data.update(answer=answer, seconds=round(time.monotonic() - started, 2), effective_model=reply.get("model"), usage=reply.get("usage"))
+    run_data.update(answer=answer, seconds=round(time.monotonic() - started, 2), effective_model=reply.get("model"), effective_provider=reply.get("provider"), usage=reply.get("usage"))
     run_data["checks"]["reply"] = "PASS" if answer.strip() else "FAIL"
-    if not providers.same_model(name, reply.get("model")):
+    if not providers.is_gateway(pconf) and not providers.same_model(name, reply.get("model")):
         run_data["checks"]["effective_model"] = "FAIL"
     if reply.get("charged"):
         run_data["checks"]["no_charge"] = "FAIL"
@@ -1454,9 +1739,9 @@ def delegate_api(prompt: str, model: str, want_json: bool = False, untrusted: st
 def bench_run(task: str, executor: str, model: str | None, **options) -> dict:
     """Run one bench task. A row with `skipped` did not run and is not kept in the history."""
     if task in bench_tasks.AGENT_TASKS:
-        if executor not in {"opencode", "claude"}:
+        if executor not in {"opencode", "claude", "colibri"}:
             return {"task": task, "executor": executor, "model": model,
-                    "skipped": f"{task} needs a coding agent: opencode:<model>, or claude"}
+                    "skipped": f"{task} needs a coding agent: opencode:<model>, colibri:colibri/<id>, or claude"}
         options.pop("caps", None)
         options.pop("time_limit_s", None)
         return bench_agent(task, executor, model, **options)
@@ -1604,8 +1889,11 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--input-chars", type=int, default=0)
     p.add_argument("--mode", choices=modes, help="a stricter cost mode for this run")
     p.add_argument("--json", action="store_true")
+    p = sub.add_parser("models")
+    p.add_argument("--mode", choices=modes, help="a stricter cost mode for this run")
+    p.add_argument("--json", action="store_true")
     p = sub.add_parser("delegate")
-    p.add_argument("executor", choices=["opencode", "ollama", "api"])
+    p.add_argument("executor", choices=["opencode", "ollama", "colibri", "api"])
     p.add_argument("--repo", type=Path, default=Path.cwd())
     p.add_argument("--task", help="the task in one or a few lines")
     p.add_argument("--task-file", type=Path)
@@ -1667,6 +1955,18 @@ def main(argv: list[str] | None = None) -> int:
         decision = route(args.task, args.repo, args.risk, args.files, args.input_chars, mode=args.mode)
         emit(decision, args.json)
         return 0 if decision["executor"] != "blocked" else 3
+    if args.command == "models":
+        import analyze
+        conf, local = policy(), local_config()
+        found = analyze.coverage(conf, local, cached_capabilities() or doctor(), model_catalog(), args.mode)
+        rows = model_states(found, conf)
+        if args.json:
+            emit(rows, True)
+        elif rows:
+            print_table(rows, ["task", "executor", "model", "discovered", "tested", "authorized", "expires"])
+        else:
+            print("no model is tested or authorized for any task type yet")
+        return 0
     if args.command == "delegate":
         task = args.task_file.read_text(encoding="utf-8") if args.task_file else (args.task or "")
         if not task.strip():
@@ -1681,7 +1981,8 @@ def main(argv: list[str] | None = None) -> int:
                                      mode=args.mode)
         else:
             result = delegate_opencode(args.repo, task, args.allow, args.test, model=args.model, protect=args.protect,
-                                       untrusted=untrusted, keep=args.keep, mode=args.mode)
+                                       untrusted=untrusted, keep=args.keep, mode=args.mode,
+                                       executor="colibri" if args.executor == "colibri" else "opencode")
         emit({k: v for k, v in result.items() if k not in {"history"}}, True)
         return 0 if result["state"] == "verified" else 1
     if args.command == "runs":

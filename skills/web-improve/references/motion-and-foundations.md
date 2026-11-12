@@ -39,6 +39,29 @@ Check the radar of the standard before adding any of these, and the current lice
 - Playwright MCP explores a page while working. Playwright Test is the check that stays in the repository. axe-core adds automatic accessibility checks, and a keyboard walk completes them.
 - Chrome DevTools MCP on demand, to trace a scene that stutters. Emulation is not a measurement on a real device.
 
-## Left for a second change
+## Site performance budget
 
-A performance budget for the whole site, a chart palette that stays distinct with color blindness and in dark theme, a full form pattern, and the preview shown when a link is shared.
+The profile fixes two numbers taken from web.dev: the critical path under 170 KB compressed and minified, and interactive in under 5 s on a Moto G4 class phone over slow 3G. Core Web Vitals thresholds stay as in the profile. Write the budget in `docs/decisions/`, split it per page type if the content differs, and state the device and network of each measurement. A page that breaks the budget is named in the report with its measured size and time. Source: https://web.dev/articles/performance-budgets-101
+
+## Chart palette for color blindness
+
+Use the Okabe-Ito palette for series and categories. Take the colors in this order, so neighbors differ the most.
+
+| Color | Hex | Contrast on white | Contrast on #121212 |
+| --- | --- | --- | --- |
+| Orange | #E69F00 | 2.25 | 8.32 |
+| Sky blue | #56B4E9 | 2.31 | 8.12 |
+| Bluish green | #009E73 | 3.42 | 5.48 |
+| Yellow | #F0E442 | 1.32 | 14.17 |
+| Blue | #0072B2 | 5.19 | 3.61 |
+| Vermillion | #D55E00 | 3.87 | 4.84 |
+| Reddish purple | #CC79A7 | 3.06 | 6.12 |
+| Black | #000000 | 21.00 | 1.12 |
+
+The ratios are computed here with the WCAG relative luminance formula. They are not part of the source.
+
+- Color is never the only signal. Each series also has a direct label, a line style or a marker shape (WCAG 1.4.1).
+- Marks need 3:1 against their background (WCAG 1.4.11). On white, orange, sky blue and yellow fail, so give them a 1 px dark outline or use a dark background. In dark theme use white in place of black.
+- Use no more than five series in one chart. Beyond that, split the chart or highlight one series.
+- Check: view the chart in grayscale and confirm every series is still told apart by its label or marker.
+- Sources: Okabe and Ito, Color Universal Design (https://jfly.uni-koeln.de/color/) and the hex values at https://siegal.bio.nyu.edu/color-palette/.

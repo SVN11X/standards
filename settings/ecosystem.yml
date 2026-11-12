@@ -1,0 +1,29 @@
+# What scripts/ecosystem.py installs, checks and repairs. Versions are recorded, never pinned to a guess.
+# A model here is downloaded only when it is missing. Nothing in this file deletes or replaces an installed model.
+version: 1
+
+ollama:
+  keep: [qwen3.5:4b, qwen3.5:9b, qwen2.5:7b, qwen3-embedding:0.6b]
+  install: [qwen2.5-coder:7b, gpt-oss:20b]
+  # OpenCode sends a prompt of about 12000 tokens and Ollama cut it to 2050 with its default context, so no
+  # model ever saw the task. A variant adds num_ctx and downloads nothing. The base model stays as it is.
+  variants:
+    qwen3.5-9b-ctx16k: {from: "qwen3.5:9b", num_ctx: 16384}
+    qwen2.5-coder-7b-ctx16k: {from: "qwen2.5-coder:7b", num_ctx: 16384}
+    gpt-oss-20b-ctx16k: {from: "gpt-oss:20b", num_ctx: 16384}
+
+colibri:
+  repo: https://github.com/JustVugg/colibri
+  tag: v2.1.0
+  model: qwen3-coder-30b
+  backend: vulkan
+  models_dir: ~/colibri-models
+  # Needed to build the Vulkan engine on Windows. Installed with winget and pacman, never by a downloaded script.
+  msys2:
+    winget_id: MSYS2.MSYS2
+    root: C:\msys64
+    packages: [mingw-w64-ucrt-x86_64-gcc, mingw-w64-ucrt-x86_64-libgomp, make, mingw-w64-ucrt-x86_64-vulkan-headers,
+               mingw-w64-ucrt-x86_64-vulkan-loader, mingw-w64-ucrt-x86_64-shaderc]
+
+tools:
+  required: [git, gh, python, ollama, opencode]

@@ -122,6 +122,74 @@ class Route(Base):
         self.assertEqual({key[1]: row["task"] for key, row in passed.items()}, {"b:1b": "classify", "c:1b": "summarize"})
         self.assertEqual(len(orchestrate.measured_models("classify", orchestrate.policy())), 3)
 
+    def test_old_runs_and_other_identities_do_not_count(self):
+        now = dt.datetime.now(dt.timezone.utc)
+        def row(executor, days=1, **hardware):
+            return {"task": "fix-bug", "executor": executor, "model": "m", "seconds": 5, "verified": True,
+                    "date": (now - dt.timedelta(days=days)).isoformat(), "hardware": hardware}
+        current = {"opencode": "1.4.2", "gpu": {"name": "RTX A"}}
+        keep = orchestrate.fresh_rows([row("opencode", opencode="1.4.9"), row("opencode", 31, opencode="1.4.9"),
+                                       row("opencode", opencode="1.5.0"), row("ollama", gpu={"name": "RTX A"}),
+                                       row("ollama", gpu={"name": "RTX B"}), row("opencode", opencode=None)], 30, current, now)
+        self.assertEqual([(r["executor"], r["hardware"]) for r in keep],
+                         [("opencode", {"opencode": "1.4.9"}), ("ollama", {"gpu": {"name": "RTX A"}}), ("opencode", {"opencode": None})])
+        legacy = {"task": "fix-bug", "executor": "opencode", "model": "m", "seconds": 5, "verified": True}
+        self.assertEqual(orchestrate.fresh_rows([legacy], 30, current, now), [legacy])
+
+    def test_models_lifecycle_states_and_expiry(self):
+        now = dt.datetime.now(dt.timezone.utc)
+        stamp = (now - dt.timedelta(days=10)).isoformat()
+        rows = [{"task": "classify", "executor": "ollama", "model": "a:1b", "seconds": 5, "verified": True, "date": stamp,
+                 "grader": bench_tasks.grader_version("classify")}] * 3
+        orchestrate.bench_file().write_text("\n".join(json.dumps(r) for r in rows) + "\n", encoding="utf-8")
+        found = [{"executor": "ollama", "model": "a:1b", "status": "eligible", "tasks": ["classify"]},
+                 {"executor": "ollama", "model": "b:1b", "status": "eligible", "tasks": ["classify"]},
+                 {"executor": "ollama", "model": "c:1b", "status": "unknown-cost", "tasks": []}]
+        table = {(r["task"], r["model"]): r for r in orchestrate.model_states(found, orchestrate.policy(), now)}
+        tested = table[("classify", "a:1b")]
+        self.assertEqual((tested["tested"], tested["authorized"]), ("yes (classify)", "yes"))
+        self.assertEqual(tested["expires"], (dt.datetime.fromisoformat(stamp) + dt.timedelta(days=30)).date().isoformat())
+        self.assertEqual(table[("classify", "b:1b")]["tested"], "no")
+        self.assertNotIn(("classify", "c:1b"), table)
+
+    def test_a_model_that_failed_the_class_is_not_a_model_nobody_measured(self):
+        def rows(model, verified, n):
+            return [{"task": "fix-bug", "executor": "colibri", "model": model, "seconds": 600, "verified": verified,
+                     "grader": bench_tasks.grader_version("fix-bug")}] * n
+        history = rows("colibri/slow", False, 2) + rows("colibri/once", False, 1) + rows("colibri/good", True, 3)
+        orchestrate.bench_file().write_text("\n".join(json.dumps(r) for r in history) + "\n", encoding="utf-8")
+        conf = orchestrate.policy()
+        failed = orchestrate.failed_models("edit-small", conf)
+        self.assertEqual({key[1] for key in failed}, {"colibri/slow"})
+        self.assertEqual({key[1] for key in orchestrate.measured_models("edit-small", conf)}, {"colibri/good"})
+
+    def test_a_proven_local_ollama_model_is_a_candidate_of_the_opencode_executor(self):
+        conf = orchestrate.policy()
+        stats = {"runs": 3, "pass_rate": 1.0, "p50_s": 300.0}
+        caps = {"opencode": {"path": "opencode"}}
+        measured = {("opencode", "ollama/m:9b"): stats}
+        ok, _, model = orchestrate.eligible("opencode", "edit-small", Path("."), 0, conf, {}, caps, measured,
+                                            "local-only", False, {}, set())
+        self.assertEqual((ok, model), (True, "ollama/m:9b"))
+        ok, _, model = orchestrate.eligible("opencode", "edit-small", Path("."), 0, conf, {}, caps, {},
+                                            "local-only", False, {}, set())
+        self.assertFalse(ok)
+
+    def test_models_lists_a_proven_model_the_coverage_does_not_know(self):
+        rows = [{"task": "fix-bug", "executor": "opencode", "model": "ollama/m:9b", "seconds": 300, "verified": True,
+                 "date": dt.datetime.now(dt.timezone.utc).isoformat(), "grader": bench_tasks.grader_version("fix-bug")}] * 3
+        orchestrate.bench_file().write_text("\n".join(json.dumps(r) for r in rows) + "\n", encoding="utf-8")
+        table = {(r["task"], r["model"]): r for r in orchestrate.model_states([], orchestrate.policy())}
+        row = table[("edit-small", "ollama/m:9b")]
+        self.assertEqual((row["tested"], row["discovered"]), ("yes (fix-bug)", "not in the coverage"))
+
+    def test_stale_history_does_not_prove_a_model(self):
+        old = (dt.datetime.now(dt.timezone.utc) - dt.timedelta(days=90)).isoformat()
+        rows = [{"task": "classify", "executor": "ollama", "model": "a:1b", "seconds": 5, "verified": True, "date": old,
+                 "grader": bench_tasks.grader_version("classify")}] * 3
+        orchestrate.bench_file().write_text("\n".join(json.dumps(r) for r in rows) + "\n", encoding="utf-8")
+        self.assertEqual(orchestrate.measured_models("classify", orchestrate.policy()), {})
+
     def test_runs_graded_by_an_older_rule_do_not_count(self):
         old = [{"task": "summarize", "executor": "ollama", "model": "a:1b", "seconds": 5, "verified": False}] * 3
         new = [{"task": "summarize", "executor": "ollama", "model": "a:1b", "seconds": 6, "verified": True}] * 3
