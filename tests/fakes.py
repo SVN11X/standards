@@ -118,6 +118,9 @@ def answer(body: dict) -> dict:
     if prompt.startswith("Review this diff"):
         case = next(c for c in bench_tasks.REVIEW_CASES if f"+++ b/{c['file']}" in prompt)
         return {"content": json.dumps(bench_tasks.review_reference(case))}
+    if prompt.startswith("Split this task"):
+        spec = next(s for s in bench_tasks.DECOMPOSE_SPECS if f"Task: {s['task']}" in prompt)
+        return {"content": json.dumps({"units": spec["reference"]})}
     if prompt.startswith("Two versions"):
         pair = next(p for p in bench_tasks.sample_pairs() if {p["a"], p["b"]} == set(images))
         return {"content": json.dumps({"choice": "a" if images[0] == pair[pair["choice"]] else "b", "reason": "clearer"})}

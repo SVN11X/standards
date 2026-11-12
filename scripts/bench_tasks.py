@@ -22,11 +22,11 @@ PASS_ACCURACY = 0.75
 # What a model must be able to do for a chat task. Tasks with a baseline also run on a program without AI.
 CHAT_TASKS = {"classify": [], "extract": [], "summarize": [], "web-subprofile": [], "tool-call": ["tools"],
               "vision": ["vision"], "design-judge": ["vision"],
-              "review-diff": []}
+              "review-diff": [], "decompose": []}
 BASELINES = {"classify", "extract", "web-subprofile"}
 # Version of the rule that grades each task. Raise it when a grader changes what it accepts: runs graded by an older
 # rule stay in the history and stop counting. A task that is not listed is at version 1.
-GRADERS = {"summarize": 3, "tool-call": 2, "refactor-module": 1, "review-diff": 1}
+GRADERS = {"summarize": 3, "tool-call": 2, "refactor-module": 1, "review-diff": 1, "decompose": 1}
 
 
 def grader_version(task: str | None) -> int:
@@ -319,7 +319,8 @@ def request_estimate(task: str) -> int:
     """About how many requests one run of a chat task sends, to plan against a provider's daily limit."""
     return {"classify": len(CLASSIFY), "extract": len(EXTRACT), "summarize": len(SUMMARIZE), "web-subprofile": len(subprofile_items()),
             "tool-call": 3 * len(TOOL_CASES), "vision": len(VISION), "design-judge": 2 * len(design_pairs()[0]),
-            "review-diff": len(REVIEW_CASES)}.get(task, 1)
+            "review-diff": len(REVIEW_CASES),
+            "decompose": len(DECOMPOSE_SPECS)}.get(task, 1)
 
 
 # review-diff
@@ -399,6 +400,69 @@ def review_ok(case: dict, parsed) -> tuple[bool, str]:
     return hit, "" if hit else f"missed {case['id']} at {case['file']}:{start}-{end}"
 
 
+# decompose
+
+def _unit(uid: str, title: str, files: list[str], deps: list[str] | None = None) -> dict:
+    return {"id": uid, "title": title, "task_type": "edit-small", "goal": title, "allowed": files,
+            "acceptance": {"test": "python -m unittest"}, "depends_on": deps or []}
+
+
+DECOMPOSE_SPECS = [
+    {"id": "tax", "task": "Add tax support: pricing computes the tax, the cart total includes it, the receipt prints it and the README documents it.",
+     "files": ["shop/pricing.py", "shop/cart.py", "shop/receipt.py", "tests/test_shop.py", "README.md"],
+     "must_touch": ["shop/pricing.py", "shop/cart.py", "shop/receipt.py", "README.md"], "min_units": 3,
+     "reference": [_unit("u1", "Tax in pricing", ["shop/pricing.py"]), _unit("u2", "Tax in the cart", ["shop/cart.py"], ["u1"]),
+                   _unit("u3", "Tax on the receipt", ["shop/receipt.py"], ["u2"]), _unit("u4", "Document tax", ["README.md"])]},
+    {"id": "verbose", "task": "Add a --verbose flag: the argument parser reads it, the logger gets debug levels, the config sets a default, "
+                              "main wires all three and docs/usage.md describes it.",
+     "files": ["cli/args.py", "cli/config.py", "cli/log.py", "cli/main.py", "docs/usage.md", "tests/test_cli.py"],
+     "must_touch": ["cli/args.py", "cli/config.py", "cli/log.py", "cli/main.py", "docs/usage.md"], "min_units": 4,
+     "reference": [_unit("u1", "Parse the flag", ["cli/args.py"]), _unit("u2", "Debug levels", ["cli/log.py"]),
+                   _unit("u3", "Config default", ["cli/config.py"]),
+                   _unit("u4", "Wire it in main", ["cli/main.py"], ["u1", "u2", "u3"]), _unit("u5", "Document the flag", ["docs/usage.md"])]},
+    {"id": "rename", "task": "Rename parse to parse_text in lib/a.py. lib/b.py and lib/c.py import it and must follow. Bump the version in "
+                             "pyproject.toml and add a line to CHANGELOG.md.",
+     "files": ["lib/a.py", "lib/b.py", "lib/c.py", "pyproject.toml", "CHANGELOG.md", "tests/test_lib.py"],
+     "must_touch": ["lib/a.py", "lib/b.py", "lib/c.py", "pyproject.toml", "CHANGELOG.md"], "min_units": 4,
+     "reference": [_unit("u1", "Rename in a", ["lib/a.py"]), _unit("u2", "Follow in b", ["lib/b.py"], ["u1"]),
+                   _unit("u3", "Follow in c", ["lib/c.py"], ["u1"]), _unit("u4", "Bump the version", ["pyproject.toml"]),
+                   _unit("u5", "Changelog line", ["CHANGELOG.md"], ["u4"])]},
+]
+DECOMPOSE_PROMPT = ("Split this task into work units for coding agents. Answer JSON "
+                    '{"units": [{"id": "u1", "title": "...", "task_type": "edit-small", "goal": "...", "allowed": ["path"], '
+                    '"acceptance": {"test": "python -m unittest"}, "depends_on": []}]}. Use only files from the list. Every file under '
+                    "Must change must be in the allowed list of some unit. Units that do not depend on each other, directly or "
+                    "through others, must not share a file.\n")
+
+
+def decompose_prompt(spec: dict) -> str:
+    return (DECOMPOSE_PROMPT + f"Task: {spec['task']}\nFiles: {', '.join(spec['files'])}\n"
+            f"Must change: {', '.join(spec['must_touch'])}")
+
+
+def decompose_ok(spec: dict, parsed) -> tuple[bool, str]:
+    """A split passes when workplan.validate accepts it, it has enough units, every file to change is in some unit and
+    units that may run together share no file. validate also rejects a cycle in depends_on."""
+    import workplan
+    units = parsed.get("units") if isinstance(parsed, dict) else None
+    if not isinstance(units, list) or not units:
+        return False, "no units"
+    plan = {"plan_id": spec["id"], "goal": spec["task"], "units": units}
+    errors = workplan.validate(plan)
+    if errors:
+        return False, f"invalid plan: {errors[0]}"
+    if len(units) < spec["min_units"]:
+        return False, f"{len(units)} units, at least {spec['min_units']} needed"
+    covered = set().union(*(workplan.expand(unit, spec["files"]) for unit in units))
+    missing = sorted(set(spec["must_touch"]) - covered)
+    if missing:
+        return False, f"not covered: {missing[0]}"
+    clash = workplan.conflicts(plan, spec["files"])
+    if clash:
+        return False, f"parallel units {clash[0][0]} and {clash[0][1]}: {clash[0][2]}"
+    return True, ""
+
+
 # Running a chat task
 
 
@@ -450,6 +514,9 @@ def run_chat(task: str, ask=None, chat=None, baseline: bool = False, home: Path 
     elif task == "review-diff":
         for case in REVIEW_CASES:
             attempt(lambda: review_ok(case, ask(REVIEW_PROMPT + review_diff_text(case), None)))
+    elif task == "decompose":
+        for spec in DECOMPOSE_SPECS:
+            attempt(lambda: decompose_ok(spec, ask(decompose_prompt(spec), None)))
     else:
         raise ValueError(f"unknown chat task {task}")
     return {"task": name, "accuracy": round(passed / total, 2) if total else 0.0, "items": total, "notes": notes}

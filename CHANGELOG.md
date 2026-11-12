@@ -6,6 +6,7 @@ All notable changes to this standard are documented here. The format follows [Ke
 
 ### Added
 
+- Bench class `decompose`: three task specs where a model returns work units. `workplan.validate` rejects a bad schema, an unknown type or a cycle, then the grader checks the unit count, that every file to change is covered and that units able to run together share no file. A program grades it, grader version 1.
 - Bench class `review-diff`: six synthetic diffs of new files, each with one seeded defect. A diff passes when a finding names the file and overlaps the defect lines (a finding over ten lines or more does not count) and no high finding sits elsewhere. A program grades it, grader version 1.
 - Bench class `refactor-module`: an 8 file fixture where `slugify` is copied into three modules and must move to `app/text.py`. Hidden tests check the behavior and, with `ast`, that the function is defined once and imported by each module. It is the proof class of the `refactor` task type, grader version 1.
 - Seven executor-loop scenarios in the adversarial suite (`X.` ids): planner types, Claude as a unit executor, overlapping units, attempt budgets, invented review lines, the privacy class of worktrees and a stopped Colibri with no fallback. `tests/test_adversarial.py` breaks each one on purpose and expects it to fail.

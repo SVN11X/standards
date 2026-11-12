@@ -1,5 +1,6 @@
 """Graders of the bench classes review-diff and decompose. No model runs: each grader must pass the reference answer
 and fail a wrong one."""
+import copy
 import sys
 import unittest
 from pathlib import Path
@@ -57,6 +58,70 @@ class ReviewDiff(unittest.TestCase):
             return bench_tasks.review_reference(case)
         self.assertEqual(bench_tasks.run_chat("review-diff", ask=good)["accuracy"], 1.0)
         self.assertEqual(bench_tasks.run_chat("review-diff", ask=lambda p, i: {"findings": []})["accuracy"], 0.0)
+
+
+class Decompose(unittest.TestCase):
+    def setUp(self):
+        self.spec = bench_tasks.DECOMPOSE_SPECS[2]
+        self.ref = {"units": copy.deepcopy(self.spec["reference"])}
+
+    def grade(self, answer):
+        return bench_tasks.decompose_ok(self.spec, answer)
+
+    def test_three_specs_registered(self):
+        self.assertEqual(len(bench_tasks.DECOMPOSE_SPECS), 3)
+        self.assertIn("decompose", bench_tasks.CHAT_TASKS)
+        self.assertEqual(bench_tasks.grader_version("decompose"), 1)
+
+    def test_reference_passes(self):
+        for spec in bench_tasks.DECOMPOSE_SPECS:
+            self.assertEqual(bench_tasks.decompose_ok(spec, {"units": spec["reference"]}), (True, ""), spec["id"])
+
+    def test_reference_has_parallel_units(self):
+        import workplan
+        for spec in bench_tasks.DECOMPOSE_SPECS:
+            plan = {"plan_id": "p", "goal": "g", "units": spec["reference"]}
+            self.assertTrue(any(len(batch) > 1 for batch in workplan.batches(plan, spec["files"])), spec["id"])
+
+    def test_not_json_and_no_units_fail(self):
+        self.assertFalse(self.grade(None)[0])
+        self.assertFalse(self.grade({"units": []})[0])
+
+    def test_cycle_fails(self):
+        self.ref["units"][0]["depends_on"] = ["u2"]
+        ok, note = self.grade(self.ref)
+        self.assertFalse(ok)
+        self.assertIn("cycle", note)
+
+    def test_missing_coverage_fails(self):
+        self.ref["units"] = [u for u in self.ref["units"] if u["id"] != "u5"]
+        ok, note = self.grade(self.ref)
+        self.assertFalse(ok)
+        self.assertIn("not covered: CHANGELOG.md", note)
+
+    def test_parallel_units_sharing_a_file_fail(self):
+        self.ref["units"][2]["allowed"] = ["lib/b.py"]
+        self.ref["units"].append({**self.ref["units"][3], "id": "u6", "allowed": ["lib/c.py"], "depends_on": ["u1"]})
+        ok, note = self.grade(self.ref)
+        self.assertFalse(ok)
+        self.assertIn("shared file", note)
+
+    def test_one_big_unit_fails(self):
+        big = {**self.spec["reference"][0], "allowed": self.spec["must_touch"]}
+        self.assertIn("units, at least", self.grade({"units": [big]})[1])
+
+    def test_invalid_unit_fails_validate(self):
+        self.ref["units"][0]["task_type"] = "no-such-type"
+        self.assertIn("invalid plan", self.grade(self.ref)[1])
+        del self.ref["units"][0]["acceptance"]
+        self.assertFalse(self.grade(self.ref)[0])
+
+    def test_run_chat_scores_reference_and_wrong_model(self):
+        def good(prompt, images):
+            spec = next(s for s in bench_tasks.DECOMPOSE_SPECS if f"Task: {s['task']}" in prompt)
+            return {"units": spec["reference"]}
+        self.assertEqual(bench_tasks.run_chat("decompose", ask=good)["accuracy"], 1.0)
+        self.assertEqual(bench_tasks.run_chat("decompose", ask=lambda p, i: {"units": []})["accuracy"], 0.0)
 
 
 if __name__ == "__main__":
