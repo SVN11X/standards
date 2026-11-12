@@ -132,21 +132,41 @@ def windows_launch(launch: list[str]) -> list[str]:
     return list(launch)
 
 
+def kill_tree(proc: subprocess.Popen) -> None:
+    """Stop a process and everything it started. On Windows a wrapper such as opencode.cmd leaves its child alive
+    holding the output pipe, so killing only the parent made the timeout wait forever."""
+    try:
+        if os.name == "nt":
+            subprocess.run(["taskkill", "/T", "/F", "/PID", str(proc.pid)], capture_output=True, timeout=30, check=False)
+        else:
+            import signal
+            os.killpg(proc.pid, signal.SIGKILL)
+    except (OSError, subprocess.SubprocessError):
+        proc.kill()
+
+
 def run(cmd, cwd=None, timeout=60, env=None, shell=False) -> dict:
     started = time.monotonic()
     if not shell:
         cmd = resolve(cmd)
+    group = {"creationflags": subprocess.CREATE_NEW_PROCESS_GROUP} if os.name == "nt" else {"start_new_session": True}
     try:
-        result = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True, encoding="utf-8", errors="replace",
-                                timeout=timeout, env=env, shell=shell, check=False)
-        return {"exit": result.returncode, "stdout": result.stdout, "stderr": result.stderr,
-                "seconds": round(time.monotonic() - started, 2), "timeout": False}
-    except subprocess.TimeoutExpired as error:
-        out = error.stdout.decode("utf-8", "replace") if isinstance(error.stdout, bytes) else (error.stdout or "")
-        return {"exit": None, "stdout": out, "stderr": f"timed out after {timeout}s",
-                "seconds": round(time.monotonic() - started, 2), "timeout": True}
+        proc = subprocess.Popen(cmd, cwd=cwd, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                text=True, encoding="utf-8", errors="replace", env=env, shell=shell, **group)
     except OSError as error:
         return {"exit": None, "stdout": "", "stderr": str(error), "seconds": 0.0, "timeout": False}
+    try:
+        out, err = proc.communicate(timeout=timeout)
+        return {"exit": proc.returncode, "stdout": out, "stderr": err,
+                "seconds": round(time.monotonic() - started, 2), "timeout": False}
+    except subprocess.TimeoutExpired:
+        kill_tree(proc)
+        try:
+            out, _ = proc.communicate(timeout=10)
+        except subprocess.TimeoutExpired:
+            out = ""
+        return {"exit": None, "stdout": out or "", "stderr": f"timed out after {timeout}s",
+                "seconds": round(time.monotonic() - started, 2), "timeout": True}
 
 
 def git(repo: Path, *args, check=True) -> str:
