@@ -152,6 +152,29 @@ class Route(Base):
         self.assertEqual(table[("classify", "b:1b")]["tested"], "no")
         self.assertNotIn(("classify", "c:1b"), table)
 
+    def test_a_model_that_failed_the_class_is_not_a_model_nobody_measured(self):
+        def rows(model, verified, n):
+            return [{"task": "fix-bug", "executor": "colibri", "model": model, "seconds": 600, "verified": verified,
+                     "grader": bench_tasks.grader_version("fix-bug")}] * n
+        history = rows("colibri/slow", False, 2) + rows("colibri/once", False, 1) + rows("colibri/good", True, 3)
+        orchestrate.bench_file().write_text("\n".join(json.dumps(r) for r in history) + "\n", encoding="utf-8")
+        conf = orchestrate.policy()
+        failed = orchestrate.failed_models("edit-small", conf)
+        self.assertEqual({key[1] for key in failed}, {"colibri/slow"})
+        self.assertEqual({key[1] for key in orchestrate.measured_models("edit-small", conf)}, {"colibri/good"})
+
+    def test_a_proven_local_ollama_model_is_a_candidate_of_the_opencode_executor(self):
+        conf = orchestrate.policy()
+        stats = {"runs": 3, "pass_rate": 1.0, "p50_s": 300.0}
+        caps = {"opencode": {"path": "opencode"}}
+        measured = {("opencode", "ollama/m:9b"): stats}
+        ok, _, model = orchestrate.eligible("opencode", "edit-small", Path("."), 0, conf, {}, caps, measured,
+                                            "local-only", False, {}, set())
+        self.assertEqual((ok, model), (True, "ollama/m:9b"))
+        ok, _, model = orchestrate.eligible("opencode", "edit-small", Path("."), 0, conf, {}, caps, {},
+                                            "local-only", False, {}, set())
+        self.assertFalse(ok)
+
     def test_stale_history_does_not_prove_a_model(self):
         old = (dt.datetime.now(dt.timezone.utc) - dt.timedelta(days=90)).isoformat()
         rows = [{"task": "classify", "executor": "ollama", "model": "a:1b", "seconds": 5, "verified": True, "date": old,

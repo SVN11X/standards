@@ -706,6 +706,28 @@ def measured_models(task: str, conf: dict, classes: list[str] | None = None) -> 
     return found
 
 
+def failed_models(task: str, conf: dict, classes: list[str] | None = None) -> dict:
+    """Models with fresh runs in the class of this task type that did not reach the pass rate.
+
+    A model that failed is not the same as a model nobody measured. The first class a model was measured in decides,
+    as in `measured_models`, and `bench_fail_runs` runs are enough to call it failed.
+    """
+    limits = conf["limits"]
+    classes = classes if classes is not None else conf.get("proof", {}).get(task, [])
+    found: dict = {}
+    judged: set = set()
+    summary = summarize_bench(fresh_rows(bench_rows(), limits.get("bench_recheck_days"), hardware()))
+    for bench in classes:
+        rows = [row for row in summary if row["task"] == bench]
+        for row in rows:
+            key = (row["executor"], row["model"])
+            if (key not in judged and row["runs"] >= limits.get("bench_fail_runs", 2)
+                    and row["pass_rate"] < limits["bench_min_pass_rate"]):
+                found[key] = row
+        judged |= {(row["executor"], row["model"]) for row in rows}
+    return found
+
+
 def model_states(found: list[dict], conf: dict, now: dt.datetime | None = None) -> list[dict]:
     """Per model and task type: discovered (a coverage record exists), authorized (cost and privacy allow it and the
     task is listed for it) and tested (fresh bench evidence passes), with the date that evidence expires.
@@ -956,6 +978,9 @@ def eligible(candidate, task, repo, input_chars, conf, local, caps, measured=Non
         if cooled("colibri", model):
             return False, cooled("colibri", model), None
         stats = measured.get(("colibri", model))
+        failed = failed_models(task, conf).get(("colibri", model))
+        if failed and not stats:
+            return False, f"{model} failed the bench class of this task (pass rate {failed['pass_rate']} in {failed['runs']} runs)", None
         if proven and not stats:
             return False, f"{model} has not passed the bench class of this task", None
         ok, why = gate("colibri", model, repo, conf, local, mode, caps, catalog)
@@ -965,7 +990,9 @@ def eligible(candidate, task, repo, input_chars, conf, local, caps, measured=Non
     if candidate == "opencode":
         if not (caps.get("opencode") or {}).get("path"):
             return False, "OpenCode is not installed", None
-        models = checked_free_models(local, conf)
+        # Local Ollama models that passed the bench of this task also run through OpenCode, with no remote call.
+        local_proven = [m for (e, m) in measured if e == "opencode" and m.startswith("ollama/")]
+        models = [*checked_free_models(local, conf), *[m for m in local_proven if m not in checked_free_models(local, conf)]]
         if not models:
             return False, "no free model checked by the owner in the last days (local.yml free_models)", None
         pool, refused = [], []
