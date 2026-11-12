@@ -25,6 +25,12 @@ if Path("shop").is_dir():
     cart.write_text(cart.read_text().replace("line_total(price, quantity)", "line_total(price, quantity, discount)"))
     receipt = Path("shop/receipt.py")
     receipt.write_text(receipt.read_text().replace("{total % 100}", "{total % 100:02d}"))
+elif Path("app").is_dir():
+    for name in ("posts", "users", "tags"):
+        mod = Path("app/" + name + ".py")
+        body = mod.read_text().split(chr(10) * 3, 1)[1]
+        mod.write_text("from app.text import slugify\n\n\n" + body.lstrip("\n"))
+    Path("app/text.py").write_text('def slugify(text):\n    words = "".join(c.lower() if c.isalnum() else " " for c in text).split()\n    return "-".join(words)\n')
 elif "README.md" in task and "Usage" in task:
     readme = Path("README.md")
     readme.write_text(readme.read_text() + "\n## Usage\n\n`sum_even([1, 2])` returns 2. `count_words('a b')` returns 2.\n")

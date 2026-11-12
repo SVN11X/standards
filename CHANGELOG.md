@@ -6,6 +6,7 @@ All notable changes to this standard are documented here. The format follows [Ke
 
 ### Added
 
+- Bench class `refactor-module`: an 8 file fixture where `slugify` is copied into three modules and must move to `app/text.py`. Hidden tests check the behavior and, with `ast`, that the function is defined once and imported by each module. It is the proof class of the `refactor` task type, grader version 1.
 - Seven executor-loop scenarios in the adversarial suite (`X.` ids): planner types, Claude as a unit executor, overlapping units, attempt budgets, invented review lines, the privacy class of worktrees and a stopped Colibri with no fallback. `tests/test_adversarial.py` breaks each one on purpose and expects it to fail.
 - Execution report: `python scripts/execute.py report PLAN.json` prints one consolidated report per plan, built only from the saved state (status, commit, tests, review findings, retries, executor and model per unit). A value the state does not hold is null. The shape is `schemas/execution-report.schema.json`.
 - `orchestrate.py models` prints, per task type, whether a model is discovered, tested and authorized, with the date its bench evidence expires. Evidence comes from `fresh_rows`, discovery from the analyze coverage.

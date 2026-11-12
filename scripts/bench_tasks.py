@@ -3,7 +3,7 @@
 
 Chat tasks send short prompts and check the reply: classify, extract, summarize, web-subprofile, tool-call,
 vision and design-judge. Agent tasks give a coding agent a small repository and check it with acceptance
-tests the agent never saw: fix-bug, fix-multi and docs-small. scripts/orchestrate.py runs them.
+tests the agent never saw: fix-bug, fix-multi, docs-small and refactor-module (its hidden tests include an `ast` check). scripts/orchestrate.py runs them.
 """
 from __future__ import annotations
 
@@ -25,7 +25,7 @@ CHAT_TASKS = {"classify": [], "extract": [], "summarize": [], "web-subprofile": 
 BASELINES = {"classify", "extract", "web-subprofile"}
 # Version of the rule that grades each task. Raise it when a grader changes what it accepts: runs graded by an older
 # rule stay in the history and stop counting. A task that is not listed is at version 1.
-GRADERS = {"summarize": 3, "tool-call": 2}
+GRADERS = {"summarize": 3, "tool-call": 2, "refactor-module": 1}
 
 
 def grader_version(task: str | None) -> int:
@@ -505,6 +505,81 @@ class Hidden(unittest.TestCase):
 if __name__ == "__main__":
     unittest.main()
 '''
+SLUG = """def slugify(text):
+    words = "".join(c.lower() if c.isalnum() else " " for c in text).split()
+    return "-".join(words)
+"""
+POSTS = SLUG + '''
+
+def post_url(title):
+    return "/posts/" + slugify(title)
+'''
+USERS = SLUG + '''
+
+def profile_url(name):
+    return "/u/" + slugify(name)
+'''
+TAGS = SLUG + '''
+
+def tag_url(tag):
+    return "/tags/" + slugify(tag)
+'''
+APP_TESTS = """import unittest
+from app.posts import post_url
+from app.tags import tag_url
+from app.users import profile_url
+
+
+class App(unittest.TestCase):
+    def test_urls(self):
+        self.assertEqual(post_url("Hello, World!"), "/posts/hello-world")
+        self.assertEqual(profile_url("Ada  Lovelace"), "/u/ada-lovelace")
+        self.assertEqual(tag_url("C++ tips"), "/tags/c-tips")
+
+
+if __name__ == "__main__":
+    unittest.main()
+"""
+APP_HIDDEN = """import ast
+import unittest
+from pathlib import Path
+
+
+def tree(name):
+    return ast.parse(Path("app", name).read_text(encoding="utf-8"))
+
+
+class Hidden(unittest.TestCase):
+    def test_behavior_kept(self):
+        from app.posts import post_url
+        from app.tags import tag_url
+        from app.text import slugify
+        from app.users import profile_url
+        self.assertEqual(slugify("  Mixed CASE--text 42 "), "mixed-case-text-42")
+        self.assertEqual(slugify("***"), "")
+        self.assertEqual(post_url("A b"), "/posts/a-b")
+        self.assertEqual(profile_url("Zoe_Q"), "/u/zoe-q")
+        self.assertEqual(tag_url("x/y"), "/tags/x-y")
+
+    def test_defined_once_in_text(self):
+        defined = [name for name in ("posts.py", "users.py", "tags.py", "text.py", "__init__.py")
+                   if any(isinstance(n, ast.FunctionDef) and n.name == "slugify" for n in ast.walk(tree(name)))]
+        self.assertEqual(defined, ["text.py"])
+
+    def test_modules_import_it(self):
+        for name in ("posts.py", "users.py", "tags.py"):
+            imports = [n for n in ast.walk(tree(name)) if isinstance(n, ast.ImportFrom) and n.module == "app.text"
+                       and any(a.name == "slugify" for a in n.names)]
+            self.assertTrue(imports, name)
+
+    def test_public_functions_kept(self):
+        for name, func in (("posts.py", "post_url"), ("users.py", "profile_url"), ("tags.py", "tag_url")):
+            self.assertIn(func, [n.name for n in tree(name).body if isinstance(n, ast.FunctionDef)])
+
+
+if __name__ == "__main__":
+    unittest.main()
+"""
 IGNORE = "__pycache__/\n*.pyc\n"
 README = "# calc\n\nSmall helpers.\n"
 AGENT_TASKS = {
@@ -524,4 +599,11 @@ AGENT_TASKS = {
         "task": "Add a '## Usage' section to README.md that documents sum_even and count_words with one example call each. "
                 "Change only README.md.",
         "allowed": ["README.md"], "test": "test_calc", "hidden": DOCS_HIDDEN},
+    "refactor-module": {
+        "files": {"app/__init__.py": "", "app/posts.py": POSTS, "app/users.py": USERS, "app/tags.py": TAGS,
+                  "test_app.py": APP_TESTS, "README.md": "# app\n\nURL helpers.\n", ".gitignore": IGNORE},
+        "task": "The function slugify is copied into app/posts.py, app/users.py and app/tags.py. Move it into a new module "
+                "app/text.py and import it from the three modules with `from app.text import slugify`. Keep every public "
+                "function and its behavior. Do not change the tests.",
+        "allowed": ["app/*.py"], "test": "test_app", "hidden": APP_HIDDEN},
 }

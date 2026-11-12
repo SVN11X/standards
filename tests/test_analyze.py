@@ -84,7 +84,7 @@ class Analyzer(unittest.TestCase):
         steps, cut = analyze.build_plan(ready, self.conf, runs=3)
         lazy = [s for s in steps if s["model"] == "opencode/lazy-free"]
         self.assertEqual(len(lazy), 2)
-        self.assertIn("7 runs left out", next(c for c in cut if c["model"] == "opencode/lazy-free")["why"])
+        self.assertIn("10 runs left out", next(c for c in cut if c["model"] == "opencode/lazy-free")["why"])
         text = "\n".join(analyze.plan_lines(steps, cut, left_out, self.conf, "existing-subscription"))
         self.assertIn("Longest it can take", text)
         self.assertIn("Remote in total", text)
@@ -110,7 +110,7 @@ class Analyzer(unittest.TestCase):
         self.assertEqual(by[("classify", "good:1b")]["cold_load_s"], 1.5)
         self.assertEqual(by[("classify", "good:1b")]["effective_model"], "good:1b")
         self.assertEqual(by[("classify", "good:1b")]["night"], state["id"])
-        for task in ("fix-bug", "fix-multi", "docs-small"):
+        for task in ("fix-bug", "fix-multi", "docs-small", "refactor-module"):
             self.assertTrue(by[(task, "opencode/fix-free")]["verified"], task)
         self.assertFalse(by[("fix-bug", "opencode/lazy-free")]["verified"])
         self.assertNotIn(("docs-small", "opencode/lazy-free"), by)
@@ -253,6 +253,23 @@ class Graders(unittest.TestCase):
     def test_selector_baseline(self):
         self.assertEqual(bench_tasks.suggest_subprofile("Compare two plans with sliders and a chart")[0], "interactive-data")
         self.assertIsNone(bench_tasks.suggest_subprofile("Make this page more dynamic")[0])
+
+    def test_refactor_module_hidden_ast_check_rejects_a_copy(self):
+        import subprocess
+        spec = bench_tasks.AGENT_TASKS["refactor-module"]
+        self.assertGreaterEqual(len(spec["files"]), 6)
+        self.assertLessEqual(len(spec["files"]), 8)
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = orchestrate.make_bench_repo(Path(tmp) / "r", "refactor-module")
+            (repo / "test_hidden.py").write_text(spec["hidden"], encoding="utf-8")
+            # A module that only re-exports a second copy keeps the behavior but still defines the function twice.
+            (repo / "app" / "text.py").write_text(bench_tasks.SLUG, encoding="utf-8")
+            for name in ("posts", "users", "tags"):
+                path = repo / "app" / f"{name}.py"
+                path.write_text("from app.text import slugify\n\n\n" + path.read_text(encoding="utf-8"), encoding="utf-8")
+            run = subprocess.run([sys.executable, "-B", "-m", "unittest", "test_hidden"], cwd=repo, capture_output=True, text=True, check=False)
+            self.assertNotEqual(run.returncode, 0)
+            self.assertIn("test_defined_once_in_text", run.stderr)
 
     def test_agent_fixtures_fail_before_and_pass_after(self):
         import subprocess
