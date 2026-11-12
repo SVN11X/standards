@@ -58,13 +58,6 @@ STATES = ("planned", "approved", "running", "blocked", "failed", "verified", "in
 SECRET_ENV = re.compile(r"(TOKEN|SECRET|PASSWORD|PASSWD|API_?KEY|PRIVATE|CREDENTIAL)", re.IGNORECASE)
 KEEP_ENV = {"OPENCODE_API_KEY", "OPENROUTER_API_KEY", "ANTHROPIC_API_KEY"}
 TASK_FILE = ".delegate-task.md"
-# Bench classes that measure each route task type, the most specific first. A model counts with the first one it passed.
-ROUTE_BENCH = {"edit-small": ["fix-bug"], "fix-test": ["fix-bug"], "fix-check": ["fix-bug"], "docs-small": ["docs-small", "fix-bug"],
-               "classify": ["classify"], "summarize-short": ["summarize", "classify"], "extract-short": ["extract", "classify"],
-               "edit-large": ["fix-multi"], "refactor": ["fix-multi"], "web-pattern": ["fix-bug"], "web-test": ["fix-bug"],
-               "web-copy": ["summarize", "classify"], "web-classify": ["web-subprofile"], "web-visual-review": ["design-judge"]}
-# More files than edit_small_max_files turns any edit into a large one for a model other than the planner.
-LARGE_BENCH = ["fix-multi"]
 DATA_RANK = {"none": 0, "stores": 1, "trains": 2, "unknown": 3}
 DATA_TEXT = {"none": "keeps nothing and does not train", "stores": "keeps what it receives and does not train",
              "trains": "may train on what it receives", "unknown": "has no recorded data policy"}
@@ -632,7 +625,7 @@ def measured_models(task: str, conf: dict, classes: list[str] | None = None) -> 
     specific one, so a model that failed the specific class never gets in through the broader one.
     """
     limits = conf["limits"]
-    classes = classes if classes is not None else ROUTE_BENCH.get(task, [])
+    classes = classes if classes is not None else conf.get("proof", {}).get(task, [])
     found: dict = {}
     judged: set = set()
     summary = summarize_bench(bench_rows())
@@ -855,8 +848,11 @@ def route(task: str, repo: Path, risk: str = "green", files: int = 1, input_char
     classes = None
     if rule.get("review") == "owner":
         decision["reasons"].append(f"risk {risk}: the owner reviews before integration, whoever does the work")
-    if files > limits["edit_small_max_files"]:
-        proven, classes = True, LARGE_BENCH
+    tiers = conf.get("size_tiers") or []
+    tier = next((t for t in tiers if files <= (t.get("max_files") or 0)), None)
+    if tier and tier.get("classes"):
+        # The file count raises the proof class, never lowers it.
+        proven, classes = True, list(tier["classes"])
     measured = measured_models(task, conf, classes)
     for candidate in candidates:
         needs_proof = proven
@@ -869,7 +865,7 @@ def route(task: str, repo: Path, risk: str = "green", files: int = 1, input_char
                 decision["reasons"].append(f"measured on this machine: {stats['runs']} runs, pass rate {stats['pass_rate']}, "
                                            f"p50 {stats['p50_s']}s, p90 {stats['p90_s']}s")
             break
-        if needs_proof and files > limits["edit_small_max_files"]:
+        if needs_proof and tier and tier.get("classes"):
             why = f"{files} files is more than {limits['edit_small_max_files']}. {why[0].upper()}{why[1:]}"
         decision["rejected"].append({"executor": candidate, "why": why})
     if decision["executor"] is None:

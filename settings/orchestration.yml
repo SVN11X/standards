@@ -75,6 +75,31 @@ unknown_task: []
 # Task types where a model other than the planner must first pass the bench class that measures the task.
 proven_only: [edit-large, refactor, web-visual-review]
 
+# The bench class each route task type is measured in, most specific first. The first class a model
+# passed decides. refactor-module is a class no fixture measures yet, so refactor stays blocked
+# until the owner adds one and a model passes it.
+proof:
+  edit-small: [fix-bug]
+  fix-test: [fix-bug]
+  fix-check: [fix-bug]
+  docs-small: [docs-small, fix-bug]
+  classify: [classify]
+  summarize-short: [summarize, classify]
+  extract-short: [extract, classify]
+  edit-large: [fix-multi]
+  refactor: [refactor-module]
+  web-pattern: [fix-bug]
+  web-test: [fix-bug]
+  web-copy: [summarize, classify]
+  web-classify: [web-subprofile]
+  web-visual-review: [design-judge]
+
+# How many files a task touches raises the proof class, never lowers it. null keeps the task's own class.
+size_tiers:
+  - {max_files: 5, classes: null}
+  - {max_files: 12, classes: [fix-multi]}
+  - {max_files: 999, classes: [refactor-module]}
+
 # What a model must be able to do for a task type, checked against what Ollama reports or settings/models.yml declares.
 needs:
   web-visual-review: [vision]

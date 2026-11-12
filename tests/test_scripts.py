@@ -221,6 +221,32 @@ class CostAndData(Base):
         self.assertEqual(self.route("edit-large", mode="free-strict")["executor"], "opencode")
         self.assertEqual(self.route("edit-small", files=9, mode="free-strict")["executor"], "opencode")
 
+    def test_refactor_needs_the_refactor_module_bench(self):
+        rows = [{"task": "fix-multi", "executor": "opencode", "model": "opencode/glm-5.3-flash-free", "seconds": 20, "verified": True}] * 3
+        orchestrate.bench_file().write_text("\n".join(json.dumps(r) for r in rows) + "\n", encoding="utf-8")
+        self.assertEqual(self.route("refactor", mode="free-strict")["executor"], "blocked")
+        rows = [dict(r, task="refactor-module") for r in rows]
+        orchestrate.bench_file().write_text("\n".join(json.dumps(r) for r in rows) + "\n", encoding="utf-8")
+        self.assertEqual(self.route("refactor", mode="free-strict")["executor"], "opencode")
+
+    def test_thirteen_files_need_the_refactor_module_bench(self):
+        rows = [{"task": "fix-multi", "executor": "opencode", "model": "opencode/glm-5.3-flash-free", "seconds": 20, "verified": True}] * 3
+        orchestrate.bench_file().write_text("\n".join(json.dumps(r) for r in rows) + "\n", encoding="utf-8")
+        refused = self.route("edit-small", files=13, mode="free-strict")
+        self.assertEqual(refused["executor"], "blocked")
+        self.assertIn("13 files is more than", refused["rejected"][0]["why"])
+        rows = [dict(r, task="refactor-module") for r in rows]
+        orchestrate.bench_file().write_text("\n".join(json.dumps(r) for r in rows) + "\n", encoding="utf-8")
+        self.assertEqual(self.route("edit-small", files=13, mode="free-strict")["executor"], "opencode")
+
+    def test_nine_files_still_need_fix_multi(self):
+        rows = [{"task": "fix-bug", "executor": "opencode", "model": "opencode/glm-5.3-flash-free", "seconds": 20, "verified": True}] * 3
+        orchestrate.bench_file().write_text("\n".join(json.dumps(r) for r in rows) + "\n", encoding="utf-8")
+        self.assertEqual(self.route("edit-small", files=9, mode="free-strict")["executor"], "blocked")
+        rows = [dict(r, task="fix-multi") for r in rows]
+        orchestrate.bench_file().write_text("\n".join(json.dumps(r) for r in rows) + "\n", encoding="utf-8")
+        self.assertEqual(self.route("edit-small", files=9, mode="free-strict")["executor"], "opencode")
+
     def test_data_use_decides_before_the_name(self):
         both = ("opencode/mimo-v2.6-flash-free", "opencode/longcat-2.5-free")
         self.assertEqual(self.route("edit-small", local=self.local(models=both))["model"], "opencode/longcat-2.5-free")
