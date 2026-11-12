@@ -85,5 +85,18 @@ class ColibriTests(unittest.TestCase):
             colibri.probe = original
 
 
+class McpRegistrationTests(unittest.TestCase):
+    def test_mcp_entry_denies_the_tools_that_change_the_machine_and_keeps_other_keys(self):
+        data = {"tools": {"webfetch": False}, "mcp": {"other": {"type": "remote", "url": "https://example.test"}}}
+        colibri.apply_mcp(data, {"home": "C:/colibri"})
+        entry = data["mcp"]["colibri"]
+        self.assertEqual((entry["type"], entry["command"][-1], entry["enabled"]), ("local", "mcp", True))
+        self.assertTrue(entry["command"][-2].replace("\\", "/").endswith("c/coli"))
+        self.assertIn("other", data["mcp"])
+        self.assertEqual({k: v for k, v in data["tools"].items() if v is False},
+                         {"webfetch": False, "colibri_install": False, "colibri_start": False, "colibri_stop": False})
+        self.assertTrue(all(name.startswith("colibri_") for name in colibri.DENIED_MCP_TOOLS))
+
+
 if __name__ == "__main__":
     unittest.main()

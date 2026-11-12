@@ -102,8 +102,24 @@ def chat(prompt: str, max_tokens: int = 64) -> dict:
     return {"ok": bool(text), "reply": (text or "")[:300], **row}
 
 
+# The MCP server of Colibri can install a model of tens of gigabytes and stop the server a task is using.
+# An agent may read the state, never change it. The orchestrator starts and stops Colibri itself.
+DENIED_MCP_TOOLS = ("colibri_install", "colibri_start", "colibri_stop")
+
+
+def apply_mcp(data: dict, conf: dict) -> dict:
+    """Add Colibri's own MCP server to an OpenCode config and deny its tools that change the machine. Other keys stay."""
+    coli = Path(str(conf["home"])) / "c" / "coli"
+    data.setdefault("mcp", {})["colibri"] = {"type": "local", "command": [sys.executable, str(coli), "mcp"],
+                                             "enabled": True, "timeout": 20000}
+    tools = data.setdefault("tools", {})
+    for name in DENIED_MCP_TOOLS:
+        tools[name] = False
+    return data
+
+
 def register(target: Path | None = None) -> dict:
-    """Add Colibri as an OpenCode provider in the global config, after a backup. Other keys stay as they are."""
+    """Add Colibri as an OpenCode provider and MCP server in the global config, after a backup. Other keys stay as they are."""
     conf = settings()
     info = probe(conf)
     if not info["up"] or not info["models"]:
@@ -117,6 +133,7 @@ def register(target: Path | None = None) -> dict:
              "options": {"baseURL": f"{conf['url'].rstrip('/')}/v1"},
              "models": {name: {"name": f"{name} (Colibri)"} for name in info["models"]}}
     data.setdefault("provider", {})["colibri"] = block
+    apply_mcp(data, conf)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
     return {"ok": True, "config": str(path), "models": info["models"]}
