@@ -30,7 +30,7 @@ Progress of the free routing, model analyzer and web design work of November 202
 - [ ] Bench class `refactor-module`. A 6 to 8 file fixture that extracts a duplicated function into a module with hidden tests and an `ast` check
 - [ ] Bench class `review-diff`. Six synthetic diffs with seeded defects, graded on recall of file and line range and false high findings
 - [ ] Bench class `decompose`. Three task specs graded with `workplan.validate` on coverage, acyclicity and disjoint parallel sets
-- [ ] Health and failover. Failure codes, `~/.standards/health.json`, cooldowns, candidate switch and `fallbacks` in `route()`
+- [x] Health and failover. Failure codes, `~/.standards/health.json`, cooldowns, candidate switch and `fallbacks` in `route()`
 - [x] Work plan contract. `schemas/work-plan.schema.json` plus `scripts/workplan.py` with validate, DAG, glob expansion, conflicts and parallel batches
 - [ ] Decomposition. `split_unit` in `workplan.py`: deterministic by files, by criteria, then model proposal, each validated
 - [ ] Review. `scripts/review.py` with a cross-model JSON verdict, finding validation and one fix round on a high finding

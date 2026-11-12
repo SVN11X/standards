@@ -809,10 +809,80 @@ def pick_ollama_model(oconf: dict, info: dict, measured: dict | None = None, nee
     return None, "no preferred chat model is installed, or it runs partly on the CPU"
 
 
+# Health: what failed recently, so a failing model is skipped until its cooldown ends
+
+
+AUTH_FAIL = re.compile(r"\b40[13]\b|unauthori[sz]ed|forbidden|invalid api key|api key", re.IGNORECASE)
+DOWN = re.compile(r"connection refused|econnrefused|could not connect|\b50[234]\b|service unavailable|overloaded|unreachable", re.IGNORECASE)
+
+
+def failure_code(exit_code: int, timeout: bool, text: str) -> str | None:
+    """timeout, rate_limit, auth or unavailable. None for success or a failure that says nothing about the provider."""
+    if timeout:
+        return "timeout"
+    if exit_code == 0:
+        return None
+    for code, pattern in (("rate_limit", RATE_LIMIT), ("auth", AUTH_FAIL), ("unavailable", DOWN)):
+        if pattern.search(text):
+            return code
+    return None
+
+
+def health_file() -> Path:
+    return home() / "health.json"
+
+
+def load_health() -> dict:
+    try:
+        data = json.loads(health_file().read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def health_key(executor: str, model: str | None) -> str:
+    return f"{executor}|{model or ''}"
+
+
+def record_health(executor: str, model: str | None, code: str | None, conf: dict, at: dt.datetime | None = None) -> None:
+    """A failure code starts a cooldown taken from policy. Success (code None) clears the entry."""
+    data = load_health()
+    key = health_key(executor, model)
+    if code is None:
+        if data.pop(key, None) is None:
+            return
+    else:
+        at = at or dt.datetime.now(dt.timezone.utc)
+        seconds = ((conf.get("health") or {}).get("cooldown_s") or {}).get(code, 0)
+        data[key] = {"code": code, "at": at.replace(microsecond=0).isoformat(),
+                     "until": (at + dt.timedelta(seconds=seconds)).replace(microsecond=0).isoformat(),
+                     "count": int((data.get(key) or {}).get("count", 0)) + 1}
+    write_json(health_file(), data)
+
+
+def cooling_set(at: dt.datetime | None = None) -> dict:
+    """(executor, model) -> entry for everything whose cooldown has not ended."""
+    at = at or dt.datetime.now(dt.timezone.utc)
+    found = {}
+    for key, entry in load_health().items():
+        try:
+            if dt.datetime.fromisoformat(entry["until"]) > at:
+                executor, _, model = key.partition("|")
+                found[(executor, model)] = entry
+        except (KeyError, TypeError, ValueError):
+            continue
+    return found
+
+
 def eligible(candidate, task, repo, input_chars, conf, local, caps, measured=None, mode=None, proven=False,
-             catalog=None) -> tuple[bool, str, str | None]:
+             catalog=None, cool=None) -> tuple[bool, str, str | None]:
     """Whether a candidate may do the task, why, and with which model. Cost and privacy go through gate()."""
     measured = measured or {}
+    cool = cool or {}
+
+    def cooled(executor, model):
+        entry = cool.get((executor, model or ""))
+        return f"{model or executor} failed with {entry['code']} and rests until {entry['until']}" if entry else None
     if candidate == "claude":
         ok, why = gate("claude", None, repo, conf, local, mode, caps, catalog)
         return ok, why, None
@@ -826,6 +896,8 @@ def eligible(candidate, task, repo, input_chars, conf, local, caps, measured=Non
         model, note = pick_ollama_model(oconf, info, measured, (conf.get("needs") or {}).get(task), proven, catalog)
         if not model:
             return False, note, None
+        if cooled("ollama", model):
+            return False, cooled("ollama", model), None
         ok, why = gate("ollama", model, repo, conf, local, mode, caps, catalog)
         return ok, (note if ok else why), (model if ok else None)
     if candidate == "colibri":
@@ -835,6 +907,8 @@ def eligible(candidate, task, repo, input_chars, conf, local, caps, measured=Non
         if not info.get("up") or not info.get("models"):
             return False, "Colibri is not running (python scripts/colibri.py ensure)", None
         model = f"colibri/{info['models'][0]}"
+        if cooled("colibri", model):
+            return False, cooled("colibri", model), None
         stats = measured.get(("colibri", model))
         if proven and not stats:
             return False, f"{model} has not passed the bench class of this task", None
@@ -850,6 +924,9 @@ def eligible(candidate, task, repo, input_chars, conf, local, caps, measured=Non
             return False, "no free model checked by the owner in the last days (local.yml free_models)", None
         pool, refused = [], []
         for model in models:
+            if cooled("opencode", model):
+                refused.append((model, cooled("opencode", model)))
+                continue
             ok, why = gate("opencode", model, repo, conf, local, mode, caps, catalog)
             (pool if ok else refused).append((model, why))
         if not pool:
@@ -878,6 +955,9 @@ def eligible(candidate, task, repo, input_chars, conf, local, caps, measured=Non
             if provider not in known:
                 refused.append(f"{model}: no provider named {provider!r} in settings/providers.yml")
                 continue
+            if cooled("api", model):
+                refused.append(cooled("api", model))
+                continue
             lacking = providers.missing_env(known[provider])
             listed = next((m for m in (providers.cached(provider) or {}).get("models", []) if m["id"] == name), {})
             if lacking:
@@ -896,7 +976,7 @@ def eligible(candidate, task, repo, input_chars, conf, local, caps, measured=Non
 
 def route(task: str, repo: Path, risk: str = "green", files: int = 1, input_chars: int = 0,
           conf: dict | None = None, local: dict | None = None, caps: dict | None = None, mode: str | None = None,
-          catalog: dict | None = None) -> dict:
+          catalog: dict | None = None, cool: dict | None = None) -> dict:
     """Hard limits first (a program, cost, privacy, capability, proof), then the fastest candidate that passed them."""
     conf = conf or policy()
     local = local if local is not None else local_config()
@@ -907,7 +987,7 @@ def route(task: str, repo: Path, risk: str = "green", files: int = 1, input_char
     cls, cls_source = privacy_class(repo, conf, local)
     rule = (conf.get("risk") or {}).get(risk) or {}
     decision = {"task": task, "risk": risk, "mode": mode_name, "privacy": cls, "review": rule.get("review", "checks"),
-                "executor": None, "model": None, "reasons": [], "rejected": []}
+                "executor": None, "model": None, "reasons": [], "rejected": [], "fallbacks": []}
     known = task in conf["tasks"]
     if known and task in TOOL_TASKS:
         decision["executor"] = "tools"
@@ -933,9 +1013,15 @@ def route(task: str, repo: Path, risk: str = "green", files: int = 1, input_char
         # The file count raises the proof class, never lowers it.
         proven, classes = True, list(tier["classes"])
     measured = measured_models(task, conf, classes)
+    cool = cooling_set() if cool is None else cool
     for candidate in candidates:
         needs_proof = proven
-        ok, why, model = eligible(candidate, task, repo, input_chars, conf, local, caps, measured, mode, needs_proof, catalog)
+        ok, why, model = eligible(candidate, task, repo, input_chars, conf, local, caps, measured, mode, needs_proof, catalog, cool)
+        if ok and decision["executor"]:
+            # Later candidates that also qualify. A Colibri task has none: it never moves to another model on its own.
+            if decision["executor"] != "colibri" and candidate != "colibri":
+                decision["fallbacks"].append({"executor": candidate, "model": model})
+            continue
         if ok:
             decision.update(executor=candidate, model=model)
             decision["reasons"].append(why)
@@ -943,7 +1029,7 @@ def route(task: str, repo: Path, risk: str = "green", files: int = 1, input_char
             if stats:
                 decision["reasons"].append(f"measured on this machine: {stats['runs']} runs, pass rate {stats['pass_rate']}, "
                                            f"p50 {stats['p50_s']}s, p90 {stats['p90_s']}s")
-            break
+            continue
         if needs_proof and tier and tier.get("classes"):
             why = f"{files} files is more than {limits['edit_small_max_files']}. {why[0].upper()}{why[1:]}"
         decision["rejected"].append({"executor": candidate, "why": why})
@@ -1123,6 +1209,10 @@ def delegate_opencode(repo: Path, task: str, allowed: list[str], test: str | Non
     run_data["executor_result"] = {"exit": result["exit"], "seconds": result["seconds"], "timeout": result["timeout"],
                                    "stdout_tail": tail(result["stdout"], size), "stderr_tail": tail(result["stderr"], size),
                                    "rate_limited": result["exit"] != 0 and bool(RATE_LIMIT.search(result["stdout"] + result["stderr"]))}
+    code = failure_code(result["exit"], result["timeout"], result["stdout"] + result["stderr"])
+    run_data["executor_result"]["failure_code"] = code
+    if executor in ("opencode", "colibri") and (code or result["exit"] == 0):
+        record_health(executor, model, code, conf)
     (worktree / TASK_FILE).unlink(missing_ok=True)
     changes, ignored = changed_files(worktree, base, conf.get("generated"))
     for rel in ignored:

@@ -152,6 +152,12 @@ executors:
     # Used by bench only. Claude Code itself is the planner and does not delegate to itself.
     command: [claude, -p, --permission-mode, acceptEdits, "{message}"]
 
+# A model or program that fails with one of these codes is skipped until the cooldown (seconds) ends.
+# The state lives in ~/.standards/health.json. A later success clears it. Colibri is never replaced by another
+# model: its cooldown blocks Colibri tasks and the router offers no fallback for them.
+health:
+  cooldown_s: {rate_limit: 3600, timeout: 900, unavailable: 600, auth: 86400}
+
 # The night run of scripts/analyze.py. It tests what is installed and allowed, one local model at a time.
 analysis:
   runs: 3
