@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Standards AI Control</title>
+<style>
+:root{--bg:#f6f7f9;--card:#fff;--ink:#16181d;--muted:#5d6572;--line:#e1e4ea;--accent:#2457d6;--ok:#1a7f4b;--bad:#c0392b;--warn:#a86a00;--chip:#eef1f6}
+@media (prefers-color-scheme:dark){:root:not([data-theme=light]){--bg:#0f1115;--card:#171a20;--ink:#e8eaee;--muted:#9aa3b2;--line:#262b34;--accent:#6b93ff;--ok:#4cc38a;--bad:#ff7a6b;--warn:#e0a53a;--chip:#1f242d}}
+:root[data-theme=dark]{--bg:#0f1115;--card:#171a20;--ink:#e8eaee;--muted:#9aa3b2;--line:#262b34;--accent:#6b93ff;--ok:#4cc38a;--bad:#ff7a6b;--warn:#e0a53a;--chip:#1f242d}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.45 system-ui,Segoe UI,sans-serif}
+header{display:flex;align-items:center;gap:16px;padding:12px 20px;border-bottom:1px solid var(--line);background:var(--card);position:sticky;top:0;z-index:2}
+h1{font-size:16px;margin:0}nav{display:flex;gap:4px;flex-wrap:wrap;flex:1}
+nav a{padding:6px 12px;border-radius:8px;color:var(--muted);text-decoration:none;transition:background .2s,color .2s}
+nav a.on{background:var(--chip);color:var(--ink)}button{background:var(--chip);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:6px 10px;cursor:pointer}
+main{padding:20px;max-width:1200px;margin:auto}.grid{display:grid;gap:14px;grid-template-columns:repeat(auto-fit,minmax(240px,1fr))}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px;animation:in .25s ease}
+@keyframes in{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+.card h3{margin:0 0 8px;font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+.big{font-size:26px;font-weight:600}.muted{color:var(--muted)}.chip{display:inline-block;padding:1px 8px;border-radius:99px;background:var(--chip);font-size:12px}
+.ok{color:var(--ok)}.bad{color:var(--bad)}.warn{color:var(--warn)}
+table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top}th{color:var(--muted);font-weight:500;font-size:12px}
+.bar{height:8px;border-radius:99px;background:var(--chip);overflow:hidden}.bar i{display:block;height:100%;background:var(--accent);transition:width .4s}
+details{margin-top:8px}summary{cursor:pointer;color:var(--muted)}pre{white-space:pre-wrap;word-break:break-word;background:var(--chip);padding:10px;border-radius:8px;max-height:340px;overflow:auto;font-size:12px}
+svg.spark{width:100%;height:46px}h2{font-size:15px;margin:22px 0 10px}
+</style>
+</head>
+<body>
+<header><h1>Standards AI Control</h1><nav id="nav"></nav><button id="theme" title="Theme"></button></header>
+<main id="view"></main>
+<script>
+const NA="Not available",views=["Dashboard","Agents and models","Tasks","Performance","History","Settings","Logs"];
+let S=null,hist={cpu:[],tps:[],ram:[]},logName="colibri",tick=0;
+const $=s=>document.querySelector(s),esc=s=>String(s??"").replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
+const num=(v,d=1)=>v==null?NA:Number(v).toLocaleString(undefined,{maximumFractionDigits:d});
+const gb=b=>b==null?NA:(b/2**30).toFixed(1)+" GiB",mb=m=>m==null?NA:(m/1024).toFixed(1)+" GiB";
+const cls=s=>({verified:"ok",failed:"bad",blocked:"warn"}[s]||"");
+function theme(set){const t=set||localStorage.getItem("theme")||"auto";try{localStorage.setItem("theme",t)}catch(e){}
+ document.documentElement.dataset.theme=t==="auto"?"":t;$("#theme").textContent="Theme: "+t}
+$("#theme").onclick=()=>theme({auto:"light",light:"dark",dark:"auto"}[localStorage.getItem("theme")||"auto"]);theme();
+const route=()=>decodeURIComponent(location.hash.slice(1))||views[0];
+$("#nav").innerHTML=views.map(v=>`<a href="#${encodeURIComponent(v)}">${v}</a>`).join("");
+function spark(a,color="var(--accent)"){if(a.length<2)return`<div class="muted">${NA}</div>`;const m=Math.max(...a,1),w=300,h=44;
+ const p=a.map((v,i)=>`${(i/(a.length-1)*w).toFixed(1)},${(h-v/m*(h-4)-2).toFixed(1)}`).join(" ");
+ return`<svg class="spark" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none"><polyline fill="none" stroke="${color}" stroke-width="2" points="${p}"/></svg>`}
+const bar=f=>`<div class="bar"><i style="width:${Math.round((f||0)*100)}%"></i></div>`;
+const card=(t,b)=>`<div class="card"><h3>${t}</h3>${b}</div>`;
+function status(){if(!S)return"";const t=S.tasks.find(t=>t.state==="running");
+ if(t)return`Running with ${esc(t.model||"unknown model")}`;
+ if(!S.providers.ollama.up&&!S.providers.colibri.up)return"No local provider is answering";return"Idle"}
+function Dashboard(){const r=S.resources,p=S.providers,c=S.counts,tel=S.telemetry.by_model;
+ const last=S.telemetry.recent.at(-1),ram=r.ram_total_bytes&&r.ram_free_bytes!=null?1-r.ram_free_bytes/r.ram_total_bytes:null;
+ const toks=Object.values(tel).reduce((a,m)=>({i:a.i+m.input,o:a.o+m.output}),{i:0,o:0});
+ return`<div class="grid">
+ ${card("Now",`<div class="big">${status()}</div><div class="muted">Cost mode ${esc(S.cost.mode)}, privacy ${esc(S.cost.privacy)}</div>`)}
+ ${card("Providers",`<div>Ollama <b class="${p.ollama.up?"ok":"bad"}">${p.ollama.up?"up":"down"}</b> <span class="muted">${p.ollama.models.length} models</span></div>
+  <div>Colibri <b class="${p.colibri.up?"ok":"bad"}">${p.colibri.up?"up":"down"}</b> <span class="muted">${esc(p.colibri.models.join(", ")||NA)}</span></div>
+  <div>OpenCode <span class="muted">${esc(p.opencode||NA)}</span></div>`)}
+ ${card("Tasks",`<div class="big">${c.running}<span class="muted"> running</span></div><div class="muted">${c.verified} verified, ${c.failed} failed, ${c.blocked} blocked</div>`)}
+ ${card("Tokens (measured requests)",`<div class="big">${num(toks.i+toks.o,0)}</div><div class="muted">in ${num(toks.i,0)}, out ${num(toks.o,0)}, ${last?num(last.tokens_per_second)+" tokens/s last":NA}</div>`)}
+ ${card("CPU",`<div class="big">${num(r.cpu_percent)}%</div>${spark(hist.cpu)}`)}
+ ${card("RAM",`<div class="big">${ram==null?NA:Math.round(ram*100)+"%"}</div><div class="muted">${gb(r.ram_total_bytes)} total</div>${spark(hist.ram,"var(--ok)")}`)}
+ ${card("GPU",r.gpu?`<div class="big">${num(r.gpu.util_percent,0)}%</div><div class="muted">${esc(r.gpu.name)}, ${num(r.gpu.vram_used_mib,0)} of ${num(r.gpu.vram_total_mib,0)} MiB VRAM, ${num(r.gpu.temperature_c,0)} C</div>${bar(r.gpu.vram_used_mib/r.gpu.vram_total_mib)}`:`<div class="big">${NA}</div>`)}
+ ${card("API cost",`<div class="big">$${num(S.cost.api_cost_usd,2)}</div><div class="muted">${esc(S.cost.note)}</div>`)}
+ </div><h2>Latest tasks</h2>${taskTable(S.tasks.slice(0,6))}`}
+function taskTable(ts){if(!ts.length)return`<div class="card muted">No tasks recorded yet.</div>`;
+ return`<div class="card"><table><tr><th>State</th><th>Task</th><th>Model</th><th>Stages</th><th>Checks</th><th>Files</th></tr>`+ts.map(t=>
+ `<tr><td class="${cls(t.state)}">${esc(t.state)}</td><td>${esc(t.task)}<details><summary>Details</summary><pre>id ${esc(t.id)}
+branch ${esc(t.branch||NA)}
+commit ${esc(t.commit||NA)}
+started ${esc(t.started||NA)}
+${esc(t.note)}</pre></details></td><td>${esc(t.model||NA)}</td><td style="width:110px">${bar(t.stage_progress)}</td>
+ <td>${t.checks_total?t.checks_passed+" of "+t.checks_total:NA}</td><td>${t.changed}</td></tr>`).join("")+`</table></div>`}
+function Agents(){const p=S.providers,o=p.ollama,loaded=o.loaded||[];
+ const rows=[...o.models.map(m=>{const l=loaded.find(x=>x.name===m);return[`Ollama`,m,"local",l?`loaded, ${num((l.gpu_share||0)*100,0)}% on GPU`:"installed",num((o.sizes[m]||0)/1e9)+" GB"]}),
+  ...p.colibri.models.map(m=>["Colibri",m,"local","serving",NA])];
+ return`<div class="card"><table><tr><th>Provider</th><th>Model</th><th>Where</th><th>State</th><th>Size</th></tr>${rows.map(r=>`<tr>${r.map(c=>`<td>${esc(c)}</td>`).join("")}</tr>`).join("")}</table></div>
+ <h2>Roles</h2><div class="grid">${card("Claude Code","Planning, architecture, acceptance criteria")}${card("OpenCode","Implementation, fixes, refactors, tests")}${card("Ollama","Quick local tasks, summaries, classification, embeddings")}${card("Colibri","Stronger local coding model")}</div>`}
+function Tasks(){return taskTable(S.tasks)}
+function Performance(){const t=S.telemetry,r=S.resources;
+ const rows=Object.entries(t.by_model).map(([k,m])=>`<tr><td>${esc(k)}</td><td>${m.requests}</td><td>${num(m.input,0)}</td><td>${num(m.output,0)}</td><td>${num(m.output/m.seconds)}</td></tr>`).join("");
+ return`<div class="grid">${card("Tokens per second",spark(hist.tps,"var(--ok)"))}${card("CPU",spark(hist.cpu))}
+ ${card("Colibri engine memory",`<div class="big">${mb(r.colibri_engine_mb)}</div>`)}${card("Ollama memory",`<div class="big">${mb(r.ollama_mb)}</div>`)}</div>
+ <h2>Measured requests per model</h2><div class="card">${rows?`<table><tr><th>Model</th><th>Requests</th><th>Input</th><th>Output</th><th>Tokens/s</th></tr>${rows}</table>`:`<span class="muted">No measured requests yet. Cache tokens and context use are ${NA}.</span>`}</div>`}
+function History(){const b=S.bench;if(!b.length)return`<div class="card muted">No bench history.</div>`;
+ return`<div class="card"><table><tr><th>Task</th><th>Executor</th><th>Model</th><th>Runs</th><th>Pass rate</th><th>p50 s</th></tr>${b.map(x=>`<tr><td>${esc(x.task)}</td><td>${esc(x.executor)}</td><td>${esc(x.model)}</td><td>${x.runs}</td><td>${x.pass_rate}</td><td>${num(x.p50_s)}</td></tr>`).join("")}</table></div>`}
+function Settings(){return`<div class="grid">${card("Cost mode",`${esc(S.cost.mode)}<div class="muted">${esc(S.cost.mode_source)}</div>`)}${card("Privacy class",esc(S.cost.privacy))}
+ ${card("Dashboard","Read only. Listens on 127.0.0.1 and changes nothing.")}</div><p class="muted">Change policy in settings/orchestration.yml and ~/.standards/local.yml.</p>`}
+async function Logs(){const r=await (await fetch("/api/logs?name="+logName)).json();
+ $("#view").innerHTML=`<div class="card"><button data-l="colibri">Colibri server</button> <button data-l="colibri-install">Colibri install</button><pre>${esc(r.lines.join("\n")||NA)}</pre></div>`;
+ document.querySelectorAll("[data-l]").forEach(b=>b.onclick=()=>{logName=b.dataset.l;Logs()})}
+const V={Dashboard,"Agents and models":Agents,Tasks,Performance,History,Settings};
+function render(){document.querySelectorAll("nav a").forEach(a=>a.classList.toggle("on",decodeURIComponent(a.hash.slice(1))===route()));
+ if(route()==="Logs"){Logs();return}if(!S){$("#view").innerHTML=`<div class="card muted">Loading</div>`;return}$("#view").innerHTML=(V[route()]||Dashboard)()}
+async function poll(){try{S=await (await fetch("/api/state")).json();const r=S.resources;
+ hist.cpu.push(r.cpu_percent||0);hist.ram.push(r.ram_total_bytes&&r.ram_free_bytes!=null?(1-r.ram_free_bytes/r.ram_total_bytes)*100:0);
+ const l=S.telemetry.recent.at(-1);if(l&&l.tokens_per_second)hist.tps=S.telemetry.recent.map(x=>x.tokens_per_second||0);
+ for(const k in hist)hist[k]=hist[k].slice(-60);if(route()!=="Logs")render()}catch(e){$("#view").innerHTML=`<div class="card bad">The control server does not answer.</div>`}}
+window.onhashchange=render;render();poll();setInterval(poll,2500);
+</script>
+</body>
+</html>

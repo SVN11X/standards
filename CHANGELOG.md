@@ -6,6 +6,7 @@ All notable changes to this standard are documented here. The format follows [Ke
 
 ### Added
 
+- Standards AI Control: `scripts/control.py serve` opens a read-only dashboard on 127.0.0.1:8765 with providers, tasks, resources, measured tokens, history, settings and logs. `control.py statusline` prints a compact line for the Claude Code `statusLine` setting. A metric a provider does not report shows "Not available".
 - Colibri as a local provider. `scripts/colibri.py` starts, checks, stops and registers it in OpenCode, and `orchestrate.py delegate colibri` runs a task with its model. A stopped Colibri blocks the run and no other model replaces it. `scripts/ecosystem.py` (entry `scripts/standards.ps1`) has the modes doctor, status, install, repair, update and verify, driven by `settings/ecosystem.yml`.
 - Cost modes `local-only`, `free-strict` and `existing-subscription` in `settings/orchestration.yml`. The owner's mode lives in `~/.standards/local.yml` (`orchestrate.py consent --cost-mode`). A run can ask for a stricter mode with `--mode` or `STANDARDS_COST_MODE`, never a looser one.
 - `settings/models.yml`: model candidates with cost category, data use, stated capabilities, source, date and evidence level. An entry enables nothing.
