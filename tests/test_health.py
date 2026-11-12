@@ -77,6 +77,13 @@ class HealthTests(unittest.TestCase):
         self.assertFalse(ok)
         self.assertIn("timeout", why)
 
+    def test_a_blocked_route_names_the_cooldown_that_caused_it(self):
+        conf = {**self.conf, "tasks": {**self.conf["tasks"], "colibri-only": ["colibri"]}}
+        orchestrate.record_health("colibri", "colibri/fake-coder", "timeout", conf)
+        decision = orchestrate.route("colibri-only", self.tmp, conf=conf, local=self.local, caps=self.caps, catalog={})
+        self.assertEqual(decision["executor"], "blocked")
+        self.assertIn("timeout", " ".join(decision["reasons"]))
+
     def test_ollama_delegate_records_failure_and_success(self):
         caps = {"models": [{"name": "m1"}]}
         run = lambda: orchestrate.delegate_ollama("hi", model="m1", conf=self.conf, caps=caps, repo=self.tmp,  # noqa: E731

@@ -6,6 +6,7 @@ All notable changes to this standard are documented here. The format follows [Ke
 
 ### Added
 
+- A blocked route now names why each candidate was refused, such as a cooldown after a timeout, instead of only saying that no executor is allowed. A real pilot run showed the old text hid a 15 minute cooldown.
 - Gateway adapter. A provider with a `gateway:` block in `settings/providers.yml` is sent nothing without an allowed list of provider/model pairs, always with fusion, caching and billing off, and a reply is refused when the answering provider is missing or outside the list, or the reply was fused or cached. The answering provider is recorded as `effective_provider`. `orchestrate.py` counts a gateway address as remote even for the ollama and colibri executors on loopback. Seventeen tests in `tests/test_gateway.py` run against a fake gateway. FreeLLMAPI stays at assess and the real service is unproven.
 - Executor loop enforces `max_total_attempts`, `max_wall_s`, `max_remote_sessions`, `max_split_depth` and `max_units_after_split`. A unit stopped by a budget is blocked and independent units go on. `docs/007` lists what each budget does and says `final_regression` is not run yet. Each budget has a test that fails without it.
 - Executor loop splits a unit that is larger than its `max_input_chars` with `split_unit`, runs the parts in order and passes the parent only when every part passed. A Colibri unit is blocked, never split. Tests cover the split, a failed part, a single file unit and Colibri.

@@ -1122,8 +1122,10 @@ def route(task: str, repo: Path, risk: str = "green", files: int = 1, input_char
         decision["rejected"].append({"executor": candidate, "why": why})
     if decision["executor"] is None:
         decision["executor"] = "blocked"
+        refused = " ".join(f"{item['executor']}: {item['why']}." for item in decision["rejected"])
         decision["reasons"].append(f"no executor is allowed in cost mode {mode_name} ({mode_source}) for a {cls} folder ({cls_source}). "
-                                   "Do it with tools, reduce the task, or ask the owner. Nothing paid is used on its own")
+                                   + (f"Refused: {refused} " if refused else "")
+                                   + "Do it with tools, reduce the task, or ask the owner. Nothing paid is used on its own")
     return decision
 
 
