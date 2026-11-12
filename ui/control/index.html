@@ -29,7 +29,7 @@ svg.spark{width:100%;height:46px}h2{font-size:15px;margin:22px 0 10px}
 <header><h1>Standards AI Control</h1><nav id="nav"></nav><button id="theme" title="Theme"></button></header>
 <main id="view"></main>
 <script>
-const NA="Not available",views=["Dashboard","Agents and models","Tasks","Performance","History","Settings","Logs"];
+const NA="Not available",views=["Dashboard","Agents and models","Tasks","Operations","Performance","History","Settings","Logs"];
 let S=null,hist={cpu:[],tps:[],ram:[]},logName="colibri",tick=0;
 const $=s=>document.querySelector(s),esc=s=>String(s??"").replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
 const num=(v,d=1)=>v==null?NA:Number(v).toLocaleString(undefined,{maximumFractionDigits:d});
@@ -84,14 +84,33 @@ function Performance(){const t=S.telemetry,r=S.resources;
  <h2>Measured requests per model</h2><div class="card">${rows?`<table><tr><th>Model</th><th>Requests</th><th>Input</th><th>Output</th><th>Tokens/s</th></tr>${rows}</table>`:`<span class="muted">No measured requests yet. Cache tokens and context use are ${NA}.</span>`}</div>`}
 function History(){const b=S.bench;if(!b.length)return`<div class="card muted">No bench history.</div>`;
  return`<div class="card"><table><tr><th>Task</th><th>Executor</th><th>Model</th><th>Runs</th><th>Pass rate</th><th>p50 s</th></tr>${b.map(x=>`<tr><td>${esc(x.task)}</td><td>${esc(x.executor)}</td><td>${esc(x.model)}</td><td>${x.runs}</td><td>${x.pass_rate}</td><td>${num(x.p50_s)}</td></tr>`).join("")}</table></div>`}
+function Operations(){const a=S.next_actions||{},o=S.operations||{},j=o.job;
+ const items=(a.items||[]).map(x=>`<tr><td>${esc(x.category)}</td><td>${esc(x.id)}</td><td>${esc(x.next)}</td></tr>`).join("");
+ return`<div class="grid">${card("Local benchmarks",`<p>Three new classes, qwen3.5-9b-ctx16k, local-only. Preview does not benchmark or download.</p>
+ <button id="bench-plan" ${o.active?"disabled":""}>Preview plan</button> <button id="bench-run" ${o.active?"disabled":""}>Run local benches</button>
+ <p class="muted">Execution requires confirmation. Up to 2 hours and 3 runs per task; no remote models.</p>`)}
+ ${card("Current operation",j?`<b>${esc(j.kind)}</b> · ${esc(j.state)}<p>Model ${esc(j.model)} · PID ${esc(j.pid)}</p>
+ <p>Started ${esc(j.started_at)} · exit code ${j.exit_code==null?NA:num(j.exit_code,0)}</p>
+ ${o.active?'<button id="bench-cancel">Request cancellation</button>':""}`:`<p>No operation started in this dashboard session.</p>`)}
+ </div><h2>Bench output</h2><pre>${esc(o.log||NA)}</pre><h2>Pending decisions (not auto-resolved)</h2>
+ <p class="muted">Technical ${num(a.counts?.technical,0)} · Human ${num(a.counts?.human,0)} · Credentials ${num(a.counts?.credential,0)} · Review ${num(a.counts?.review,0)}</p>
+ <div class="card"><table><tr><th>Kind</th><th>Item</th><th>Next step</th></tr>${items}</table></div>`}
+async function operation(action,kind){if(action==="start"&&kind==="bench-run"&&!confirm("Run local-only benchmarks for up to 2 hours?"))return;
+ const payload=action==="start"?{kind,confirmed:kind==="bench-run"}:{id:S.operations.job.id};
+ try{const res=await fetch(action==="start"?"/api/jobs/start":"/api/jobs/cancel",{method:"POST",headers:{"Content-Type":"application/json","X-Standards-Token":CONTROL_TOKEN},body:JSON.stringify(payload)});
+ const response=await res.json();if(!res.ok)throw new Error(response.error||"Operation rejected");await poll();}
+ catch(e){alert(String(e.message||e))}}
+function bindOperations(){const a=$("#bench-plan"),b=$("#bench-run"),c=$("#bench-cancel");if(a)a.onclick=()=>operation("start","bench-plan");
+ if(b)b.onclick=()=>operation("start","bench-run");if(c)c.onclick=()=>operation("cancel")}
 function Settings(){return`<div class="grid">${card("Cost mode",`${esc(S.cost.mode)}<div class="muted">${esc(S.cost.mode_source)}</div>`)}${card("Privacy class",esc(S.cost.privacy))}
- ${card("Dashboard","Read only. Listens on 127.0.0.1 and changes nothing.")}</div><p class="muted">Change policy in settings/orchestration.yml and ~/.standards/local.yml.</p>`}
+ ${card("Dashboard","Read-only supervision except explicit, local-only benchmark controls in Operations.")}</div><p class="muted">Change policy in settings/orchestration.yml and ~/.standards/local.yml.</p>`}
 async function Logs(){const r=await (await fetch("/api/logs?name="+logName)).json();
  $("#view").innerHTML=`<div class="card"><button data-l="colibri">Colibri server</button> <button data-l="colibri-install">Colibri install</button><pre>${esc(r.lines.join("\n")||NA)}</pre></div>`;
  document.querySelectorAll("[data-l]").forEach(b=>b.onclick=()=>{logName=b.dataset.l;Logs()})}
-const V={Dashboard,"Agents and models":Agents,Tasks,Performance,History,Settings};
+const V={Dashboard,"Agents and models":Agents,Tasks,Operations,Performance,History,Settings};
 function render(){document.querySelectorAll("nav a").forEach(a=>a.classList.toggle("on",decodeURIComponent(a.hash.slice(1))===route()));
- if(route()==="Logs"){Logs();return}if(!S){$("#view").innerHTML=`<div class="card muted">Loading</div>`;return}$("#view").innerHTML=(V[route()]||Dashboard)()}
+ if(route()==="Logs"){Logs();return}if(!S){$("#view").innerHTML=`<div class="card muted">Loading</div>`;return}$("#view").innerHTML=(V[route()]||Dashboard)();
+ if(route()==="Operations")bindOperations()}
 async function poll(){try{S=await (await fetch("/api/state")).json();const r=S.resources;
  hist.cpu.push(r.cpu_percent||0);hist.ram.push(r.ram_total_bytes&&r.ram_free_bytes!=null?(1-r.ram_free_bytes/r.ram_total_bytes)*100:0);
  const l=S.telemetry.recent.at(-1);if(l&&l.tokens_per_second)hist.tps=S.telemetry.recent.map(x=>x.tokens_per_second||0);
