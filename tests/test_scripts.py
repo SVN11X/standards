@@ -79,8 +79,15 @@ class Timeouts(Base):
         self.assertLess(result["seconds"], 25)
 
 
+class WorkingFolder(Base):
+    def test_pwd_follows_the_folder_the_command_runs_in(self):
+        result = orchestrate.run([sys.executable, "-c", "import os; print(os.environ.get('PWD'))"], cwd=self.tmp,
+                                 env={**os.environ, "PWD": "/somewhere/else"})
+        self.assertEqual(result["stdout"].strip(), str(self.tmp))
+
+
 class Route(Base):
-    caps ={"ollama": {"up": False}, "opencode": {"path": "/bin/opencode"}}
+    caps = {"ollama": {"up": False}, "opencode": {"path": "/bin/opencode"}}
 
     def local(self, cls="personal-public", **extra):
         return {"folders": [{"path": str(self.tmp), "class": cls, **extra}],

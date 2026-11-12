@@ -150,6 +150,9 @@ def run(cmd, cwd=None, timeout=60, env=None, shell=False) -> dict:
     if not shell:
         cmd = resolve(cmd)
     group = {"creationflags": subprocess.CREATE_NEW_PROCESS_GROUP} if os.name == "nt" else {"start_new_session": True}
+    if cwd is not None:
+        # A tool that reads PWD instead of asking the system (OpenCode does) would otherwise work in the caller's folder.
+        env = {**(os.environ if env is None else env), "PWD": str(cwd)}
     try:
         proc = subprocess.Popen(cmd, cwd=cwd, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                                 text=True, encoding="utf-8", errors="replace", env=env, shell=shell, **group)

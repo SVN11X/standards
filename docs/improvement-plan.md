@@ -40,3 +40,4 @@ Progress of the free routing, model analyzer and web design work of November 202
 - [ ] Docs and agent texts. `docs/007`, `docs/005`, `docs/006`, `skills/repo-improve/SKILL.md` and a new `run-plan` OpenCode command
 - [ ] BLOCKED: Live validation on the owner's machine. Run the new bench classes and a pilot plan of 3 green units with `execute.py`
 - [x] Fix: a timeout kills the whole process tree of the executor, so a stuck OpenCode no longer hangs the run
+- [x] Fix: a command run in a folder gets PWD set to that folder, so OpenCode launched from a Bash session works in its own worktree
