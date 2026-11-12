@@ -6,6 +6,7 @@ All notable changes to this standard are documented here. The format follows [Ke
 
 ### Added
 
+- Ollama context variants in `settings/ecosystem.yml`. OpenCode sends a prompt of about 12000 tokens and Ollama cut it to 2050, so no model saw the task. With a 16K variant `qwen3.5-9b` passed the `fix-bug` bench through OpenCode in 334 s. `qwen2.5-coder:7b` changed nothing. One run each is a first signal, not statistics.
 - Standards AI Control: `scripts/control.py serve` opens a read-only dashboard on 127.0.0.1:8765 with providers, tasks, resources, measured tokens, history, settings and logs. `control.py statusline` prints a compact line for the Claude Code `statusLine` setting. A metric a provider does not report shows "Not available".
 - Colibri as a local provider. `scripts/colibri.py` starts, checks, stops and registers it in OpenCode, and `orchestrate.py delegate colibri` runs a task with its model. A stopped Colibri blocks the run and no other model replaces it. `scripts/ecosystem.py` (entry `scripts/standards.ps1`) has the modes doctor, status, install, repair, update and verify, driven by `settings/ecosystem.yml`.
 - Cost modes `local-only`, `free-strict` and `existing-subscription` in `settings/orchestration.yml`. The owner's mode lives in `~/.standards/local.yml` (`orchestrate.py consent --cost-mode`). A run can ask for a stricter mode with `--mode` or `STANDARDS_COST_MODE`, never a looser one.

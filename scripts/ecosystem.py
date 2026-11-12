@@ -11,6 +11,7 @@ import argparse
 import json
 import shutil
 import sys
+import tempfile
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -47,7 +48,7 @@ def check_ollama(conf: dict) -> list[dict]:
     if not info["up"]:
         return [component("ollama-server", False, info.get("error", "not answering"), "start Ollama")]
     rows = [component("ollama-server", True, f"version {info.get('version')}, {len(info['models'])} models")]
-    for name in conf["ollama"]["keep"] + conf["ollama"]["install"]:
+    for name in conf["ollama"]["keep"] + conf["ollama"]["install"] + [f"{v}:latest" for v in conf["ollama"].get("variants", {})]:
         have = name in info["models"]
         rows.append(component(f"ollama:{name}", have, f"{(info['sizes'].get(name) or 0) / 1e9:.1f} GB" if have else "missing",
                               f"ollama pull {name}"))
@@ -93,6 +94,13 @@ def install() -> list[dict]:
         if name not in have:
             result = orchestrate.run(["ollama", "pull", name], timeout=7200)
             steps.append({"step": f"ollama pull {name}", "ok": result["exit"] == 0})
+    have = orchestrate.detect_ollama({"url": "http://127.0.0.1:11434"}).get("models", [])
+    for name, variant in (conf["ollama"].get("variants") or {}).items():
+        if f"{name}:latest" not in have and variant["from"] in have:
+            text = f"FROM {variant['from']}\nPARAMETER num_ctx {variant['num_ctx']}\n"
+            path = Path(tempfile.gettempdir()) / f"Modelfile.{name}"
+            path.write_text(text, encoding="utf-8")
+            steps.append({"step": f"ollama create {name}", "ok": orchestrate.run(["ollama", "create", name, "-f", str(path)], timeout=300)["exit"] == 0})
     home = colibri.settings()["home"]
     if not (home / "c" / "coli").exists():
         home.parent.mkdir(parents=True, exist_ok=True)
