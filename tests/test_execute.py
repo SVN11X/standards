@@ -161,6 +161,17 @@ class ExecuteTests(Base):
         self.assertEqual([c[0] for c in agent.calls], ["u2"])
         self.assertEqual(self.statuses(again), {"u1": "passed", "u2": "passed"})
 
+    def test_resume_refuses_a_repository_that_moved_since_the_plan_started(self):
+        work = plan(unit("u1", ["a.txt"]), unit("u2", ["b.txt"]))
+        self.executor(work, FakeAgent(fail=["u2"])).run()
+        (self.repo / "d.txt").write_text("new commit\n")
+        sh("git", "add", "-A", cwd=self.repo)
+        sh("git", "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "moved", cwd=self.repo)
+        agent = FakeAgent()
+        with self.assertRaises(execute.StaleIntegration):
+            self.executor(work, agent).run()
+        self.assertEqual(agent.calls, [])
+
     def test_state_is_written_after_each_unit(self):
         work = plan(unit("u1", ["a.txt"]), unit("u2", ["b.txt"], ["u1"]))
         seen = []

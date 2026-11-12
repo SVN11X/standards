@@ -33,6 +33,10 @@ def state_file(plan_id: str) -> Path:
     return orchestrate.home() / "executions" / f"{plan_id}.json"
 
 
+class StaleIntegration(RuntimeError):
+    """The repository moved since the plan started, so dependent units would build on an old base."""
+
+
 def load_state(plan_id: str) -> dict:
     path = state_file(plan_id)
     if path.exists():
@@ -138,9 +142,13 @@ class Executor:
         """A worktree whose HEAD advances with each passed unit, so dependents build on earlier work."""
         path = orchestrate.home() / "worktrees" / f"execute-{self.plan['plan_id']}"
         branch = f"execute/{self.plan['plan_id']}"
+        head = orchestrate.git(self.repo, "rev-parse", "HEAD").strip()
+        if path.exists() and (self.state.get("integration") or {}).get("base") != head:
+            raise StaleIntegration(f"the integration worktree {path} was built on another commit than {head[:12]}. "
+                                   f"Run `python scripts/execute.py clean PLAN.json` and start the plan again")
         if not path.exists():
             orchestrate.git(self.repo, "worktree", "add", "-q", "-B", branch, str(path), "HEAD")
-        self.state["integration"] = {"branch": branch, "worktree": str(path)}
+        self.state["integration"] = {"branch": branch, "worktree": str(path), "base": head}
         self.save()
         return path
 
@@ -363,7 +371,11 @@ def main(argv=None) -> int:
     if args.command == "run":
         state_file(plan["plan_id"]).unlink(missing_ok=True)
     reviewer = review_mod.ollama_reviewer(repo, args.reviewer) if args.reviewer else None
-    counts = summary(Executor(plan, repo, args.reviewer, reviewer, parallel=args.parallel).run())
+    try:
+        counts = summary(Executor(plan, repo, args.reviewer, reviewer, parallel=args.parallel).run())
+    except StaleIntegration as error:
+        print(error)
+        return 1
     print(json.dumps(counts))
     return 0 if set(counts) <= {DONE} else 1
 
