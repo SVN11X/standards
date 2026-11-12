@@ -71,8 +71,16 @@ class Autopilot(Base):
         self.assertIn("1 pending", decision["reason"])
 
 
+class Timeouts(Base):
+    def test_a_timeout_also_stops_the_child_that_holds_the_pipe(self):
+        child = "import subprocess,sys,time; subprocess.Popen([sys.executable,'-c','import time; time.sleep(60)']); time.sleep(60)"
+        result = orchestrate.run([sys.executable, "-c", child], timeout=2)
+        self.assertTrue(result["timeout"])
+        self.assertLess(result["seconds"], 25)
+
+
 class Route(Base):
-    caps = {"ollama": {"up": False}, "opencode": {"path": "/bin/opencode"}}
+    caps ={"ollama": {"up": False}, "opencode": {"path": "/bin/opencode"}}
 
     def local(self, cls="personal-public", **extra):
         return {"folders": [{"path": str(self.tmp), "class": cls, **extra}],
