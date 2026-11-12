@@ -34,6 +34,12 @@ python scripts/orchestrate.py route --all --repo .
 
 prints every task type with the agent, the exact model on this machine and the reason, including why a task is blocked or moved to another agent. `doctor` prints the same table after the list of tools, and names the catalog entries, owner checks and measurements that are due again with the page to read. It confirms nothing by itself: you confirm that a model is still free.
 
+```
+python scripts/orchestrate.py models
+```
+
+prints, per task type and model, whether it is discovered, tested and authorized, and the date its bench evidence expires. Evidence older than `limits.bench_recheck_days`, or measured with another OpenCode minor or GPU, no longer counts.
+
 ## What is found, and what the files add
 
 Nothing is counted against a fixed list. The analyzer finds models in three places:
@@ -88,8 +94,11 @@ A task a model was not run on is "not evaluated", with the reason, never a score
 | `vision` | models that take images, on Ollama or a provider API | facts that only the image holds |
 | `design-judge` | models that take images, on Ollama or a provider API | agreement with your choice between two screens, asked in both orders |
 | `fix-bug`, `fix-multi`, `docs-small` | OpenCode | acceptance tests the agent never saw, the allowed files and the protected files |
+| `refactor-module` | OpenCode | hidden tests, and with `ast` that a copied function is defined once and imported by each module |
+| `review-diff` | a model that reviews | six diffs with one seeded defect each: a finding must name the file and overlap the defect lines |
+| `decompose` | a model that plans | `workplan.validate` on the returned units, then that every file is covered and parallel units share no file |
 
-The first six rows are inference by API: one request per item, straight to the model. The last row is a full agent working in a repository. The report keeps the two apart, because they measure different things.
+The first six rows are inference by API: one request per item, straight to the model. `fix-bug`, `fix-multi`, `docs-small` and `refactor-module` are a full agent working in a repository. `review-diff` and `decompose` grade the model's JSON answer. The report keeps the two apart, because they measure different things.
 
 Every fixture is synthetic. No model grades another. Each run records the version of the rule that graded it, and when a rule is corrected the runs it graded before stop counting. A model enters a real task only after 3 runs with a pass rate of 0.8 in the class that measures it. Three runs are a first signal on one machine, not strong statistics.
 
@@ -180,7 +189,8 @@ No gateway or agent board is integrated. Two candidates are in the radar at `ass
 - Sending an image through `opencode run` is not confirmed, so a vision model served only through OpenCode is not evaluated on `vision` or `design-judge`.
 - The reply of a provider may name the model with or without a suffix. A name that only adds or drops a suffix counts as the same model, another name fails the run. The first real run shows whether a provider needs a stricter rule.
 - The memory check of a local model uses the file size with a fixed overhead. It is a rough fit, not a measurement.
-- Planning, deep review and visual direction have no bench class. In a free mode they are blocked, and whether a free model may ever do them is the owner's decision.
+- Planning and visual direction have no bench class and are planner work: the owner asks Claude directly. Deep review has the `review-diff` class, but no task type routes to it yet.
+- Colibri prefills about 6 tokens per second on the RTX 2060 (1009 tokens in 177 s), so a 12000 token OpenCode prompt needs about 30 minutes. It is not a coding agent on this machine.
 - An agent session makes several requests. The session budget per remote model is an estimate (`analysis.requests_per_agent_run`), not a count of requests.
 - OpenCode does not report which model answered, so that field is empty for agent runs. Ollama does, and a different name fails the run.
 - Groq, Mistral, Gemini and Cloudflare report no account state to the adapter, so the only evidence that the account cannot be billed is your own check.

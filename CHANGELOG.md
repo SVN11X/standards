@@ -6,6 +6,7 @@ All notable changes to this standard are documented here. The format follows [Ke
 
 ### Added
 
+- Docs and agent texts. `docs/007` now describes the executor loop as built, `docs/005`, `docs/006` and the `repo-improve` skill no longer keep Claude as a worker, and the new `/run-plan` OpenCode command checks and runs a work plan.
 - Bench class `decompose`: three task specs where a model returns work units. `workplan.validate` rejects a bad schema, an unknown type or a cycle, then the grader checks the unit count, that every file to change is covered and that units able to run together share no file. A program grades it, grader version 1.
 - Bench class `review-diff`: six synthetic diffs of new files, each with one seeded defect. A diff passes when a finding names the file and overlaps the defect lines (a finding over ten lines or more does not count) and no high finding sits elsewhere. A program grades it, grader version 1.
 - Bench class `refactor-module`: an 8 file fixture where `slugify` is copied into three modules and must move to `app/text.py`. Hidden tests check the behavior and, with `ast`, that the function is defined once and imported by each module. It is the proof class of the `refactor` task type, grader version 1.

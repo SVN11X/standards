@@ -10,19 +10,19 @@ flowchart LR
   route -->|search, lint, tests, hashes| tools[Program without AI]
   route -->|short local work| ollama[Ollama API]
   route -->|small green edit| opencode[OpenCode in its own worktree]
-  route -->|plan and work nobody else may take| claude[Claude Code]
+  route -->|plan or web direction| planner[Planner: the owner asks Claude]
   route -->|nobody is allowed| blocked[Blocked with the reason]
   ollama --> verify[Checks run by the caller]
   opencode --> verify
   verify -->|PASS| integrate[cherry-pick on the work branch]
-  verify -->|FAIL| fix[Claude fixes it or marks it BLOCKED]
+  verify -->|FAIL| fix[Next candidate or BLOCKED with the reason]
 ```
 
 1. Detection. At startup the `session_probe` hook says whether OpenCode is installed, whether Ollama answers, how many free models the owner checked and the privacy class of the folder. It installs nothing, contacts nothing remote and never blocks the session. Detection alone delegates nothing.
-2. Decision. `orchestrate.py route` applies `settings/orchestration.yml` in this order: can a program without AI do it, does the cost mode allow the executor, does the privacy class allow it, can the model do what the task needs, did it pass the bench class when the task or the risk asks for proof, and only then which allowed candidate is fastest. Cost, privacy and risk are never added into one score. Yellow and red items need the owner's review, whoever does the work. A task type that is not listed passes the same rules. The answer can be "blocked". `006-model-analyzer.md` explains the cost modes.
+2. Decision. `orchestrate.py route` applies `settings/orchestration.yml` in this order: can a program without AI do it, does the cost mode allow the executor, does the privacy class allow it, can the model do what the task needs, did it pass the bench class when the task or the risk asks for proof, and only then which allowed candidate is fastest. Cost, privacy and risk are never added into one score. Yellow and red items need the owner's review, whoever does the work. A model in cooldown after a failure is skipped and the next candidate is offered, except for Colibri, which has no fallback. Bench evidence expires after `limits.bench_recheck_days`, and `orchestrate.py models` prints what is discovered, tested and authorized with the date the evidence expires. A task type that is not listed is blocked, and `plan` and `web-direction` answer `planner`. The answer can be "blocked". `006-model-analyzer.md` explains the cost modes.
 3. Delegation. `orchestrate.py delegate opencode` creates a worktree on a new `delegate/<id>` branch from HEAD, writes a short task file (purpose, allowed files, protected files, the test command, base commit, untrusted material fenced as data), runs OpenCode with an explicit model, and keeps the exit code and the output. Credentials are removed from its environment. `delegate ollama` calls the API directly with thinking off, a fixed context and a token limit.
 4. Verification. The caller, not the executor, checks that something changed, that nothing outside the allowed files and nothing protected changed, and that the tests pass. Only then it commits on the delegate branch. Every state change (planned, approved, running, blocked, failed, verified, integrated) is written to `~/.standards/runs/<id>.json`, so a session that stops can see what was done instead of doing it twice.
-5. Integration. Claude cherry-picks a verified commit and runs the check again. Two writers never share a worktree.
+5. Integration. A verified commit is cherry-picked and the check runs again, by hand or by `scripts/execute.py`, which does it for every unit of a work plan on the branch `execute/<plan_id>` (see `007-autonomous-execution.md`). Two writers never share a worktree.
 
 ## Privacy
 
@@ -54,6 +54,7 @@ python scripts/verify.py --level deep --live
 ## Known limits
 
 - The guard hook matches text, so a command written in an unusual way can pass it. The worktree, OpenCode's own permissions and the checks after each run are the other layers.
-- Bench results belong to one machine and one day. The router uses them only after three runs with a pass rate of at least 0.8.
+- Bench results belong to one machine and one day. The router uses them only after three runs with a pass rate of at least 0.8, and only while they are fresh.
+- Colibri prefills about 6 tokens per second on the RTX 2060, so it answers short prompts and is not a coding agent on this machine.
 - Prompt-injection resistance of a model is reported, never relied on. The controls are the protected files, the scope check and the tests.
 - MCP servers are off by default. `mcp inspect` lists what a server exposes. It does not prove the server is safe.
