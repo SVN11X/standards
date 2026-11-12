@@ -1503,9 +1503,9 @@ def delegate_api(prompt: str, model: str, want_json: bool = False, untrusted: st
 def bench_run(task: str, executor: str, model: str | None, **options) -> dict:
     """Run one bench task. A row with `skipped` did not run and is not kept in the history."""
     if task in bench_tasks.AGENT_TASKS:
-        if executor not in {"opencode", "claude"}:
+        if executor not in {"opencode", "claude", "colibri"}:
             return {"task": task, "executor": executor, "model": model,
-                    "skipped": f"{task} needs a coding agent: opencode:<model>, or claude"}
+                    "skipped": f"{task} needs a coding agent: opencode:<model>, colibri:colibri/<id>, or claude"}
         options.pop("caps", None)
         options.pop("time_limit_s", None)
         return bench_agent(task, executor, model, **options)
