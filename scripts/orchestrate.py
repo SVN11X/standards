@@ -260,6 +260,27 @@ def detect_ollama(conf: dict, timeout: float = 1.5, show: bool = False) -> dict:
     return info
 
 
+def detect_colibri(conf: dict, timeout: float = 1.5) -> dict:
+    """What the local Colibri API answers. It only reads. A model is listed under the id the server expects."""
+    url = str(conf.get("url", "http://127.0.0.1:8000")).rstrip("/")
+    info = {"url": url, "up": False, "models": []}
+    try:
+        listing = http_json(f"{url}/v1/models", timeout=timeout)
+        info["models"] = sorted(str(m["id"]) for m in listing.get("data", []) if m.get("id"))
+        info["up"] = True
+    except (OSError, ValueError, urllib.error.URLError) as error:
+        info["error"] = str(error)[:200]
+    return info
+
+
+def append_telemetry(row: dict) -> None:
+    """One line per measured request, from the provider's own usage block. The dashboard reads this file."""
+    path = home() / "telemetry.jsonl"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps(row) + "\n")
+
+
 def detect_gpu() -> dict | None:
     if not shutil.which("nvidia-smi"):
         return None
@@ -294,7 +315,8 @@ def doctor(full: bool = False, conf: dict | None = None) -> dict:
             "git": version_of(["git", "--version"]), "node": version_of(["node", "--version"]),
             "npx": shutil.which("npx"), "uvx": shutil.which("uvx"), "claude": shutil.which("claude"),
             "sqlite_fts5": fts5_available(), "gpu": detect_gpu(), "ram_bytes": memory_bytes(),
-            "ollama": detect_ollama(conf.get("executors", {}).get("ollama", {}), show=full)}
+            "ollama": detect_ollama(conf.get("executors", {}).get("ollama", {}), show=full),
+            "colibri": detect_colibri(conf.get("executors", {}).get("colibri", {}))}
     opencode = shutil.which("opencode")
     caps["opencode"] = {"path": opencode, "version": version_of(["opencode", "--version"]) if opencode else None}
     if opencode and full:
@@ -390,6 +412,8 @@ def catalog_entry(executor: str, model: str | None, catalog: dict | None = None)
         return None
     if executor == "opencode" and model.startswith("ollama/"):
         executor, model = "ollama", model.split("/", 1)[1]
+    if executor == "colibri":
+        model = model.split("/", 1)[1] if model.startswith("colibri/") else model
     name = model.split("/")[-1] if executor == "opencode" else model
     for entry in (catalog if catalog is not None else model_catalog()).get("models") or []:
         if entry.get("executor") == executor and entry.get("id") == name:
@@ -436,6 +460,10 @@ def channel(executor: str, model: str | None, conf: dict, caps: dict | None = No
         return "remote_claude"
     if executor == "opencode" and model and model.startswith("ollama/"):
         executor, model = "ollama", model.split("/", 1)[1]
+    if executor == "opencode" and model and model.startswith("colibri/"):
+        executor = "colibri"
+    if executor == "colibri":
+        return "local" if is_loopback(conf["executors"]["colibri"].get("url", "")) else "remote_free"
     if executor == "ollama":
         remote = set(((caps or {}).get("ollama") or {}).get("remote") or [])
         local_url = is_loopback(conf["executors"]["ollama"].get("url", "http://127.0.0.1:11434"))
@@ -763,6 +791,20 @@ def eligible(candidate, task, repo, input_chars, conf, local, caps, measured=Non
             return False, note, None
         ok, why = gate("ollama", model, repo, conf, local, mode, caps, catalog)
         return ok, (note if ok else why), (model if ok else None)
+    if candidate == "colibri":
+        info = caps.get("colibri") or {}
+        if not (caps.get("opencode") or {}).get("path"):
+            return False, "OpenCode is not installed, and it is what runs Colibri's model", None
+        if not info.get("up") or not info.get("models"):
+            return False, "Colibri is not running (python scripts/colibri.py ensure)", None
+        model = f"colibri/{info['models'][0]}"
+        stats = measured.get(("colibri", model))
+        if proven and not stats:
+            return False, f"{model} has not passed the bench class of this task", None
+        ok, why = gate("colibri", model, repo, conf, local, mode, caps, catalog)
+        if not ok:
+            return False, why, None
+        return True, why + (". Verified on this machine" if stats else ". Not measured yet"), model
     if candidate == "opencode":
         if not (caps.get("opencode") or {}).get("path"):
             return False, "OpenCode is not installed", None
@@ -1007,6 +1049,13 @@ def delegate_opencode(repo: Path, task: str, allowed: list[str], test: str | Non
                 "repo": str(repo), "task": task, "allowed": allowed, "test": test, "checks": {},
                 "cost_mode": cost_mode(conf, local, mode)[0]}
     set_state(run_data, "planned")
+    if executor == "colibri":
+        # No silent substitution: a stopped Colibri blocks the run, it never falls back to another model.
+        found = detect_colibri(conf["executors"]["colibri"])
+        if not found["up"] or not found["models"]:
+            set_state(run_data, "blocked", "Colibri is not running (python scripts/colibri.py ensure). No other model was used")
+            return run_data
+        model = model or f"colibri/{found['models'][0]}"
     if executor == "opencode" and not model:
         models = checked_free_models(local, conf)
         model = models[0] if models else None
@@ -1605,7 +1654,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--mode", choices=modes, help="a stricter cost mode for this run")
     p.add_argument("--json", action="store_true")
     p = sub.add_parser("delegate")
-    p.add_argument("executor", choices=["opencode", "ollama", "api"])
+    p.add_argument("executor", choices=["opencode", "ollama", "colibri", "api"])
     p.add_argument("--repo", type=Path, default=Path.cwd())
     p.add_argument("--task", help="the task in one or a few lines")
     p.add_argument("--task-file", type=Path)
@@ -1681,7 +1730,8 @@ def main(argv: list[str] | None = None) -> int:
                                      mode=args.mode)
         else:
             result = delegate_opencode(args.repo, task, args.allow, args.test, model=args.model, protect=args.protect,
-                                       untrusted=untrusted, keep=args.keep, mode=args.mode)
+                                       untrusted=untrusted, keep=args.keep, mode=args.mode,
+                                       executor="colibri" if args.executor == "colibri" else "opencode")
         emit({k: v for k, v in result.items() if k not in {"history"}}, True)
         return 0 if result["state"] == "verified" else 1
     if args.command == "runs":

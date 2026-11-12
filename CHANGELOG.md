@@ -6,6 +6,7 @@ All notable changes to this standard are documented here. The format follows [Ke
 
 ### Added
 
+- Colibri as a local provider. `scripts/colibri.py` starts, checks, stops and registers it in OpenCode, and `orchestrate.py delegate colibri` runs a task with its model. A stopped Colibri blocks the run and no other model replaces it. `scripts/ecosystem.py` (entry `scripts/standards.ps1`) has the modes doctor, status, install, repair, update and verify, driven by `settings/ecosystem.yml`.
 - Cost modes `local-only`, `free-strict` and `existing-subscription` in `settings/orchestration.yml`. The owner's mode lives in `~/.standards/local.yml` (`orchestrate.py consent --cost-mode`). A run can ask for a stricter mode with `--mode` or `STANDARDS_COST_MODE`, never a looser one.
 - `settings/models.yml`: model candidates with cost category, data use, stated capabilities, source, date and evidence level. An entry enables nothing.
 - Data use per privacy class (`remote_data`). Public code may go to a free model that trains. Private code goes only to one that keeps nothing. A model with no recorded data policy is never used. `consent --free-model <id> --data-use none|stores|trains` records what the owner read.

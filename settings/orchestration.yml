@@ -51,18 +51,18 @@ tasks:
   classify: [ollama, api]
   summarize-short: [ollama, api]
   extract-short: [ollama, api]
-  edit-small: [opencode]
-  fix-test: [opencode]
-  docs-small: [opencode, ollama]
-  edit-large: [opencode]
-  refactor: [opencode]
+  edit-small: [opencode, colibri]
+  fix-test: [opencode, colibri]
+  docs-small: [opencode, colibri, ollama]
+  edit-large: [opencode, colibri]
+  refactor: [opencode, colibri]
   # Web work. Direction is a design decision. A pattern, a test or a check error is bounded code. Copy is short text.
-  web-pattern: [opencode]
-  web-test: [opencode]
+  web-pattern: [opencode, colibri]
+  web-test: [opencode, colibri]
   web-copy: [ollama, opencode, api]
   web-classify: [ollama, api]
   web-visual-review: [ollama, api]
-  fix-check: [opencode]
+  fix-check: [opencode, colibri]
 
 # Task types that are architecture decisions. route() answers executor "planner": the owner asks
 # Claude directly and nothing runs on its own. They never appear in the candidate lists above.
@@ -133,6 +133,14 @@ executors:
     num_predict: 400
     # How long Ollama keeps the model loaded after a call. Unset keeps Ollama's own default.
     # keep_alive: 10m
+  colibri:
+    # Local inference engine with an OpenAI-compatible API. OpenCode runs its model as colibri/<id>.
+    # home is the clone that scripts/standards.ps1 installs. A stopped server blocks the run, it is never replaced.
+    url: http://127.0.0.1:8000
+    home: ~/.standards/tools/colibri
+    command: [opencode, run, --model, "{model}", "{message}"]
+    ready_timeout_s: 300
+    chat_timeout_s: 600
   opencode:
     # {model} and {message} are filled in. The message points to a task file in the worktree.
     command: [opencode, run, --model, "{model}", "{message}"]
