@@ -191,5 +191,19 @@ class ExecuteTests(unittest.TestCase):
         self.assertFalse(Path(run.state["integration"]["worktree"]).exists())
 
 
+class PrivacyInheritanceTests(unittest.TestCase):
+    def test_worktree_keeps_the_class_the_owner_set_for_the_repository(self):
+        conf = orchestrate.policy()
+        with tempfile.TemporaryDirectory() as tmp:
+            repo, work = Path(tmp) / "repo", Path(tmp) / "work"
+            repo.mkdir()
+            work.mkdir()
+            local = {"folders": [{"path": str(repo.resolve()), "class": "restricted"}]}
+            self.assertEqual(orchestrate.privacy_class(work, conf, local)[0], conf["privacy"]["default"])
+            inherited = execute.inherit_folder(local, repo, work)
+            self.assertEqual(orchestrate.privacy_class(work, conf, inherited)[0], "restricted")
+            self.assertEqual(execute.inherit_folder({}, repo, work), {})
+
+
 if __name__ == "__main__":
     unittest.main()

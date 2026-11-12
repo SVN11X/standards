@@ -58,6 +58,15 @@ def route_unit(unit: dict, plan: dict, repo: Path, conf: dict, local: dict) -> d
     return orchestrate.route(unit["task_type"], repo, risk=risk, files=files, conf=conf, local=local)
 
 
+def inherit_folder(local: dict, source: Path, target: Path) -> dict:
+    """Give a worktree the owner's privacy entry of the repository it came from. Without it the worktree path
+    matches no entry and falls back to the default class, which can be looser than the owner's choice."""
+    entry = orchestrate.folder_entry(source, local)
+    if not entry or Path(target).resolve() == Path(source).resolve():
+        return local
+    return {**local, "folders": [*(local.get("folders") or []), {**entry, "path": str(Path(target).resolve())}]}
+
+
 def default_delegate(repo: Path, unit: dict, decision: dict, test: str | None, conf: dict, local: dict) -> dict:
     if decision["executor"] not in AGENTS:
         return {"state": "blocked", "note": f"routing gave {decision['executor']}, not a coding agent. "
@@ -91,7 +100,7 @@ class Executor:
         self.local = local if local is not None else orchestrate.local_config()
         self.reviewer_model, self.reviewer, self.parallel = reviewer_model, reviewer, parallel
         self.route = route or (lambda unit: route_unit(unit, plan, self.repo, self.conf, self.local))
-        self.delegate = delegate or (lambda r, u, d, t: default_delegate(r, u, d, t, self.conf, self.local))
+        self.delegate = delegate or (lambda r, u, d, t: default_delegate(r, u, d, t, self.conf, inherit_folder(self.local, self.repo, r)))
         self.lock = threading.Lock()
         self.units = {u["id"]: u for u in plan["units"]}
         self.state = load_state(plan["plan_id"])
