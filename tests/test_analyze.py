@@ -1,5 +1,6 @@
 """The model analyzer with fake executors: no real model, no download and no paid endpoint. Run: python -m unittest discover -s tests"""
 import datetime as dt
+import json
 import os
 import socket
 import sys
@@ -92,6 +93,25 @@ class Analyzer(unittest.TestCase):
         self.assertIn("1 not installed", text)
         self.assertNotIn("ollama pull", text)
         self.assertIn("Cut by a budget", text)
+
+    def test_the_plan_measures_first_what_lapses_soon(self):
+        ready, left_out = analyze.candidates(self.conf, self.local, self.caps, CATALOG)
+        before = analyze.build_plan(ready, self.conf, runs=1)[0]
+        self.assertNotEqual([s for s in before if s["executor"] != "tools"][0]["model"], "opencode/lazy-free")
+        self.assertFalse(any(s.get("refresh") for s in before))
+        date = (dt.datetime.now(dt.timezone.utc) - dt.timedelta(days=27)).isoformat()
+        orchestrate.bench_file().write_text(json.dumps(
+            {"task": "fix-bug", "executor": "opencode", "model": "opencode/lazy-free", "seconds": 5,
+             "verified": True, "date": date}) + "\n", encoding="utf-8")
+        steps, cut = analyze.build_plan(ready, self.conf, runs=1)
+        work = [s for s in steps if s["executor"] != "tools"]
+        self.assertEqual(work[0]["model"], "opencode/lazy-free")
+        self.assertEqual((work[0]["task"], bool(work[0]["refresh"])), ("fix-bug", True))
+        text = "\n".join(analyze.plan_lines(steps, cut, left_out, self.conf, "existing-subscription"))
+        self.assertIn("Measured again before the evidence lapses", text)
+        self.assertIn("opencode:opencode/lazy-free on fix-bug", text)
+        self.conf["limits"]["refresh_before_days"] = 1
+        self.assertFalse(any(s.get("refresh") for s in analyze.build_plan(ready, self.conf, runs=1)[0]))
 
     def test_local_only_plans_no_remote_step(self):
         ready, left_out = analyze.candidates(self.conf, self.local, self.caps, CATALOG, mode="local-only")

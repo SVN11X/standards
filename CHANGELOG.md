@@ -6,6 +6,7 @@ All notable changes to this standard are documented here. The format follows [Ke
 
 ### Added
 
+- `limits.max_p90_s` is a ceiling on the p90 seconds to an accepted result per route task type (default `{}`, no limit). A model over it does not count as proven for that task and the route says so. `limits.refresh_before_days` (default 7) puts the evidence that lapses within that many days first in the night analyzer plan, so it is measured again before it expires. Redone on `fresh_rows` and `model_states` after an earlier run was written on an old base.
 - `docs/delivery-report-2026-11-12.md`: the consolidated delivery report with versions, measurements, the pilot, the acceptance criteria with their real state, the defects found and the blocked items.
 - Fixed the CI `verify` failures: the policy check did not know `colibri` as an executor and two imports were unused. They failed since the Colibri commit. Run `python scripts/verify.py --level standard` before every push, not only the selftest.
 - `execute.py` records the commit the integration worktree was built on and refuses to continue when the repository moved, with the command to clean and restart. A real pilot run reused a worktree built on an old base after the fixture changed, and a second `run` silently reused the commits of the first.

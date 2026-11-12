@@ -117,6 +117,11 @@ limits:
   bench_fail_runs: 2
   # A bench run older than this, or measured with another OpenCode minor (opencode) or GPU (ollama), no longer counts.
   bench_recheck_days: 30
+  # Evidence that lapses within this many days is measured again first by the night run (analyze.py run).
+  refresh_before_days: 7
+  # Ceiling on the p90 seconds to an accepted result, keyed by route task type, such as {edit-small: 120}.
+  # A model over it does not count as proven for that task type. {} means no limit.
+  max_p90_s: {}
   # A provider's price list older than this no longer proves that a model is free.
   provider_list_max_age_h: 24
   output_tail_chars: 4000
