@@ -263,10 +263,15 @@ def build_plan(ready: list[dict], conf: dict, runs: int | None = None, tasks: li
               "remote": False, "provider": "program"} for task in sorted(bench_tasks.BASELINES) if wanted(task)]
     cut, spent = [], {}
     known = orchestrate.providers.load()
-    for item in sorted(ready, key=lambda r: (r["remote"], r["executor"] == "api")):
+    soon: dict[tuple, str] = {}
+    for bench, executor, model, expires in orchestrate.expiring_evidence(conf, conf["limits"].get("refresh_before_days", 7)):
+        soon[(executor, model, bench)] = expires
+    lapsing = {(executor, model) for executor, model, _ in soon}
+    for item in sorted(ready, key=lambda r: ((r["executor"], r["model"]) not in lapsing, r["remote"], r["executor"] == "api")):
         if models and not any(text.lower() in item["model"].lower() for text in models):
             continue
         mine = [task for task in item["tasks"] if wanted(task)]
+        mine.sort(key=lambda task: (item["executor"], item["model"], task) not in soon)
         agent_limit = conf["limits"]["opencode_timeout_s"] + 120
         api = item["executor"] == "api"
         allowed, unit = None, "sessions this model gets"
@@ -290,7 +295,8 @@ def build_plan(ready: list[dict], conf: dict, runs: int | None = None, tasks: li
                 spent[bucket] = spent.get(bucket, 0) + cost
                 steps.append({"key": f"{task}|{item['executor']}|{item['model']}|{number}", "task": task,
                               "executor": item["executor"], "model": item["model"], "run": number, "remote": item["remote"],
-                              "provider": item["provider"], "own_limit": bool(item.get("limit")) and not api, "requests": cost if api else None,
+                              "provider": item["provider"], "refresh": soon.get((item["executor"], item["model"], task)),
+                              "own_limit": bool(item.get("limit")) and not api, "requests": cost if api else None,
                               "limit_s": agent_limit if task in bench_tasks.AGENT_TASKS else settings["chat_run_timeout_s"]})
         if dropped:
             cut.append({"executor": item["executor"], "model": item["model"], "provider": item["provider"], "fix": None,
@@ -319,6 +325,10 @@ def plan_lines(steps: list[dict], cut: list[dict], left_out: list[dict], conf: d
                 requests = sum(s.get("requests") or 0 for s in items)
                 lines.append(f"  {name}: {len(items)} runs of {', '.join(sorted({s['task'] for s in items}))}"
                              + (f", about {requests} requests" if requests else ""))
+    again = sorted({(s["executor"], s["model"], s["task"], s["refresh"]) for s in todo if s.get("refresh")})
+    if again:
+        lines.append("Measured again before the evidence lapses, first in the plan:")
+        lines += [f"  {executor}:{model} on {task}, expires {expires}" for executor, model, task, expires in again]
     sessions = sum(1 for s in todo if s["remote"] and s["executor"] != "api")
     requests = sum(s.get("requests") or 0 for s in todo)
     if sessions or requests:

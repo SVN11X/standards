@@ -183,6 +183,33 @@ class Route(Base):
         row = table[("edit-small", "ollama/m:9b")]
         self.assertEqual((row["tested"], row["discovered"]), ("yes (fix-bug)", "not in the coverage"))
 
+    def test_a_p90_over_the_ceiling_does_not_prove_the_model_and_the_route_says_why(self):
+        rows = [{"task": "classify", "executor": "ollama", "model": "a:1b", "seconds": s, "verified": True,
+                 "date": dt.datetime.now(dt.timezone.utc).isoformat()} for s in (5, 6, 90)]
+        orchestrate.bench_file().write_text("\n".join(json.dumps(r) for r in rows) + "\n", encoding="utf-8")
+        conf = orchestrate.policy()
+        self.assertIn(("ollama", "a:1b"), orchestrate.measured_models("classify", conf))
+        conf["limits"]["max_p90_s"] = {"classify": 30}
+        self.assertEqual(orchestrate.measured_models("classify", conf), {})
+        self.assertIn(("ollama", "a:1b"), orchestrate.slow_models("classify", conf))
+        self.assertIn(("ollama", "a:1b"), orchestrate.measured_models("summarize-short", conf))
+        self.assertEqual(orchestrate.policy()["limits"]["max_p90_s"], {})
+        caps = {"ollama": {"up": True, "models": ["a:1b"], "loaded": [], "remote": []}}
+        decision = orchestrate.route("classify", self.tmp, conf=conf, local=self.local(), caps=caps)
+        self.assertIn("does not count as proven: p90", " ".join(decision["reasons"]))
+
+    def test_expiring_evidence_lists_what_lapses_within_the_window(self):
+        now = dt.datetime.now(dt.timezone.utc)
+
+        def row(model, age, executor="ollama"):
+            return {"task": "classify", "executor": executor, "model": model, "seconds": 5, "verified": True,
+                    "date": (now - dt.timedelta(days=age)).isoformat()}
+        rows = [row("a:1b", 27), row("b:1b", 10), row("c:1b", 40), row("t", 27, "tools")]
+        orchestrate.bench_file().write_text("\n".join(json.dumps(r) for r in rows) + "\n", encoding="utf-8")
+        found = orchestrate.expiring_evidence(orchestrate.policy(), 7)
+        self.assertEqual([(t, e, m) for t, e, m, _ in found], [("classify", "ollama", "a:1b")])
+        self.assertEqual(orchestrate.policy()["limits"]["refresh_before_days"], 7)
+
     def test_stale_history_does_not_prove_a_model(self):
         old = (dt.datetime.now(dt.timezone.utc) - dt.timedelta(days=90)).isoformat()
         rows = [{"task": "classify", "executor": "ollama", "model": "a:1b", "seconds": 5, "verified": True, "date": old,

@@ -698,15 +698,14 @@ def summarize_bench(rows: list[dict]) -> list[dict]:
 # Route
 
 
-def measured_models(task: str, conf: dict, classes: list[str] | None = None) -> dict:
-    """Bench results that count for this task type: recent runs of this OpenCode minor and GPU, enough of them and a high enough pass rate, in the class that measures it.
-
-    The first class a model was measured in decides. A broader class counts only for a model with no run in a more
-    specific one, so a model that failed the specific class never gets in through the broader one.
-    """
+def judged_models(task: str, conf: dict, classes: list[str] | None = None) -> tuple[dict, dict]:
+    """(proven, slow) for this task type. Both hold models with fresh runs, enough of them and a high enough pass rate
+    in the class that measures it. `slow` holds those whose p90 is over `limits.max_p90_s` for this task type."""
     limits = conf["limits"]
     classes = classes if classes is not None else conf.get("proof", {}).get(task, [])
+    ceiling = (limits.get("max_p90_s") or {}).get(task)
     found: dict = {}
+    slow: dict = {}
     judged: set = set()
     summary = summarize_bench(fresh_rows(bench_rows(), limits.get("bench_recheck_days"), hardware()))
     for bench in classes:
@@ -715,9 +714,53 @@ def measured_models(task: str, conf: dict, classes: list[str] | None = None) -> 
             key = (row["executor"], row["model"])
             if (key not in judged and row["runs"] >= limits["bench_min_runs"]
                     and row["pass_rate"] >= limits["bench_min_pass_rate"] and row["p50_s"] is not None):
-                found[key] = row
+                if ceiling is not None and (row["p90_s"] or 0) > ceiling:
+                    slow[key] = row
+                else:
+                    found[key] = row
         judged |= {(row["executor"], row["model"]) for row in rows}
-    return found
+    return found, slow
+
+
+def measured_models(task: str, conf: dict, classes: list[str] | None = None) -> dict:
+    """Bench results that count for this task type: recent runs of this OpenCode minor and GPU, enough of them and a high enough pass rate, in the class that measures it.
+
+    The first class a model was measured in decides. A broader class counts only for a model with no run in a more
+    specific one, so a model that failed the specific class never gets in through the broader one. A model whose p90
+    is over `limits.max_p90_s` for this task type does not count (see `slow_models`).
+    """
+    return judged_models(task, conf, classes)[0]
+
+
+def slow_models(task: str, conf: dict, classes: list[str] | None = None) -> dict:
+    """Models that passed the bench of this task type but are slower than its `limits.max_p90_s` ceiling."""
+    return judged_models(task, conf, classes)[1]
+
+
+def expiring_evidence(conf: dict, within_days: int, now: dt.datetime | None = None) -> list[tuple]:
+    """(bench class, executor, model, expiry date) of the fresh evidence that lapses within `within_days` days.
+    The newest run of each class and model sets the date, and the program baselines are left out."""
+    now = now or dt.datetime.now(dt.timezone.utc)
+    days = conf["limits"].get("bench_recheck_days")
+    if days is None:
+        return []
+    newest: dict[tuple, dt.datetime] = {}
+    for row in fresh_rows(bench_rows(), days, hardware(), now):
+        if row.get("executor") == "tools":
+            continue
+        try:
+            stamp = dt.datetime.fromisoformat(str(row["date"]))
+        except (KeyError, ValueError):
+            continue
+        stamp = stamp if stamp.tzinfo else stamp.replace(tzinfo=dt.timezone.utc)
+        key = (str(row.get("task")), str(row.get("executor")), str(row.get("model")))
+        newest[key] = max(newest.get(key, stamp), stamp)
+    found = []
+    for key, stamp in newest.items():
+        expires = stamp + dt.timedelta(days=days)
+        if (expires - now).total_seconds() <= within_days * 86400:
+            found.append((*key, expires.date().isoformat()))
+    return sorted(found)
 
 
 def failed_models(task: str, conf: dict, classes: list[str] | None = None) -> dict:
@@ -1113,7 +1156,7 @@ def route(task: str, repo: Path, risk: str = "green", files: int = 1, input_char
     if tier and tier.get("classes"):
         # The file count raises the proof class, never lowers it.
         proven, classes = True, list(tier["classes"])
-    measured = measured_models(task, conf, classes)
+    measured, slow = judged_models(task, conf, classes)
     cool = cooling_set() if cool is None else cool
     for candidate in candidates:
         needs_proof = proven
@@ -1134,6 +1177,9 @@ def route(task: str, repo: Path, risk: str = "green", files: int = 1, input_char
         if needs_proof and tier and tier.get("classes"):
             why = f"{files} files is more than {limits['edit_small_max_files']}. {why[0].upper()}{why[1:]}"
         decision["rejected"].append({"executor": candidate, "why": why})
+    for (executor, model), stats in sorted(slow.items()):
+        decision["reasons"].append(f"{executor} {model} does not count as proven: p90 {stats['p90_s']}s is over the "
+                                   f"{limits['max_p90_s'][task]}s ceiling for {task}")
     if decision["executor"] is None:
         decision["executor"] = "blocked"
         refused = " ".join(f"{item['executor']}: {item['why']}." for item in decision["rejected"])
