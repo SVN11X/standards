@@ -453,8 +453,20 @@ def is_cloud_tag(model: str) -> bool:
     return bool(re.search(r"(^|[:-])cloud$", model.lower()))
 
 
+def gateway_address(url: str) -> bool:
+    """True when the address is the base_url of a gateway in settings/providers.yml, whatever executor is configured to use it."""
+    wanted = urllib.parse.urlparse(url)
+    for pconf in providers.load().values():
+        if providers.is_gateway(pconf):
+            theirs = urllib.parse.urlparse(str(pconf.get("base_url") or ""))
+            if theirs.hostname and (theirs.hostname, theirs.port) == (wanted.hostname, wanted.port):
+                return True
+    return False
+
+
 def channel(executor: str, model: str | None, conf: dict, caps: dict | None = None) -> str:
-    """Where a request ends up: tools, local, remote_free or remote_claude. Listening on localhost is not enough to be local."""
+    """Where a request ends up: tools, local, remote_free or remote_claude. Listening on localhost is not enough to be local.
+    A gateway forwards to remote providers, so an address that belongs to one is remote whatever executor reaches it."""
     if executor == "tools":
         return "tools"
     if executor == "claude":
@@ -464,10 +476,12 @@ def channel(executor: str, model: str | None, conf: dict, caps: dict | None = No
     if executor == "opencode" and model and model.startswith("colibri/"):
         executor = "colibri"
     if executor == "colibri":
-        return "local" if is_loopback(conf["executors"]["colibri"].get("url", "")) else "remote_free"
+        url = conf["executors"]["colibri"].get("url", "")
+        return "local" if is_loopback(url) and not gateway_address(url) else "remote_free"
     if executor == "ollama":
         remote = set(((caps or {}).get("ollama") or {}).get("remote") or [])
-        local_url = is_loopback(conf["executors"]["ollama"].get("url", "http://127.0.0.1:11434"))
+        url = conf["executors"]["ollama"].get("url", "http://127.0.0.1:11434")
+        local_url = is_loopback(url) and not gateway_address(url)
         return "local" if local_url and model not in remote and not is_cloud_tag(model or "") else "remote_free"
     return "remote_free"
 
@@ -1692,9 +1706,9 @@ def delegate_api(prompt: str, model: str, want_json: bool = False, untrusted: st
         return run_data
     record_health("api", model, None, conf)
     answer = reply["message"].get("content", "")
-    run_data.update(answer=answer, seconds=round(time.monotonic() - started, 2), effective_model=reply.get("model"), usage=reply.get("usage"))
+    run_data.update(answer=answer, seconds=round(time.monotonic() - started, 2), effective_model=reply.get("model"), effective_provider=reply.get("provider"), usage=reply.get("usage"))
     run_data["checks"]["reply"] = "PASS" if answer.strip() else "FAIL"
-    if not providers.same_model(name, reply.get("model")):
+    if not providers.is_gateway(pconf) and not providers.same_model(name, reply.get("model")):
         run_data["checks"]["effective_model"] = "FAIL"
     if reply.get("charged"):
         run_data["checks"]["no_charge"] = "FAIL"

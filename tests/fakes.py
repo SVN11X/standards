@@ -282,3 +282,62 @@ def provider_settings(url: str) -> dict:
         "gone": {"name": "Gone Models", "status": "retired", "cost": "unknown", "confirmed": "Retired last summer."},
         "cli": {"name": "Some CLI", "status": "no-adapter", "cost": "unknown", "notes": "A command line tool, not an API."},
     }
+
+
+class Gateway(http.server.BaseHTTPRequestHandler):
+    """A fake gateway such as FreeLLMAPI. It forwards to upstream providers in order and falls back to the next one
+    that is up. It honors the allowed list of the request unless `leaky` is set. The key is test-key."""
+    upstream = ["groq/llama-3", "mistral/small", "openai/gpt-x"]
+    down: set = set()
+    leaky = False            # ignores the allowed list, as a gateway without the feature would
+    silent = False           # does not say which provider answered
+    fusion = False
+    cached = False
+    charge = False
+    bodies: list = []
+
+    def log_message(self, *args):
+        pass
+
+    def reply(self, code, body):
+        data = json.dumps(body).encode("utf-8")
+        self.send_response(code)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(data)))
+        self.end_headers()
+        self.wfile.write(data)
+
+    def do_POST(self):
+        body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+        Gateway.bodies.append(body)
+        if self.headers.get("Authorization") != "Bearer test-key":
+            return self.reply(401, {"error": {"message": "Invalid key"}})
+        options = body.get("gateway") or {}
+        allow = options.get("allow")
+        pool = [name for name in Gateway.upstream if name not in Gateway.down]
+        if allow is not None and not Gateway.leaky:
+            pool = [name for name in pool if name in allow]
+        if not pool:
+            return self.reply(503, {"error": {"message": "no provider is up in the allowed list"}})
+        provider, _, model = pool[0].partition("/")
+        info = {"provider": provider, "model": model, "fusion": Gateway.fusion, "cached": Gateway.cached}
+        message = to_openai_reply(answer(from_openai_request(body)))
+        usage = {"prompt_tokens": 10, "completion_tokens": 5, **({"cost": 0.02} if Gateway.charge else {})}
+        self.reply(200, {"model": model, "usage": usage, **({} if Gateway.silent else {"gateway": info}),
+                         "choices": [{"index": 0, "message": message, "finish_reason": "stop"}]})
+
+
+def start_gateway():
+    Gateway.down, Gateway.leaky, Gateway.silent = set(), False, False
+    Gateway.fusion, Gateway.cached, Gateway.charge, Gateway.bodies = False, False, False, []
+    server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Gateway)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    return server, f"http://127.0.0.1:{server.server_address[1]}"
+
+
+def gateway_settings(url: str, allow: list[str] | None = None) -> dict:
+    """A settings/providers.yml for tests with one gateway on a loopback address. It still forwards to remote providers."""
+    return {"gate": {"name": "Fake Gateway", "status": "adapter", "protocol": "openai", "base_url": f"{url}/v1", "key_env": "FAKE_API_KEY",
+                     "cost": "free-quota", "free_rule": "plan", "preflight": "owner", "features": ["chat", "json"],
+                     "data": {"stores": "no", "trains": "no"}, "limits": {"requests_per_day": None, "requests_per_minute": None},
+                     "gateway": {"allow": ["groq/llama-3", "mistral/small"] if allow is None else allow}}}

@@ -374,7 +374,7 @@ entries:
     cost: not verified
     privacy: not verified
     expression: []
-    notes: "Optional gateway that routes requests among free providers. First candidate to evaluate as a backend. Listening on localhost does not make it local: the requests go to remote providers, so orchestrate.py counts any gateway as remote. Before trial: prove with a fake server that it can be limited to an allowed list of provider and model before anything is sent, that its internal fallback stays inside that list, which provider answered, and that no charge is possible. Keep fusion and caching of private data off."
+    notes: "Optional gateway that routes requests among free providers. First candidate to evaluate as a backend. Listening on localhost does not make it local: the requests go to remote providers, so orchestrate.py counts any gateway as remote. Before trial: prove with a fake server that it can be limited to an allowed list of provider and model before anything is sent, that its internal fallback stays inside that list, which provider answered, and that no charge is possible. Keep fusion and caching of private data off. The adapter and these four checks pass against a fake gateway (tests/test_gateway.py), the real service is still unproven."
     evaluated: 2026-11-10
   - name: Paperclip
     url: https://github.com/paperclipai/paperclip

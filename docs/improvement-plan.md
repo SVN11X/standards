@@ -20,7 +20,7 @@ Progress of the free routing, model analyzer and web design work of November 202
 - [ ] BLOCKED: run each provider adapter against its real service with the owner's key. Only a fake server was used
 - [ ] BLOCKED: open each provider's pages and confirm what `settings/providers.yml` says. It came from a search of their sites
 - [ ] Confirm that `opencode run --file` sends an image, then test vision models served only through OpenCode
-- [ ] Adapter for a gateway such as FreeLLMAPI, after the trial checks in the radar pass with a fake server
+- [x] Adapter for a gateway such as FreeLLMAPI, after the trial checks in the radar pass with a fake server
 - [x] Locate the official repository and license of the impeccable detector. It is pbakaus/impeccable, Apache-2.0, and the radar lists it at assess
 - [ ] Second web change: site performance budget, chart palette for color blindness, form pattern, link preview
 - [x] Remove Claude from routing. Drop `claude` from every `tasks` list, add `planner_tasks`, remove the risk reorder and the proof exemption, update the five tests
