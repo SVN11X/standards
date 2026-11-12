@@ -14,6 +14,7 @@ import argparse
 import json
 import sys
 import threading
+import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
@@ -51,6 +52,17 @@ def unit_task(unit: dict) -> str:
 
 def unit_test(unit: dict, plan: dict) -> str | None:
     return (unit.get("acceptance") or {}).get("test") or (plan.get("defaults") or {}).get("test")
+
+
+def input_size(unit: dict, repo: Path, files: list[str]) -> int:
+    """Characters a model would read: the task text plus the files the unit may touch."""
+    total = len(unit_task(unit))
+    for name in workplan.expand(unit, files):
+        try:
+            total += (Path(repo) / name).stat().st_size
+        except OSError:
+            pass
+    return total
 
 
 def route_unit(unit: dict, plan: dict, repo: Path, conf: dict, local: dict) -> dict:
@@ -95,7 +107,8 @@ class Executor:
     """Runs a plan. `delegate(repo, unit, decision, test)` and `route(unit)` are injected so tests need no model."""
 
     def __init__(self, plan: dict, repo: Path, reviewer_model: str | None = None, reviewer=None, delegate=None,
-                 route=None, conf: dict | None = None, local: dict | None = None, parallel: int | None = None):
+                 route=None, conf: dict | None = None, local: dict | None = None, parallel: int | None = None,
+                 propose=None, clock=time.monotonic):
         self.plan, self.repo = plan, Path(repo)
         self.conf = conf or orchestrate.policy()
         self.local = local if local is not None else orchestrate.local_config()
@@ -106,7 +119,11 @@ class Executor:
         self.units = {u["id"]: u for u in plan["units"]}
         self.state = load_state(plan["plan_id"])
         self.work_repo = self.repo
-        self.attempts = max(1, (plan.get("budgets") or {}).get("max_attempts_per_unit", 1))
+        self.budgets = plan.get("budgets") or {}
+        self.attempts = max(1, self.budgets.get("max_attempts_per_unit", 1))
+        self.propose, self.clock, self.started = propose, clock, clock()
+        self.depth: dict[str, int] = {}
+        self.split_parents: set[str] = set()
 
     def save(self) -> None:
         orchestrate.write_json(state_file(self.plan["plan_id"]), self.state)
@@ -136,6 +153,33 @@ class Executor:
                 return "cherry-pick conflict: " + orchestrate.tail(result["stderr"], 300)
         return None
 
+    def split(self, unit: dict) -> tuple[list[dict], str]:
+        """Parts for a unit that is too large, or ([], reason). A part is never split again."""
+        uid = unit["id"]
+        if self.depth.get(uid, 0) >= 1:
+            return [], "max_split_depth"
+        method, parts = workplan.split_unit(unit, workplan.tracked_files(self.work_repo), self.propose, self.conf)
+        if not parts:
+            return [], "no valid split"
+        with self.lock:
+            self.split_parents.add(uid)
+            for part in parts:
+                self.units[part["id"]] = part
+                self.depth[part["id"]] = self.depth.get(uid, 0) + 1
+        return parts, method
+
+    def run_parts(self, uid: str, parts: list[dict], method: str) -> None:
+        """Run the parts of a split unit in order. The parent passes only when every part passed."""
+        ids = workplan.topo_order(parts)
+        for part in ids:
+            if self.state["units"].get(part, {}).get("status") != DONE:
+                self.run_unit(part)
+        bad = [p for p in ids if self.state["units"][p]["status"] != DONE]
+        if bad:
+            self.mark(uid, "failed", note=f"split by {method}, not passed: " + ", ".join(bad), split=ids)
+        else:
+            self.mark(uid, DONE, note=f"split by {method} into " + ", ".join(ids), split=ids, attempts=0)
+
     def attempt(self, unit: dict, decision: dict, test: str | None) -> tuple[str, str, dict]:
         data = self.delegate(self.work_repo, unit, decision, test)
         if data.get("state") == "blocked":
@@ -158,6 +202,17 @@ class Executor:
         try:
             decision = self.route(unit)
             test = unit_test(unit, self.plan)
+            limit = unit.get("max_input_chars")
+            if limit and input_size(unit, self.work_repo, workplan.tracked_files(self.work_repo)) > limit:
+                if decision.get("executor") == "colibri":
+                    self.mark(uid, "blocked", note="too large for Colibri and a Colibri unit is never replaced by a split")
+                    return
+                parts, why = self.split(unit)
+                if not parts:
+                    self.mark(uid, "blocked", note=f"too large (max_input_chars {limit}) and not split: {why}")
+                    return
+                self.run_parts(uid, parts, why)
+                return
             # A Colibri unit has no fallback: it never moves to another model on its own.
             choices = [decision]
             if decision.get("executor") != "colibri":

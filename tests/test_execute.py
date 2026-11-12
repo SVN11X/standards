@@ -62,7 +62,7 @@ class Reviewer:
         return self.replies.pop(0) if len(self.replies) > 1 else self.replies[0]
 
 
-class ExecuteTests(unittest.TestCase):
+class Base(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
@@ -84,6 +84,8 @@ class ExecuteTests(unittest.TestCase):
     def statuses(self, run):
         return {k: v["status"] for k, v in run.state["units"].items()}
 
+
+class ExecuteTests(Base):
     def test_all_pass_and_each_unit_has_its_own_worktree(self):
         agent = FakeAgent()
         run = self.executor(plan(unit("u1", ["a.txt"]), unit("u2", ["b.txt"])), agent)
@@ -215,6 +217,61 @@ class ExecuteTests(unittest.TestCase):
         rep = execute.report(plan(unit("u1", ["a.txt"])), {"plan_id": "plan1", "units": {}})
         self.assertTrue(set(schema["required"]) <= set(rep))
         self.assertTrue(set(schema["properties"]["units"]["items"]["required"]) <= set(rep["units"][0]))
+
+
+class BudgetTests(Base):
+    """Budgets of the work plan and the split of a unit that is too large."""
+
+    def budget_plan(self, *units, **budgets):
+        return {**plan(*units), "budgets": budgets}
+
+    def big(self, uid, files, deps=(), kind="edit-small", limit=10):
+        return {**unit(uid, files, deps, kind), "max_input_chars": limit}
+
+    def test_too_large_unit_is_split_and_each_part_runs(self):
+        agent = FakeAgent()
+        run = self.executor(plan(self.big("u1", ["a.txt", "b.txt"]), unit("u2", ["c.txt"], ["u1"])), agent)
+        run.run()
+        self.assertNotIn("u1", [c[0] for c in agent.calls])
+        self.assertEqual(self.statuses(run)["u1"], "passed")
+        self.assertEqual(len(run.state["units"]["u1"]["split"]), 2)
+        self.assertEqual(self.statuses(run)["u2"], "passed")
+        self.assertEqual(len(agent.calls), 3)
+
+    def test_failed_part_fails_the_parent_and_independent_units_go_on(self):
+        agent = FakeAgent()
+        first = self.executor(plan(self.big("u1", ["a.txt", "b.txt"]), unit("u2", ["c.txt"])), agent)
+        part = workplan_parts(first, "u1")[0]
+        agent.fail = {part}
+        first.run()
+        self.assertEqual(self.statuses(first)["u1"], "failed")
+        self.assertEqual(self.statuses(first)["u2"], "passed")
+
+    def test_children_of_a_split_are_not_split_again_by_default(self):
+        agent = FakeAgent()
+        run = self.executor(plan(self.big("u1", ["a.txt", "b.txt"], limit=1)), agent)
+        run.run()
+        self.assertEqual(self.statuses(run)["u1"], "failed")
+        self.assertEqual(agent.calls, [])
+
+    def test_unit_with_nothing_to_split_is_blocked(self):
+        agent = FakeAgent()
+        run = self.executor(plan(self.big("u1", ["a.txt"], limit=5)), agent)
+        run.run()
+        self.assertEqual(self.statuses(run), {"u1": "blocked"})
+        self.assertEqual(agent.calls, [])
+
+    def test_colibri_unit_too_large_is_never_split_or_replaced(self):
+        agent = FakeAgent()
+        run = self.executor(plan(self.big("u1", ["a.txt", "b.txt"], kind="colibri-task")), agent)
+        run.run()
+        self.assertEqual(self.statuses(run), {"u1": "blocked"})
+        self.assertEqual(agent.calls, [])
+
+
+def workplan_parts(run, uid):
+    unit_ = run.units[uid]
+    return [p["id"] for p in execute.workplan.split_unit(unit_, execute.workplan.tracked_files(run.repo), None, CONF)[1]]
 
 
 class PrivacyInheritanceTests(unittest.TestCase):

@@ -31,7 +31,7 @@ Nothing is pushed, merged or opened as a pull request by the loop. Claude is lis
 
 Two units share a batch only when neither depends on the other, their expanded `allowed` files (globs expanded against `git ls-files`) are disjoint and neither touches a serial file (`package.json`, `package-lock.json`, `pyproject.toml`, `requirements*.txt`, `.standard.yml`). `execute.py run --parallel N` caps the batch size.
 
-`split_unit` splits a unit by files, then by acceptance criteria, then with a proposal from a model passed in as a callable. Each candidate is validated with the plan rules and must stay inside the parent's files. The first valid one wins, else the result is `none`. The loop does not call it yet. It exists for a caller that wants to split a unit that failed.
+`split_unit` splits a unit by files, then by acceptance criteria, then with a proposal from a model passed in as a callable. Each candidate is validated with the plan rules and must stay inside the parent's files. The first valid one wins, else the result is `none`. The loop calls it for a unit whose input (task text plus the files it may touch) is larger than its `max_input_chars`. The parts run in order, each in its own worktree. The parent passes only when every part passed, and a failed part fails the parent while independent units go on. A part is never split again, and nothing valid to split blocks the unit. A Colibri unit is blocked instead of split, because its parts could route to another model.
 
 ## Routing and proof
 
