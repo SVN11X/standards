@@ -38,10 +38,10 @@ Progress of the free routing, model analyzer and web design work of November 202
 - [x] Adversarial scenarios. New cases in `adversarial.py` for planner types, claude calls, overlap, budget stops and invented review lines
 - [x] Report. `schemas/execution-report.schema.json` and the `report` command, one consolidated report per plan
 - [x] Docs and agent texts. `docs/007`, `docs/005`, `docs/006`, `skills/repo-improve/SKILL.md` and a new `run-plan` OpenCode command
-- [ ] BLOCKED: Live validation on the owner's machine. Run the new bench classes and a pilot plan of 3 green units with `execute.py`
+- [ ] BLOCKED: run the three new bench classes `refactor-module`, `review-diff` and `decompose` against real models. Their graders are tested with fakes only. It needs the GPU and the owner's time slot. The pilot plan part is done
 - [x] Fix: a timeout kills the whole process tree of the executor, so a stuck OpenCode no longer hangs the run
 - [x] Fix: a command run in a folder gets PWD set to that folder, so OpenCode launched from a Bash session works in its own worktree
 - [x] Executor loop calls `split_unit` when a unit is too large, instead of only failing it
 - [x] Executor loop enforces every budget declared in the work plan, not only `max_attempts_per_unit` and `final_regression`
-- [ ] BLOCKED: pilot plan of 3 green units with `execute.py` and one `review.py` run with real models need the GPU and a time slot
+- [x] Pilot plan of 3 green units with `execute.py` and a real `review.py` run, local-only. Two units passed with their tests and a review by `qwen2.5:7b` with no findings, and one failed `inside_scope` on a stale integration base, which the loop now refuses
 - [ ] BLOCKED: map the gateway adapter to FreeLLMAPI's real request and reply fields and prove the four radar conditions against the real service at trial. The adapter was proven only against a fake server with its own field names. It needs the owner to approve installing it
