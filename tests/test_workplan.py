@@ -97,5 +97,63 @@ class Graph(unittest.TestCase):
         self.assertEqual(p, before)
 
 
+class Split(unittest.TestCase):
+    def split(self, u, propose=None):
+        return workplan.split_unit(u, FILES, propose, POLICY)
+
+    def test_by_files(self):
+        u = unit("u", ["a/*.py"], new_files=["a/new.py"])
+        method, parts = self.split(u)
+        self.assertEqual(method, "files")
+        self.assertEqual([p["id"] for p in parts], ["u.1", "u.2", "u.3"])
+        self.assertEqual(sorted(sum((p["allowed"] + p["new_files"] for p in parts), [])), ["a/new.py", "a/new.py", "a/x.py", "a/y.py"])
+
+    def test_by_criteria_chained(self):
+        u = unit("u", ["b/z.py"], acceptance={"test": "t", "criteria": ["one", "two"]})
+        method, parts = self.split(u)
+        self.assertEqual(method, "criteria")
+        self.assertEqual(parts[1]["depends_on"], ["u.1"])
+        self.assertEqual(parts[0]["acceptance"]["criteria"], ["one"])
+
+    def test_model_used_last_and_validated(self):
+        u = unit("u", ["b/z.py"])
+        good = [unit("u.a", ["b/z.py"]), unit("u.b", ["b/z.py"], ["u.a"])]
+        calls = []
+
+        def fake(unit_, files_):
+            calls.append(unit_["id"])
+            return good
+
+        self.assertEqual(self.split(u, fake), ("model", good))
+        self.assertEqual(calls, ["u"])
+
+    def test_model_not_called_when_deterministic_works(self):
+        def boom(*_):
+            raise AssertionError("model called")
+
+        self.assertEqual(self.split(unit("u", ["a/*.py"]), boom)[0], "files")
+
+    def test_invalid_model_proposals_rejected(self):
+        u = unit("u", ["b/z.py"])
+        outside = [unit("u.a", ["a/x.py"]), unit("u.b", ["b/z.py"])]
+        for bad in (outside, [unit("u.a", ["b/z.py"])], "junk", [unit("u.a", ["b/z.py"], kind="mystery"), unit("u.b", ["b/z.py"])],
+                    [unit("u", ["b/z.py"]), unit("u.b", ["b/z.py"])]):
+            self.assertEqual(self.split(u, lambda *_: bad), ("none", []))
+
+    def test_model_error_and_no_model(self):
+        def fail(*_):
+            raise RuntimeError("down")
+
+        u = unit("u", ["b/z.py"])
+        self.assertEqual(self.split(u, fail), ("none", []))
+        self.assertEqual(self.split(u), ("none", []))
+
+    def test_unit_not_mutated(self):
+        u = unit("u", ["a/*.py"])
+        before = copy.deepcopy(u)
+        self.split(u)
+        self.assertEqual(u, before)
+
+
 if __name__ == "__main__":
     unittest.main()

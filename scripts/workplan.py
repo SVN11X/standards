@@ -7,6 +7,7 @@ Usage: python scripts/workplan.py validate PLAN.json
 from __future__ import annotations
 
 import argparse
+import copy
 import fnmatch
 import json
 import subprocess
@@ -210,6 +211,77 @@ def batches(plan: dict, files: list[str] | None = None, serial: list[str] | None
         result.append(batch)
         done.update(batch)
     return result
+
+
+def child(unit: dict, suffix: str, **change) -> dict:
+    """A smaller unit derived from a parent. Ids are `<parent>.<suffix>`."""
+    data = copy.deepcopy(unit)
+    data["id"] = f"{unit['id']}.{suffix}"
+    data["title"] = f"{unit['title']} ({suffix})"
+    data["depends_on"] = list(unit.get("depends_on", []))
+    data.update(change)
+    return data
+
+
+def split_by_files(unit: dict, files: list[str]) -> list[dict]:
+    """One unit per file the parent may touch. Empty when the parent covers fewer than two files."""
+    touched = sorted(expand(unit, files))
+    if len(touched) < 2:
+        return []
+    return [child(unit, str(n), allowed=[f], new_files=[] if f in files else [f],
+                  acceptance=copy.deepcopy(unit["acceptance"])) for n, f in enumerate(touched, 1)]
+
+
+def split_by_criteria(unit: dict) -> list[dict]:
+    """One unit per acceptance criterion, chained in order because they share files."""
+    criteria = unit["acceptance"].get("criteria", [])
+    if len(criteria) < 2:
+        return []
+    out: list[dict] = []
+    for n, text in enumerate(criteria, 1):
+        acceptance = copy.deepcopy(unit["acceptance"])
+        acceptance["criteria"] = [text]
+        deps = list(unit.get("depends_on", [])) + ([out[-1]["id"]] if out else [])
+        out.append(child(unit, str(n), goal=f"{unit['goal']} Only this criterion: {text}", acceptance=acceptance,
+                         depends_on=deps))
+    return out
+
+
+def check_split(unit: dict, parts: list, files: list[str], pol: dict | None = None) -> list[str]:
+    """Problems with a proposed split. Empty means every part is valid and stays inside the parent."""
+    if not isinstance(parts, list) or len(parts) < 2:
+        return ["a split needs at least two units"]
+    if not all(isinstance(p, dict) for p in parts):
+        return ["every part must be an object"]
+    errors = validate({"plan_id": "split", "goal": unit["goal"], "units": parts}, pol)
+    if errors:
+        return errors
+    parent = expand(unit, files)
+    for part in parts:
+        if not expand(part, files) <= parent:
+            errors.append(f"{part['id']}: touches files outside {unit['id']}")
+        if part["id"] == unit["id"]:
+            errors.append(f"{part['id']}: reuses the parent id")
+    return errors
+
+
+def split_unit(unit: dict, files: list[str], propose=None, pol: dict | None = None) -> tuple[str, list[dict]]:
+    """Split one unit. Tries files, then criteria, then `propose(unit, files)` (the model, injected).
+
+    Returns (method, units). Each candidate is validated and the first valid one wins.
+    Returns ("none", []) when nothing valid exists. The input unit is not changed.
+    """
+    steps = [("files", lambda: split_by_files(unit, files)), ("criteria", lambda: split_by_criteria(unit))]
+    if propose is not None:
+        steps.append(("model", lambda: propose(copy.deepcopy(unit), list(files))))
+    for method, make in steps:
+        try:
+            parts = make()
+        except Exception:
+            continue
+        if parts and not check_split(unit, parts, files, pol):
+            return method, parts
+    return "none", []
 
 
 def main() -> int:
