@@ -114,6 +114,57 @@ class TestAutopilot(unittest.TestCase):
                                           policy=cfg, local={}, request=lambda u, p: stub)
         self.assertEqual(1, len(result["units"]))
 
+    def test_planner_repairs_criteria_once(self):
+        cfg = {**POLICY, "executors": {"ollama": {"url": "http://127.0.0.1:11434"}}}
+        proposals = [proposal(criteria=[]), proposal(criteria=["Regression test proves the fix"])]
+        calls = []
+
+        def fake_request(url, payload):
+            calls.append(payload)
+            return {"message": {"content": json.dumps(proposals.pop(0))}}
+
+        with mock.patch.object(autopilot.orchestrate, "git", return_value=SHA_A), \
+             mock.patch.object(autopilot.orchestrate, "detect_ollama", return_value={"models": ["qwen3.5:9b"], "remote": []}), \
+             mock.patch.object(autopilot.orchestrate, "gate", return_value=(True, "allowed")):
+            plan = autopilot.local_plan("Fix src.py", self.repo, "qwen3.5:9b", TEST,
+                                        policy=cfg, local={}, request=fake_request)
+        self.assertEqual(2, len(calls))
+        self.assertEqual(["Regression test proves the fix"], plan["units"][0]["acceptance"]["criteria"])
+        self.assertIn("Change ONLY", calls[1]["messages"][-1]["content"])
+
+    def test_planner_repair_blocks_scope_change(self):
+        cfg = {**POLICY, "executors": {"ollama": {"url": "http://127.0.0.1:11434"}}}
+        proposals = [proposal(criteria=[]), proposal(criteria=["Tests pass"], allowed=["other.py"])]
+        calls = []
+
+        def fake_request(url, payload):
+            calls.append(payload)
+            return {"message": {"content": json.dumps(proposals.pop(0))}}
+
+        with mock.patch.object(autopilot.orchestrate, "git", return_value=SHA_A), \
+             mock.patch.object(autopilot.orchestrate, "detect_ollama", return_value={"models": ["qwen3.5:9b"], "remote": []}), \
+             mock.patch.object(autopilot.orchestrate, "gate", return_value=(True, "allowed")):
+            with self.assertRaisesRegex(autopilot.Blocked, "modified scope"):
+                autopilot.local_plan("Fix src.py", self.repo, "qwen3.5:9b", TEST,
+                                     policy=cfg, local={}, request=fake_request)
+        self.assertEqual(2, len(calls))
+
+    def test_planner_repair_stops_after_one_retry(self):
+        cfg = {**POLICY, "executors": {"ollama": {"url": "http://127.0.0.1:11434"}}}
+        calls = []
+
+        def fake_request(url, payload):
+            calls.append(payload)
+            return {"message": {"content": json.dumps(proposal(criteria=[]))}}
+
+        with mock.patch.object(autopilot.orchestrate, "git", return_value=SHA_A), \
+             mock.patch.object(autopilot.orchestrate, "detect_ollama", return_value={"models": ["qwen3.5:9b"], "remote": []}), \
+             mock.patch.object(autopilot.orchestrate, "gate", return_value=(True, "allowed")):
+            with self.assertRaisesRegex(autopilot.Blocked, "1-8 concrete"):
+                autopilot.local_plan("Fix src.py", self.repo, "qwen3.5:9b", TEST,
+                                     policy=cfg, local={}, request=fake_request)
+        self.assertEqual(2, len(calls))
+
     def test_failed_units_cannot_be_published(self):
         plan = self.make()
         with mock.patch.object(autopilot.execute, "load_state", return_value={"units": {"u1": {"status": "failed"}}}):
