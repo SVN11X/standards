@@ -489,7 +489,7 @@ def decide(prompt: str, cwd: Path, client: str = "claude", session: str | None =
         "intent": intent, "intent_why": intent_why,
         "repository": {"name": fp["name"], "root": str(root), "revision": fp.get("revision"), "standard": bool(standard.get("present"))},
         "folder": folder, "folder_why": folder_why, "profile": profile, "profile_why": profile_why,
-        "experience": experience_for(prompt, root) if recipe and recipe.get("experience") else None,
+        "experience": experience_for(prompt, root) if recipe and recipe.get("experience") and signals & {"web", "static-web"} else None,
         "signals": signal_rows, "recipe": recipe["id"] if recipe else None, "recipe_why": recipe_why, "alternatives": alternatives,
         "capabilities": chosen,
         "verification": {"command": commands.get("test"), "where": where, "proof": (recipe or {}).get("proof"),

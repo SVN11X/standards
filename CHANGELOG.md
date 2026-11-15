@@ -6,6 +6,7 @@ All notable changes to this standard are documented here. The format follows [Ke
 
 ### Added
 
+- Router fixes found on OpenTutor, a Windows tutor. A learning request outside a web page now gets the `learning-app` recipe, where it got the windows-app recipe and a web experience. A Python package under `src/` gets `python -m pip install -e .` in its install step, because its tests cannot import it before that.
 - Learning, visual assets and writing (`docs/012-learning-visuals-writing.md`). `scripts/learning_check.py` audits question banks of any shape for integrity errors and for the rules of the research on practice testing and item writing, each with its source, and reads the code to see whether the page shuffles the options. On three of the owner's banks it found a key in position B in 34% of 418 items where 20% is expected, keys that are the longest option in 37% and 39% of items, and 306 imported questions without an explanation.
 - `scripts/text_check.py` measures readability (Szigriszt-Pazos with the INFLESZ scale for Spanish, Flesch for English), long sentences and paragraphs, acronyms, vague links and passive voice, and writes and reads a comprehension test with five readers, the only evidence that a page helps. `scripts/media.py` searches Openverse and Wikimedia Commons for images whose license allows the use, attaches one with its alt text and credit, and audits the media of a repository.
 - `skills/web-improve/references/learning-science.md` and `writing-and-usability.md`. The web-improve and docs-review skills call the three scripts.
