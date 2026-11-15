@@ -8,8 +8,9 @@ Claude is the planner, not an automatic executor. It writes a work plan, the own
 Owner asks Claude (planner) for a plan  ->  work-plan.json
         |
         v
-scripts/execute.py   check | run | status | resume | clean | report
-        |  workplan.py: validate, order, find conflicts, batch, split
+scripts/execute.py   check | run | status | resume | pause | unpause | cancel | clean | report
+        |  workplan.py: validate, order, find conflicts, split
+        |  scheduler.py: ready queue, resource pools
         |  orchestrate.py: route() and gate() per unit, health, fallbacks
         |  review.py: a different model reviews the diff
         v
@@ -20,7 +21,7 @@ Nothing is pushed, merged or opened as a pull request by the loop. Claude is lis
 
 ## Work plan
 
-`schemas/work-plan.schema.json` is the contract. `python scripts/workplan.py validate PLAN.json` checks it and `batches PLAN.json` prints the groups of units that may run together. A plan holds `plan_id`, `goal`, optional `defaults` (`risk`, `test`), optional `budgets`, optional `final_regression` and `units`. A unit holds `id`, `title`, `task_type`, `goal`, `allowed` and `acceptance` (`test`, `criteria`), and may hold `read`, `new_files`, `protect`, `depends_on`, `risk` and `max_input_chars`.
+`schemas/work-plan.schema.json` is the contract. `python scripts/workplan.py validate PLAN.json` checks it and `batches PLAN.json` prints the groups of units that may run together. A plan holds `plan_id`, `goal`, optional `defaults` (`risk`, `test`), optional `budgets`, optional `final_regression` and `units`. A unit holds `id`, `title`, `task_type`, `goal`, `allowed` and `acceptance` (`test`, `criteria`), and may hold `read`, `new_files`, `protect`, `depends_on`, `risk`, `max_input_chars`, `budget` (`timeout_s`) and `context` (text the agent reads as untrusted data).
 
 `validate` returns a problem for each of these:
 
@@ -29,7 +30,7 @@ Nothing is pushed, merged or opened as a pull request by the loop. Claude is lis
 - a protected file of `settings/orchestration.yml` in `allowed` or `new_files`
 - no `acceptance.test` and no `defaults.test` when the type is not a tools type
 
-Two units share a batch only when neither depends on the other, their expanded `allowed` files (globs expanded against `git ls-files`) are disjoint and neither touches a serial file (`package.json`, `package-lock.json`, `pyproject.toml`, `requirements*.txt`, `.standard.yml`). `execute.py run --parallel N` caps the batch size.
+Two units run at the same time only when neither depends on the other, their expanded `allowed` files (globs expanded against `git ls-files`) are disjoint and neither touches a serial file (`package.json`, `package-lock.json`, `pyproject.toml`, `requirements*.txt`, `.standard.yml`). A unit starts as soon as its own dependencies passed and its resource pool has a free slot. `execute.py run --parallel N` caps the units at once, and `concurrency` in `settings/orchestration.yml` holds the defaults. `docs/010-multiagent-autopilot.md` describes the scheduler.
 
 `split_unit` splits a unit by files, then by acceptance criteria, then with a proposal from a model passed in as a callable. Each candidate is validated with the plan rules and must stay inside the parent's files. The first valid one wins, else the result is `none`. The loop calls it for a unit whose input (task text plus the files it may touch) is larger than its `max_input_chars`. The parts run in order, each in its own worktree. The parent passes only when every part passed, and a failed part fails the parent while independent units go on. A part is split again only while `budgets.max_split_depth` allows it (default 1, so never), and nothing valid to split blocks the unit. A Colibri unit is blocked instead of split, because its parts could route to another model.
 
@@ -65,19 +66,23 @@ A Colibri task never gets a fallback and never moves to another model. If Colibr
 python scripts/execute.py check PLAN.json [--repo DIR]
 python scripts/execute.py run PLAN.json --reviewer MODEL [--repo DIR] [--parallel N]
 python scripts/execute.py status PLAN.json
-python scripts/execute.py resume PLAN.json --reviewer MODEL [--repo DIR]
+python scripts/execute.py resume PLAN.json --reviewer MODEL [--repo DIR] [--parallel N]
+python scripts/execute.py pause PLAN.json
+python scripts/execute.py unpause PLAN.json
+python scripts/execute.py cancel PLAN.json --unit ID
 python scripts/execute.py clean PLAN.json [--repo DIR]
 python scripts/execute.py report PLAN.json
 ```
 
 - `check` validates the plan, prints the batches and the route of each unit. It exits 1 on an invalid plan or when a unit has no coding agent.
-- `run` starts from empty state. It creates the worktree `~/.standards/worktrees/execute-<plan_id>` on branch `execute/<plan_id>`, then runs batch by batch. Each unit runs through `delegate_opencode` in its own worktree, with its allowed files, protected files and test command. The unit passes only when the caller's checks pass (a change exists, scope, protected files, tests) and the review has no high finding. A passed unit is cherry-picked into the integration branch, so dependents build on it. A conflict aborts the pick and fails the unit.
+- `run` starts from empty state. It creates the worktree `~/.standards/worktrees/execute-<plan_id>` on branch `execute/<plan_id>`, then runs the units from a ready queue. Each unit runs through `delegate_opencode` in its own worktree, with its allowed files, protected files and test command. The unit passes only when the caller's checks pass (a change exists, scope, protected files, tests), the lines it added hold no credential and the review has no high finding. A passed unit is cherry-picked into the integration branch, so dependents build on it. A conflict aborts the pick and fails the unit.
 - A unit tries its route and then its fallbacks, at most `budgets.max_attempts_per_unit` choices (default 1). A blocked result or a Colibri unit stops the tries.
 - A unit that waits on one that did not pass is `skipped`. A failure or exception in one unit never stops the independent ones.
 - Review is required. `--reviewer` names an Ollama model. Without it, or with the author's own model, the unit is blocked before any call. Findings that cite files or lines outside the diff are dropped. The reviewer must be a different model than the author.
-- `resume` keeps the units that passed and runs the rest. `status` prints the saved state, kept in `~/.standards/executions/<plan_id>.json` and written after every unit.
-- `clean` removes the unit worktrees, the integration worktree and the state file. Branches stay.
-- `report` prints one consolidated JSON report built only from the saved state (`schemas/execution-report.schema.json`): per unit the status, commit, tests, review verdict and findings, retries, executor and model. A value the state does not hold is null.
+- `resume` keeps the units that passed and runs the rest. A unit that was reviewed but not yet integrated is integrated without a new run. `status` prints the saved state, kept in `~/.standards/executions/<plan_id>.json` and written after every transition, with the metrics of the run.
+- `pause` stops new assignments and lets running units end. `unpause` allows them again and `resume` continues. `cancel --unit ID` stops one unit and keeps its worktree.
+- `clean` removes a worktree only when it is clean and its commit is integrated, never by force, and prints what it kept and why. The state file stays while anything was kept. Branches stay.
+- `report` prints one consolidated JSON report built only from the saved state (`schemas/execution-report.schema.json`): per unit the status, commit, tests, review verdict and findings, retries, executor, model, channel, seconds and dependencies, plus the metrics of the plan. A value the state does not hold is null.
 
 Budgets of the plan, all checked before an attempt starts or a split is made. A unit stopped by a budget is `blocked` with the budget in its note, and independent units go on. A Colibri unit is never moved to another model by a budget.
 

@@ -1,13 +1,16 @@
 #!/usr/bin/env python3
-"""Standards AI Control: a read-only local dashboard and a compact Claude Code status line.
+"""Standards AI Control: a local dashboard and a compact Claude Code status line.
 
-serve      http://127.0.0.1:8765, JSON at /api/state. It binds to loopback only and changes nothing.
+serve      http://127.0.0.1:8765, JSON at /api/state. It binds to loopback only. It reads state files and
+           changes nothing, except the explicit operations of the page: local benchmarks, and Autopilot
+           plans, runs, pause and cancel. Each needs the page token.
 statusline reads the Claude Code status line JSON on stdin and prints one short line.
 A metric a provider does not report is null in the JSON and shown as "Not available" in the page.
 """
 from __future__ import annotations
 
 import argparse
+import datetime as dt
 import http.server
 import json
 import os
@@ -20,7 +23,9 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import orchestrate  # noqa: E402
 import control_jobs  # noqa: E402
+import execute  # noqa: E402
 import next_actions  # noqa: E402
+import resources  # noqa: E402
 
 PAGE = Path(__file__).resolve().parent.parent / "ui" / "control" / "index.html"
 STAGES = ["planned", "approved", "running"]
@@ -120,6 +125,64 @@ def telemetry() -> dict:
     return {"recent": rows[-60:], "by_model": by_model}
 
 
+def seconds_since(stamp: str | None) -> float | None:
+    try:
+        return round((dt.datetime.now(dt.timezone.utc) - dt.datetime.fromisoformat(stamp)).total_seconds(), 1)
+    except (TypeError, ValueError):
+        return None
+
+
+def plan_view(plan: dict, state: dict, control: dict, events: list[dict]) -> dict:
+    """One plan as the page shows it. Every value comes from the plan file, the state file or the event log."""
+    entries = state.get("units") or {}
+    units = []
+    for unit in plan.get("units") or []:
+        entry = entries.get(unit["id"]) or {}
+        status = entry.get("status", "pending")
+        waits = [d for d in unit.get("depends_on", []) if (entries.get(d) or {}).get("status") != execute.DONE]
+        units.append({"id": unit["id"], "title": unit.get("title"), "risk": unit.get("risk"), "status": status,
+                      "executor": entry.get("executor"), "model": entry.get("model"), "channel": entry.get("channel"),
+                      "depends_on": unit.get("depends_on", []), "waits_on": waits if status in ("pending", "skipped") else [],
+                      "seconds": entry.get("seconds") if status != "running" else seconds_since(entry.get("at")),
+                      "attempts": entry.get("attempts"), "note": entry.get("note"), "commit": entry.get("commit"),
+                      "review": (entry.get("review") or {}).get("verdict"), "checks": entry.get("checks")})
+    extra = [{"id": uid, "title": "Fix the failed checks", "status": e.get("status"), "model": e.get("model"),
+              "executor": e.get("executor"), "channel": e.get("channel"), "depends_on": [], "waits_on": [],
+              "seconds": e.get("seconds"), "attempts": e.get("attempts"), "note": e.get("note"), "risk": None,
+              "commit": e.get("commit"), "review": (e.get("review") or {}).get("verdict"), "checks": e.get("checks")}
+             for uid, e in entries.items() if uid not in {u["id"] for u in plan.get("units") or []}]
+    publication = state.get("publication") or {}
+    approvals = [f"{u['id']} is {u['risk']}: the owner reviews it before a merge" for u in units if u["risk"] in ("yellow", "red")]
+    if publication.get("pr") and not publication.get("auto_merge_requested"):
+        approvals.append("the pull request waits for the owner to merge it")
+    done = sum(1 for u in units if u["status"] == execute.DONE)
+    return {"plan_id": plan.get("plan_id"), "goal": str(plan.get("goal", "")).splitlines()[0][:200] if plan.get("goal") else "",
+            "planner": {k: (plan.get("planner") or {}).get(k) for k in ("backend", "model", "tier", "reasons", "repair_calls", "fixes")},
+            "paused": bool(control.get("paused")), "cancel": control.get("cancel") or [], "finished": state.get("finished"),
+            "started": bool(entries), "done": done, "total": len(units), "units": units + extra,
+            "metrics": state.get("metrics"), "publication": publication, "approvals": approvals,
+            "orphans": state.get("orphans") or [], "events": events[-40:]}
+
+
+def autopilot(limit: int = 8) -> dict:
+    """Plans, newest first, with the state of every unit. Reading it starts nothing and asks no model."""
+    home = orchestrate.home()
+    plans = []
+    for path in sorted((home / "plans").glob("auto-*.json"), key=lambda p: p.stat().st_mtime, reverse=True)[:limit]:
+        try:
+            plan = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        plan_id = str(plan.get("plan_id"))
+        plans.append(plan_view(plan, execute.load_state(plan_id), execute.read_control(plan_id),
+                               read_jsonl(execute.events_file(plan_id), 200)))
+    agents = [{"plan_id": p["plan_id"], **u} for p in plans for u in p["units"] if u["status"] == "running"]
+    limits = (orchestrate.policy().get("concurrency") or {})
+    return {"plans": plans, "agents": agents, "limits": {"max_parallel": limits.get("max_parallel"), "pools": limits.get("pools"),
+                                                          "tests": limits.get("tests")},
+            "jobs": Handler.autopilot.snapshot() if Handler.autopilot else [], "planners": list(control_jobs.PLANNERS)}
+
+
 def log_tail(name: str, lines: int = 80) -> list[str]:
     paths = {"colibri": Path(os.environ.get("LOCALAPPDATA", str(Path.home()))) / "colibri" / "logs" / "serve.log",
              "colibri-install": Path(os.environ.get("LOCALAPPDATA", str(Path.home()))) / "colibri" / "logs" / "install.log"}
@@ -134,18 +197,7 @@ def collect(repo: Path) -> dict:
     mode, mode_source = orchestrate.cost_mode(conf, local)
     cls, _ = orchestrate.privacy_class(repo, conf, local)
     total = orchestrate.memory_bytes()
-    free = None
-    if os.name == "nt":
-        import ctypes
-
-        class Status(ctypes.Structure):
-            _fields_ = [("length", ctypes.c_ulong), ("load", ctypes.c_ulong), ("total", ctypes.c_ulonglong),
-                        ("free", ctypes.c_ulonglong), ("a", ctypes.c_ulonglong), ("b", ctypes.c_ulonglong),
-                        ("c", ctypes.c_ulonglong), ("d", ctypes.c_ulonglong), ("e", ctypes.c_ulonglong)]
-        status = Status()
-        status.length = ctypes.sizeof(Status)
-        if ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(status)):
-            free = int(status.free)
+    free = resources.ram_free_bytes()
     tasks = runs()
     return {"time": orchestrate.now(), "providers": {"ollama": ollama, "colibri": colibri,
                                                        "opencode": orchestrate.version_of(["opencode", "--version"])},
@@ -160,12 +212,14 @@ def collect(repo: Path) -> dict:
                               "Other modes require provider-specific accounting."},
             "bench": orchestrate.summarize_bench(orchestrate.bench_rows())[:80],
              "next_actions": next_actions.snapshot(),
+             "autopilot": autopilot(),
              "operations": Handler.manager.snapshot() if Handler.manager else {"active": False, "job": None, "log": ""}}
 
 
 class Handler(http.server.BaseHTTPRequestHandler):
     repo = Path.cwd()
     manager: control_jobs.JobManager | None = None
+    autopilot: control_jobs.AutopilotManager | None = None
     token = ""
 
     def send(self, code: int, body: bytes, kind: str) -> None:
@@ -212,12 +266,15 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return
         try:
             length = int(self.headers.get("Content-Length", "0"))
-            if not 0 < length <= 1024:
+            # An instruction may hold 6000 characters, each up to four bytes.
+            if not 0 < length <= (32768 if self.path == "/api/autopilot/plan" else 1024):
                 raise ValueError("request too large or empty")
             data = json.loads(self.rfile.read(length))
             if not isinstance(data, dict) or self.manager is None:
                 raise ValueError("invalid operation")
-            if self.path == "/api/jobs/start":
+            if self.path.startswith("/api/autopilot/"):
+                result = self.autopilot_action(self.path.rsplit("/", 1)[1], data)
+            elif self.path == "/api/jobs/start":
                 kind = data.get("kind")
                 if kind == "bench-run" and data.get("confirmed") is not True:
                     raise ValueError("explicit benchmark confirmation required")
@@ -231,6 +288,28 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self.send(409, json.dumps({"error": str(error)[:240]}).encode(), "application/json")
             return
         self.send(200, json.dumps(result).encode(), "application/json")
+
+    def autopilot_action(self, action: str, data: dict) -> dict:
+        """plan and start run a bounded job. pause, unpause and cancel only write the plan's control file."""
+        if self.autopilot is None:
+            raise ValueError("invalid operation")
+        if action == "plan":
+            return self.autopilot.plan(str(data.get("instruction", "")), str(data.get("planner", "auto")))
+        plan_id = str(data.get("plan_id", ""))
+        if not control_jobs.PLAN_ID.fullmatch(plan_id) or not (orchestrate.home() / "plans" / f"{plan_id}.json").is_file():
+            raise ValueError("unknown plan")
+        if action == "start":
+            if data.get("confirmed") is not True:
+                raise ValueError("explicit confirmation required")
+            return self.autopilot.start(plan_id, str(data.get("publish", "none")))
+        if action in ("pause", "unpause"):
+            return execute.set_control(plan_id, paused=action == "pause")
+        if action == "cancel":
+            plan = json.loads((orchestrate.home() / "plans" / f"{plan_id}.json").read_text(encoding="utf-8"))
+            if data.get("unit") not in {u["id"] for u in plan.get("units") or []}:
+                raise ValueError("unknown unit")
+            return execute.set_control(plan_id, cancel=str(data["unit"]))
+        raise ValueError("invalid operation")
 
     def log_message(self, *args):
         pass
@@ -247,7 +326,7 @@ def statusline() -> str:
     active = [t for t in runs(10) if t["state"] in {"planned", "approved", "running"}]
     name = (data.get("model") or {}).get("display_name") or "Claude"
     return (f"{name} | ollama {'up' if ollama['up'] else 'down'} | colibri {'up' if colibri['up'] else 'down'}"
-            f" | tasks running {len(active)}")
+            f" | tasks running {len(active)} | plan units running {len(autopilot(3)['agents'])}")
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -267,6 +346,8 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     Handler.repo = args.repo
     Handler.manager = control_jobs.JobManager(args.repo, orchestrate.home() / "control-jobs")
+    Handler.autopilot = control_jobs.AutopilotManager(args.repo, orchestrate.home() / "control-jobs",
+                                                      orchestrate.home() / "plans")
     Handler.token = secrets.token_urlsafe(32)
     server = http.server.ThreadingHTTPServer(("127.0.0.1", args.port), Handler)
     print(f"Standards AI Control on http://127.0.0.1:{args.port}", flush=True)

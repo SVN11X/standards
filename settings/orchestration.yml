@@ -108,6 +108,9 @@ limits:
   edit_small_max_files: 5
   ollama_max_input_chars: 8000
   opencode_timeout_s: 600
+  # Seconds a coding agent may print nothing before the executor loop stops it. null never stops a silent run:
+  # Colibri reads a long prompt for many minutes without a word.
+  opencode_idle_s: null
   ollama_timeout_s: 120
   test_timeout_s: 600
   free_recheck_days: 30
@@ -158,6 +161,46 @@ executors:
   claude:
     # Used by bench only. Claude Code itself is the planner and does not delegate to itself.
     command: [claude, -p, --permission-mode, acceptEdits, "{message}"]
+
+# The planner of scripts/plan_autopilot.py. A program scores the request and the score picks the tier, so the
+# smallest Claude model that is enough drafts the plan with one `claude -p` call. The call uses the Claude
+# Code subscription, never an API key. Where the cost mode or the privacy class keeps Claude out, or the CLI
+# is missing, local_model drafts the plan through Ollama.
+planning:
+  # auto, local, haiku, sonnet or opus. A run can name another with --planner.
+  default: auto
+  local_model: qwen3.5:9b
+  tiers:
+    light: {model: haiku, timeout_s: 180}
+    medium: {model: sonnet, timeout_s: 300}
+    advanced: {model: opus, timeout_s: 600}
+  # Score from which a request is medium or advanced. Length, folders, design words, risk and listed items add points.
+  complexity: {medium_at: 3, advanced_at: 6}
+  # Who repairs a draft that stayed invalid after the fixes a program can make. light or medium, never advanced.
+  repair_tier: light
+  # Tiers a request may climb when its draft stays invalid after the repair.
+  max_escalations: 1
+  # Whether that climb may reach Opus on its own. false: the owner asks for Opus with --planner opus.
+  opus_on_block: false
+  opus_max_concurrent: 1
+  # {model} is filled in and the prompt goes in on standard input. Flags the installed version lists are added.
+  command: [claude, -p, --model, "{model}", --output-format, json]
+
+# How many units the executor loop runs at once. A unit starts when its own dependencies passed and its pool
+# has a free slot. More slots are not always faster: `python scripts/bench_parallel.py` measures it here.
+concurrency:
+  # Units at once, all pools together. A run can lower or raise it with --parallel.
+  max_parallel: 3
+  # remote_free: free remote models through OpenCode. local: models on this machine's graphics card.
+  pools: {remote_free: 2, local: 1}
+  # Test suites that may run at once. One keeps a heavy suite from fighting a local model for the CPU.
+  tests: 1
+  # A local model starts only when the graphics card has this much memory free, or already holds that model.
+  local_min_free_vram_mib: 1024
+  # A pool loses one slot after a rate limit and gets it back after this many units passed in a row.
+  grow_after: 3
+  # Seconds a ready unit may wait for a slot that something outside the plan holds before it is blocked.
+  stall_s: 900
 
 # A model or program that fails with one of these codes is skipped until the cooldown (seconds) ends.
 # The state lives in ~/.standards/health.json. A later success clears it. Colibri is never replaced by another

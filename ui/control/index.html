@@ -18,7 +18,7 @@ main{padding:20px;max-width:1200px;margin:auto}.grid{display:grid;gap:14px;grid-
 @keyframes in{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
 .card h3{margin:0 0 8px;font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
 .big{font-size:26px;font-weight:600}.muted{color:var(--muted)}.chip{display:inline-block;padding:1px 8px;border-radius:99px;background:var(--chip);font-size:12px}
-.ok{color:var(--ok)}.bad{color:var(--bad)}.warn{color:var(--warn)}
+.run{color:var(--accent)}textarea{width:100%;min-height:74px;background:var(--bg);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:8px;font:inherit}select{background:var(--chip);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:6px}.ok{color:var(--ok)}.bad{color:var(--bad)}.warn{color:var(--warn)}
 table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top}th{color:var(--muted);font-weight:500;font-size:12px}
 .bar{height:8px;border-radius:99px;background:var(--chip);overflow:hidden}.bar i{display:block;height:100%;background:var(--accent);transition:width .4s}
 details{margin-top:8px}summary{cursor:pointer;color:var(--muted)}pre{white-space:pre-wrap;word-break:break-word;background:var(--chip);padding:10px;border-radius:8px;max-height:340px;overflow:auto;font-size:12px}
@@ -29,12 +29,12 @@ svg.spark{width:100%;height:46px}h2{font-size:15px;margin:22px 0 10px}
 <header><h1>Standards AI Control</h1><nav id="nav"></nav><button id="theme" title="Theme"></button></header>
 <main id="view"></main>
 <script>
-const NA="Not available",views=["Dashboard","Agents and models","Tasks","Operations","Performance","History","Settings","Logs"];
+const NA="Not available",views=["Dashboard","Autopilot","Agents and models","Tasks","Operations","Performance","History","Settings","Logs"];
 let S=null,hist={cpu:[],tps:[],ram:[]},logName="colibri",tick=0;
 const $=s=>document.querySelector(s),esc=s=>String(s??"").replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
 const num=(v,d=1)=>v==null?NA:Number(v).toLocaleString(undefined,{maximumFractionDigits:d});
 const gb=b=>b==null?NA:(b/2**30).toFixed(1)+" GiB",mb=m=>m==null?NA:(m/1024).toFixed(1)+" GiB";
-const cls=s=>({verified:"ok",failed:"bad",blocked:"warn"}[s]||"");
+const cls=s=>({verified:"ok",passed:"ok",failed:"bad",blocked:"warn",cancelled:"warn",skipped:"warn",running:"run"}[s]||"");
 function theme(set){const t=set||localStorage.getItem("theme")||"auto";try{localStorage.setItem("theme",t)}catch(e){}
  document.documentElement.dataset.theme=t==="auto"?"":t;$("#theme").textContent="Theme: "+t}
 $("#theme").onclick=()=>theme({auto:"light",light:"dark",dark:"auto"}[localStorage.getItem("theme")||"auto"]);theme();
@@ -75,7 +75,7 @@ function Agents(){const p=S.providers,o=p.ollama,loaded=o.loaded||[];
  const rows=[...o.models.map(m=>{const l=loaded.find(x=>x.name===m);return[`Ollama`,m,"local",l?`loaded, ${num((l.gpu_share||0)*100,0)}% on GPU`:"installed",num((o.sizes[m]||0)/1e9)+" GB"]}),
   ...p.colibri.models.map(m=>["Colibri",m,"local","serving",NA])];
  return`<div class="card"><table><tr><th>Provider</th><th>Model</th><th>Where</th><th>State</th><th>Size</th></tr>${rows.map(r=>`<tr>${r.map(c=>`<td>${esc(c)}</td>`).join("")}</tr>`).join("")}</table></div>
- <h2>Roles</h2><div class="grid">${card("Claude Code","Planning, architecture, acceptance criteria")}${card("OpenCode","Implementation, fixes, refactors, tests")}${card("Ollama","Quick local tasks, summaries, classification, embeddings")}${card("Colibri","Stronger local coding model")}</div>`}
+ <h2>Roles</h2><div class="grid">${card("Claude Haiku, Sonnet, Opus","Planning only. A program picks the smallest tier that is enough, one call per plan")}${card("OpenCode","Implementation, fixes, refactors, tests, in parallel worktrees")}${card("Ollama","Quick local tasks, summaries, classification, embeddings")}${card("Colibri","Stronger local coding model")}</div>`}
 function Tasks(){return taskTable(S.tasks)}
 function Performance(){const t=S.telemetry,r=S.resources;
  const rows=Object.entries(t.by_model).map(([k,m])=>`<tr><td>${esc(k)}</td><td>${m.requests}</td><td>${num(m.input,0)}</td><td>${num(m.output,0)}</td><td>${num(m.output/m.seconds)}</td></tr>`).join("");
@@ -84,6 +84,46 @@ function Performance(){const t=S.telemetry,r=S.resources;
  <h2>Measured requests per model</h2><div class="card">${rows?`<table><tr><th>Model</th><th>Requests</th><th>Input</th><th>Output</th><th>Tokens/s</th></tr>${rows}</table>`:`<span class="muted">No measured requests yet. Cache tokens and context use are ${NA}.</span>`}</div>`}
 function History(){const b=S.bench;if(!b.length)return`<div class="card muted">No bench history.</div>`;
  return`<div class="card"><table><tr><th>Task</th><th>Executor</th><th>Model</th><th>Runs</th><th>Pass rate</th><th>p50 s</th></tr>${b.map(x=>`<tr><td>${esc(x.task)}</td><td>${esc(x.executor)}</td><td>${esc(x.model)}</td><td>${x.runs}</td><td>${x.pass_rate}</td><td>${num(x.p50_s)}</td></tr>`).join("")}</table></div>`}
+const secs=v=>v==null?NA:(v>=90?(v/60).toFixed(1)+" min":num(v)+" s");
+function planCard(p){const m=p.metrics||{},pub=p.publication||{},live=p.started&&!p.finished;
+ const rows=p.units.map(u=>`<tr><td class="${cls(u.status)}">${esc(u.status)}</td><td><b>${esc(u.id)}</b> ${esc(u.title||"")}</td>
+ <td>${esc(u.model||NA)}</td><td>${esc(u.executor||NA)}${u.channel?` <span class="chip">${esc(u.channel)}</span>`:""}</td>
+ <td>${secs(u.seconds)}</td><td>${esc(u.depends_on.join(", ")||"none")}${u.waits_on.length?`<div class="warn">waits on ${esc(u.waits_on.join(", "))}</div>`:""}</td>
+ <td>${esc(u.review||NA)}</td><td>${u.status==="running"||u.status==="pending"?`<button data-cancel="${esc(p.plan_id)}|${esc(u.id)}">Cancel</button>`:""}</td></tr>
+ ${u.note?`<tr><td></td><td colspan="7" class="muted">${esc(u.note)}</td></tr>`:""}`).join("");
+ return`<div class="card"><h3>${esc(p.plan_id)} · ${p.done} of ${p.total} passed${p.paused?' · <span class="warn">paused</span>':""}${p.finished?" · finished":live?" · running":" · not started"}</h3>
+ <div>${esc(p.goal)}</div><div class="muted">Planner ${esc(p.planner.model||NA)} (${esc(p.planner.tier||NA)}, ${esc(p.planner.backend||NA)}), repair calls ${num(p.planner.repair_calls,0)}</div>
+ ${bar(p.total?p.done/p.total:0)}
+ <p>${!p.started||p.paused||!live?`<button data-start="${esc(p.plan_id)}">${p.started?"Resume pending work":"Start execution"}</button> <button data-startpr="${esc(p.plan_id)}">${p.started?"Resume":"Start"} and open a PR</button> `:""}
+ ${p.paused?`<button data-unpause="${esc(p.plan_id)}">Allow new assignments</button>`:`<button data-pause="${esc(p.plan_id)}">Pause new assignments</button>`}</p>
+ <table><tr><th>State</th><th>Task</th><th>Model</th><th>Provider</th><th>Time</th><th>Depends on</th><th>Review</th><th></th></tr>${rows}</table>
+ <p class="muted">Total ${secs(m.total_s)} · peak ${num(m.peak_parallel,0)} of ${num(m.parallel_limit,0)} at once · waited for slots ${secs(m.waited_s)} · integration ${secs(m.integration_s)} · conflicts ${num(m.collisions,0)} · retries ${num(m.retries,0)}</p>
+ ${pub.pr?`<p>Pull request <a href="${esc(pub.pr)}" rel="noopener">${esc(pub.pr)}</a> · checks ${esc((pub.ci||{}).state||NA)} · auto-merge ${pub.auto_merge_requested?"requested":"not requested"}</p>`:`<p class="muted">No pull request yet.</p>`}
+ ${p.approvals.length?`<p class="warn">Needs the owner: ${esc(p.approvals.join(". "))}</p>`:""}
+ ${p.orphans.length?`<p class="warn">Kept from an interrupted run: ${esc(p.orphans.map(o=>o.worktree).join(", "))}</p>`:""}
+ <details><summary>Events and planner notes</summary><pre>${esc((p.planner.reasons||[]).join("\n"))}
+${esc((p.planner.fixes||[]).join("\n"))}
+${esc(p.events.map(e=>`${e.at} ${e.event} ${e.unit||""} ${e.status||""} ${e.note||""}`).join("\n")||NA)}</pre></details></div>`}
+function Autopilot(){const a=S.autopilot||{plans:[],agents:[],jobs:[],planners:["auto"],limits:{}},l=a.limits||{};
+ const agents=a.agents.map(u=>`<tr><td>${esc(u.plan_id)}</td><td>${esc(u.id)} ${esc(u.title||"")}</td><td>${esc(u.model||NA)}</td><td>${esc(u.executor||NA)}</td><td>${secs(u.seconds)}</td></tr>`).join("");
+ const jobs=a.jobs.map(j=>`<details><summary>${esc(j.kind)} · <span class="${cls(j.state)}">${esc(j.state)}</span> · ${esc(j.started_at)} · exit ${j.exit_code==null?NA:num(j.exit_code,0)}</summary><pre>${esc(j.log||NA)}</pre></details>`).join("");
+ return`<div class="grid">${card("New plan",`<textarea id="ap-text" placeholder="Describe the change in plain words">${esc(apDraft)}</textarea>
+ <p>Planner <select id="ap-planner">${a.planners.map(x=>`<option${x===apPlanner?" selected":""}>${esc(x)}</option>`).join("")}</select> <button id="ap-plan">Create plan</button></p>
+ <p class="muted">auto picks the smallest planner that is enough. A plan changes no code.</p>`)}
+ ${card("Active agents",agents?`<table><tr><th>Plan</th><th>Task</th><th>Model</th><th>Provider</th><th>Time</th></tr>${agents}</table>`:`<div class="big">0</div><div class="muted">No unit is running.</div>`)}
+ ${card("Shared resources",`<div>Units at once: ${num(l.max_parallel,0)}</div><div>Free remote slots: ${num((l.pools||{}).remote_free,0)}</div><div>Local model slots: ${num((l.pools||{}).local,0)}</div><div>Test suites at once: ${num(l.tests,0)}</div>`)}</div>
+ <h2>Plans</h2>${a.plans.map(planCard).join("")||`<div class="card muted">No plan yet.</div>`}
+ <h2>Jobs started here</h2><div class="card">${jobs||`<span class="muted">None in this dashboard session.</span>`}</div>`}
+let apDraft="",apPlanner="auto";
+async function ap(action,payload){try{const res=await fetch("/api/autopilot/"+action,{method:"POST",headers:{"Content-Type":"application/json","X-Standards-Token":CONTROL_TOKEN},body:JSON.stringify(payload)});
+ const response=await res.json();if(!res.ok)throw new Error(response.error||"Operation rejected");await poll()}catch(e){alert(String(e.message||e))}}
+function bindAutopilot(){const t=$("#ap-text"),s=$("#ap-planner"),b=$("#ap-plan");if(t)t.oninput=()=>{apDraft=t.value};if(s)s.onchange=()=>{apPlanner=s.value};
+ if(b)b.onclick=()=>{if(apDraft.trim())ap("plan",{instruction:apDraft,planner:apPlanner})};
+ const on=(k,f)=>document.querySelectorAll(`[data-${k}]`).forEach(e=>e.onclick=()=>f(e.dataset[k]));
+ on("start",id=>confirm("Run this plan with the allowed agents?")&&ap("start",{plan_id:id,publish:"none",confirmed:true}));
+ on("startpr",id=>confirm("Run this plan and open a pull request when every unit passed?")&&ap("start",{plan_id:id,publish:"pr",confirmed:true}));
+ on("pause",id=>ap("pause",{plan_id:id}));on("unpause",id=>ap("unpause",{plan_id:id}));
+ on("cancel",v=>{const[id,unit]=v.split("|");confirm("Cancel "+unit+"? Its worktree is kept.")&&ap("cancel",{plan_id:id,unit})})}
 function Operations(){const a=S.next_actions||{},o=S.operations||{},j=o.job;
  const items=(a.items||[]).map(x=>`<tr><td>${esc(x.category)}</td><td>${esc(x.id)}</td><td>${esc(x.next)}</td></tr>`).join("");
  return`<div class="grid">${card("Local benchmarks",`<p>Three new classes, qwen3.5-9b-ctx16k, local-only. Preview does not benchmark or download.</p>
@@ -103,14 +143,17 @@ async function operation(action,kind){if(action==="start"&&kind==="bench-run"&&!
 function bindOperations(){const a=$("#bench-plan"),b=$("#bench-run"),c=$("#bench-cancel");if(a)a.onclick=()=>operation("start","bench-plan");
  if(b)b.onclick=()=>operation("start","bench-run");if(c)c.onclick=()=>operation("cancel")}
 function Settings(){return`<div class="grid">${card("Cost mode",`${esc(S.cost.mode)}<div class="muted">${esc(S.cost.mode_source)}</div>`)}${card("Privacy class",esc(S.cost.privacy))}
- ${card("Dashboard","Read-only supervision except explicit, local-only benchmark controls in Operations.")}</div><p class="muted">Change policy in settings/orchestration.yml and ~/.standards/local.yml.</p>`}
+ ${card("Dashboard","Read-only supervision except the explicit controls in Operations and Autopilot.")}</div><p class="muted">Change policy in settings/orchestration.yml and ~/.standards/local.yml.</p>`}
 async function Logs(){const r=await (await fetch("/api/logs?name="+logName)).json();
  $("#view").innerHTML=`<div class="card"><button data-l="colibri">Colibri server</button> <button data-l="colibri-install">Colibri install</button><pre>${esc(r.lines.join("\n")||NA)}</pre></div>`;
  document.querySelectorAll("[data-l]").forEach(b=>b.onclick=()=>{logName=b.dataset.l;Logs()})}
-const V={Dashboard,"Agents and models":Agents,Tasks,Operations,Performance,History,Settings};
+const V={Dashboard,Autopilot,"Agents and models":Agents,Tasks,Operations,Performance,History,Settings};
 function render(){document.querySelectorAll("nav a").forEach(a=>a.classList.toggle("on",decodeURIComponent(a.hash.slice(1))===route()));
- if(route()==="Logs"){Logs();return}if(!S){$("#view").innerHTML=`<div class="card muted">Loading</div>`;return}$("#view").innerHTML=(V[route()]||Dashboard)();
- if(route()==="Operations")bindOperations()}
+ if(route()==="Logs"){Logs();return}if(!S){$("#view").innerHTML=`<div class="card muted">Loading</div>`;return}
+ // Typing in the plan box or reading an open log must not be wiped by the next poll.
+ const a=document.activeElement,busy=route()==="Autopilot"&&((a&&(a.id==="ap-text"||a.id==="ap-planner"))||document.querySelector("#view details[open]"));
+ if(busy&&$("#ap-text"))return;$("#view").innerHTML=(V[route()]||Dashboard)();
+ if(route()==="Operations")bindOperations();if(route()==="Autopilot")bindAutopilot()}
 async function poll(){try{S=await (await fetch("/api/state")).json();const r=S.resources;
  hist.cpu.push(r.cpu_percent||0);hist.ram.push(r.ram_total_bytes&&r.ram_free_bytes!=null?(1-r.ram_free_bytes/r.ram_total_bytes)*100:0);
  const l=S.telemetry.recent.at(-1);if(l&&l.tokens_per_second)hist.tps=S.telemetry.recent.map(x=>x.tokens_per_second||0);

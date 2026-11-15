@@ -30,6 +30,9 @@ flowchart LR
 - `profiles/`: one folder per profile with its `profile.yml`: folders, fixed rules, techniques that need a reason and setup questions. `profiles/web/subprofiles.yml` describes the five web sub-profiles.
 - `scripts/standard.py`: the engine. It creates, regenerates, checks and migrates repositories, and packages the skills.
 - `scripts/orchestrate.py`: routing, delegation, bench, consent and the gate every model call passes.
+- `scripts/plan_autopilot.py`, `scripts/planner.py` and `scripts/plan_contract.py`: an instruction in plain words becomes a validated work plan. The planner is the smallest Claude model that is enough, or a local one, and one contract fixes, repairs and validates its draft.
+- `scripts/execute.py`, `scripts/scheduler.py`, `scripts/resources.py` and `scripts/workplan.py`: the executor loop. Units run at once in their own worktrees from a ready queue, under resource limits, and their results are integrated one at a time.
+- `scripts/control.py`: the local dashboard that shows and steers that work.
 - `scripts/bench_tasks.py`: the synthetic bench tasks and the code that grades them.
 - `scripts/providers.py`: one transport for providers with an OpenAI-compatible API. It lists models, checks the account, sends requests and names every failure.
 - `scripts/analyze.py`: the night run that finds the models of the machine and of each provider, tests the ones that are allowed and writes the report.

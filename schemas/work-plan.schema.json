@@ -18,7 +18,18 @@
       "properties": {
         "max_attempts_per_unit": {"type": "integer"}, "max_total_attempts": {"type": "integer"},
         "max_wall_s": {"type": "integer"}, "max_remote_sessions": {"type": "integer"},
-        "max_split_depth": {"type": "integer"}, "max_units_after_split": {"type": "integer"}
+        "max_split_depth": {"type": "integer"}, "max_units_after_split": {"type": "integer"},
+        "unit_timeout_s": {"type": "integer", "minimum": 1}, "max_ci_fix_attempts": {"type": "integer", "minimum": 0}
+      }
+    },
+    "planner": {
+      "type": "object",
+      "properties": {
+        "backend": {"type": "string", "enum": ["claude", "ollama"]}, "model": {"type": "string"},
+        "tier": {"type": "string", "enum": ["light", "medium", "advanced"]}, "score": {"type": "integer"},
+        "reasons": {"type": "array", "items": {"type": "string"}}, "fixes": {"type": "array", "items": {"type": "string"}},
+        "repaired": {"type": "array", "items": {"type": "string"}}, "repair_calls": {"type": "integer"},
+        "calls": {"type": "array", "items": {"type": "object"}}, "escalations": {"type": "integer"}
       }
     },
     "final_regression": {"type": "array", "items": {"type": "string"}},
@@ -43,7 +54,9 @@
           },
           "depends_on": {"type": "array", "items": {"type": "string"}},
           "risk": {"type": "string", "enum": ["green", "yellow", "red"]},
-          "max_input_chars": {"type": "integer", "minimum": 1}
+          "max_input_chars": {"type": "integer", "minimum": 1},
+          "budget": {"type": "object", "properties": {"timeout_s": {"type": "integer", "minimum": 1}}},
+          "context": {"type": "string"}
         }
       }
     }

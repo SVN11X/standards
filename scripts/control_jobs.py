@@ -1,14 +1,16 @@
 #!/usr/bin/env python3
-"""Bounded local benchmark jobs for Standards AI Control.
+"""Bounded jobs for Standards AI Control: local benchmarks and Autopilot plans.
 
-No shell, remote provider, model installation, arbitrary command or automatic start.
-Users start/cancel jobs explicitly from the loopback dashboard. This is intentionally
-narrower than the work-plan executor; it uses the existing analyzer and its resume logic.
+No shell, model installation, arbitrary command or automatic start.
+Users start/cancel jobs explicitly from the loopback dashboard. A benchmark uses the existing
+analyzer and its resume logic. An Autopilot job runs scripts/plan_autopilot.py as its own process,
+under the owner's cost and privacy policy, and goes on after the dashboard or a Claude session ends.
 """
 from __future__ import annotations
 
 import json
 import os
+import re
 import subprocess
 import sys
 import threading
@@ -103,3 +105,80 @@ class JobManager:
             self.job["state"] = "cancelling"
             # A successful terminate() call does not prove that child processes stopped.
         return self.snapshot()
+
+
+PLAN_ID = re.compile(r"auto-[0-9a-f]{14}")
+PLANNERS = ("auto", "local", "haiku", "sonnet", "opus")
+PUBLISH = ("none", "pr")
+
+
+def autopilot_command(kind: str, repo: Path, *, instruction: str = "", planner: str = "auto", plan: Path | None = None,
+                      publish: str = "none") -> list[str]:
+    """The exact argv of an Autopilot job. Auto-merge is never offered here: it stays an explicit terminal command."""
+    script = Path(repo).resolve() / "scripts" / "plan_autopilot.py"
+    if not script.is_file():
+        raise FileNotFoundError(f"Autopilot missing: {script}")
+    if kind == "plan":
+        if not instruction.strip() or len(instruction) > 6000 or planner not in PLANNERS:
+            raise ValueError("an instruction of 1 to 6000 characters and a known planner are required")
+        return [sys.executable, str(script), "plan", "--instruction", instruction.strip(), "--planner", planner,
+                "--repo", str(Path(repo).resolve())]
+    if kind == "run":
+        if plan is None or not PLAN_ID.fullmatch(plan.stem) or not plan.is_file() or publish not in PUBLISH:
+            raise ValueError("a saved plan and a publish mode of none or pr are required")
+        return [sys.executable, str(script), "run", str(plan), "--repo", str(Path(repo).resolve()), "--publish", publish]
+    raise ValueError("unsupported operation")
+
+
+class AutopilotManager:
+    """Plans and runs started from the dashboard. One job per plan at a time. It never kills a process it did not start."""
+
+    def __init__(self, repo: Path, data_dir: Path, plans_dir: Path, popen=None):
+        self.repo, self.data_dir, self.plans_dir = Path(repo).resolve(), Path(data_dir), Path(plans_dir)
+        self.popen = popen or subprocess.Popen
+        self.lock = threading.Lock()
+        self.jobs: dict[str, dict] = {}
+        self.procs: dict[str, object] = {}
+
+    def refresh(self, row: dict) -> dict:
+        proc = self.procs.get(row["id"])
+        code = proc.poll() if proc is not None else None
+        if row["state"] == "running" and code is not None:
+            # The exit code is the evidence. A process that only went quiet is still running.
+            row.update(state="passed" if code == 0 else "failed", exit_code=code,
+                       finished_at=datetime.now(timezone.utc).isoformat())
+        return row
+
+    def snapshot(self) -> list[dict]:
+        with self.lock:
+            rows = [self.refresh(row).copy() for row in self.jobs.values()]
+        for row in rows:
+            row["log"] = read_tail(self.data_dir / f"{row['id']}.log", 6000)
+        return sorted(rows, key=lambda r: r["started_at"], reverse=True)[:12]
+
+    def launch(self, kind: str, key: str, argv: list[str]) -> dict:
+        with self.lock:
+            if any(self.refresh(r)["state"] == "running" and r["key"] == key for r in self.jobs.values()):
+                raise RuntimeError("this plan already has a job running")
+            self.data_dir.mkdir(parents=True, exist_ok=True)
+            job_id = uuid.uuid4().hex
+            env = os.environ.copy()
+            env["PYTHONUTF8"] = "1"
+            flags = ({"creationflags": subprocess.CREATE_NEW_PROCESS_GROUP} if os.name == "nt" else {"start_new_session": True})
+            with (self.data_dir / f"{job_id}.log").open("wb") as output:
+                proc = self.popen(argv, cwd=str(self.repo), stdin=subprocess.DEVNULL, stdout=output,
+                                  stderr=subprocess.STDOUT, env=env, **flags)
+            self.procs[job_id] = proc
+            self.jobs[job_id] = {"id": job_id, "kind": kind, "key": key, "state": "running", "pid": proc.pid,
+                                 "started_at": datetime.now(timezone.utc).isoformat(), "exit_code": None}
+            return self.jobs[job_id].copy()
+
+    def plan(self, instruction: str, planner: str = "auto") -> dict:
+        argv = autopilot_command("plan", self.repo, instruction=instruction, planner=planner)
+        return self.launch("plan", "plan:" + instruction.strip()[:80], argv)
+
+    def start(self, plan_id: str, publish: str = "none") -> dict:
+        if not PLAN_ID.fullmatch(str(plan_id)):
+            raise ValueError("unknown plan")
+        argv = autopilot_command("run", self.repo, plan=self.plans_dir / f"{plan_id}.json", publish=publish)
+        return self.launch("run", plan_id, argv)

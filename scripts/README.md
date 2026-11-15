@@ -5,6 +5,10 @@
 - `adversarial.py`: tries to break the standard's controls with fake executors and synthetic data, in quick, standard and deep levels.
 - `orchestrate.py`: finds the executors of the machine, chooses one per task under the cost and privacy rules, delegates to OpenCode or Ollama and verifies the result, runs benchmarks, records consent and the cost mode, merges the OpenCode config and prints MCP configs.
 - `colibri.py` and `ecosystem.py`: manage the local Colibri server and install, diagnose, repair, update and verify the whole local AI setup. Run them through `standards.ps1`.
+- `plan_autopilot.py`: turns an instruction into a work plan, runs it and publishes one pull request (`plan`, `go`, `run`, `publish`). `planner.py` picks Claude Haiku, Sonnet, Opus or the local planner. `plan_contract.py` is the one contract that fixes, repairs and validates a draft.
+- `execute.py`: the executor loop (`check`, `run`, `status`, `resume`, `pause`, `unpause`, `cancel`, `clean`, `report`). `scheduler.py` is its ready queue and resource pools, `resources.py` reads the free memory and `workplan.py` validates a plan and finds file conflicts.
+- `bench_parallel.py`: measures the executor loop at several concurrency levels on the same plan, with simulated agents.
+- `control.py` and `control_jobs.py`: the local dashboard and the bounded jobs it may start.
 - `bench_tasks.py`: the synthetic bench tasks and the code that grades them. No model grades another.
 - `analyze.py`: finds the models of the machine and of each provider, tests the allowed ones overnight and writes the report (`prepare`, `plan`, `run`, `report`). `analyze-models.ps1` and `analyze-models.sh` run it. It never downloads a model.
 - `providers.py`: the transport for providers with an OpenAI-compatible API (`status`, `models`, `check`). Keys come from the environment and are never stored or printed.
