@@ -42,12 +42,14 @@ Report what was measured and with how many people. Never report a learning gain 
 
 ## Sources
 
+Springer answers a link checker with a redirect loop, so its articles are cited by DOI as text.
+
 - Dunlosky, Rawson, Marsh, Nathan and Willingham (2013), Improving students' learning with effective learning techniques: https://doi.org/10.1177/1529100612453266
 - Roediger and Karpicke (2006), Test-enhanced learning: https://doi.org/10.1111/j.1467-9280.2006.01693.x
 - Cepeda, Pashler, Vul, Wixted and Rohrer (2006), Distributed practice in verbal recall tasks: https://doi.org/10.1037/0033-2909.132.3.354
-- Rohrer and Taylor (2007), The shuffling of mathematics problems improves learning: https://doi.org/10.1007/s11251-007-9015-8
+- Rohrer and Taylor (2007), The shuffling of mathematics problems improves learning, doi:10.1007/s11251-007-9015-8
 - Hattie and Timperley (2007), The power of feedback: https://doi.org/10.3102/003465430298487
-- Butler and Roediger (2008), Feedback enhances the positive effects and reduces the negative effects of multiple-choice testing: https://doi.org/10.3758/MC.36.3.604
-- Sweller, van Merriënboer and Paas (2019), Cognitive architecture and instructional design, 20 years later: https://doi.org/10.1007/s10648-019-09465-5
+- Butler and Roediger (2008), Feedback enhances the positive effects and reduces the negative effects of multiple-choice testing, doi:10.3758/MC.36.3.604
+- Sweller, van Merriënboer and Paas (2019), Cognitive architecture and instructional design, 20 years later, doi:10.1007/s10648-019-09465-5
 - Mayer and Moreno (2003), Nine ways to reduce cognitive load in multimedia learning: https://doi.org/10.1207/S15326985EP3801_6
 - Haladyna, Downing and Rodriguez (2002), A review of multiple-choice item-writing guidelines: https://doi.org/10.1207/S15324818AME1503_5
