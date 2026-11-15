@@ -1383,6 +1383,17 @@ recipes:
     proof: the question audit shows no integrity error, every question explains why, practice mixes topics and comes back over days, and five learners finish
       a lesson and answer its questions from memory
     notes: learning is shown by what learners recall later, not by how the page looks
+  - id: learning-app
+    intents: [work, review]
+    words: [aprender, aprendizaje, aprende, estudiar, estudio, estudiante, estudiantes, examen, exámenes, quiz, pregunta, preguntas, lección,
+      lecciones, curso, repaso, repasar, memorizar, recordar, practicar, práctica, flashcards, tarjetas, cuestionario, cuestionarios, learn,
+      learning, learner, learners, study, student, exam, question, questions, lesson, lessons, course, flashcard, practice, retention,
+      remember, certificación, certification]
+    capabilities: [learning-design, question-quality, writing-check, comprehension-test, ux-review, unit-test]
+    proof: every question explains why, practice mixes topics and comes back over days, and five learners finish a session and answer its
+      questions from memory
+    notes: a learning app outside a web page, such as a desktop tutor. Questions kept in code are reviewed by reading them, because the
+      question audit reads data files
   - id: content-clarity
     intents: [work, review]
     words: [texto, textos, redacción, redacta, reescribe, claridad, claro, clara, legible, entender, entienda, entiende, comprender, comprensión, explicación,

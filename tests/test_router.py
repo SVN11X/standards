@@ -270,6 +270,18 @@ class LearningVisualWritingTests(Base):
         self.assertIn("recall later", decision["notes"][0])
         self.assertIn("five learners", decision["verification"]["proof"])
 
+    def test_a_learning_request_in_a_desktop_tutor_gets_the_learning_app_recipe(self):
+        """Found on OpenTutor: a Windows tutor whose questions live in code got the windows-app recipe."""
+        files = {"pyproject.toml": '[project]\nname = "t"\n', "requirements-dev.txt": "ruff\n", "src/tutor/__init__.py": "",
+                 "src/tutor/desktop.py": "import tkinter\n", "tests/test_core.py": "import unittest\n"}
+        tutor = repo(self.root / "tutor", files)
+        decision = self.decide("Mejora las preguntas para que ayuden a recordar", tutor)
+        self.assertEqual((decision["recipe"], decision["experience"]), ("learning-app", None))
+        self.assertNotIn("browser-test", [c["capability"] for c in decision["capabilities"]])
+        self.assertEqual(self.decide("Corrige el foco de la ventana del cuestionario", tutor, session="s2")["recipe"], "windows-app")
+        self.assertEqual(decision["verification"]["install"],
+                         ["python -m pip install -r requirements-dev.txt", "python -m pip install -e ."])
+
     def test_a_diagram_and_a_clip_get_the_visual_recipe_with_their_tools(self):
         files = {**WEB, "docs/flow.mmd": "graph LR\n a-->b\n", "assets/clip.webm": "x", "assets/clip.vtt": "WEBVTT\n"}
         decision = self.decide("Agrega un diagrama de la arquitectura y un video corto que lo explique", repo(self.root / "vis", files))

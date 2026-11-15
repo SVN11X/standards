@@ -202,8 +202,10 @@ def collect(root: Path, files: list[str], prefix: str = "") -> tuple[list[dict],
         install.append("npm install")
     install += [f"python -m pip install -r {(here + '/') if here else ''}{n}" for n in sorted(here_files)
                 if re.fullmatch(r"requirements[^/]*\.txt", n)]
-    if "pyproject.toml" in here_files and not any("requirements" in i for i in install):
-        install.append("python -m pip install -e .")
+    src_layout = any(n.startswith((here + "/src/") if here else "src/") for n in scoped)
+    if "pyproject.toml" in here_files and (src_layout or not any("requirements" in i for i in install)):
+        # A package under src/ is importable by its tests only once it is installed.
+        install.append("python -m pip install -e " + (here or "."))
     if install:
         commands["install"] = " && ".join(install) if len(install) == 1 else install
     if "python" in found and "pytest" in found and "test" not in commands:
