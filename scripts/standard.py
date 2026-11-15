@@ -1343,7 +1343,10 @@ def skill_names() -> list[str]:
 
 # Scripts the skills call from the bundled copy of the standard, next to standard.py.
 BUNDLED_SCRIPTS = ("standard.py", "orchestrate.py", "verify.py", "evidence.py", "preserve.py", "adversarial.py",
-                   "safe_patch.py", "memory.py", "bench_tasks.py", "analyze.py", "providers.py")
+                   "safe_patch.py", "memory.py", "bench_tasks.py", "analyze.py", "providers.py",
+                   # The executor loop, the planner and the router. verify.py and adversarial.py import them.
+                   "execute.py", "workplan.py", "review.py", "scheduler.py", "resources.py", "plan_autopilot.py",
+                   "plan_contract.py", "planner.py", "repo_fingerprint.py", "router.py")
 
 
 def cmd_package_skills(out_dir: Path) -> None:
@@ -1368,7 +1371,7 @@ def cmd_package_skills(out_dir: Path) -> None:
         shutil.copy2(STANDARD_ROOT / "hooks" / hook, snapshot / "hooks" / hook)
     shutil.copytree(STANDARD_ROOT / "schemas", snapshot / "schemas", ignore=ignore)
     (snapshot / "settings").mkdir()
-    for name in ("orchestration.yml", "models.yml", "providers.yml"):
+    for name in ("orchestration.yml", "models.yml", "providers.yml", "recipes.yml"):
         shutil.copy2(STANDARD_ROOT / "settings" / name, snapshot / "settings" / name)
     for name in ("mcp", "opencode"):
         shutil.copytree(STANDARD_ROOT / "settings" / name, snapshot / "settings" / name, ignore=ignore)
@@ -1566,7 +1569,8 @@ def cmd_selftest() -> int:
         cmd_skills_repo(skills_out)
         expected = ["repo/.claude-plugin/plugin.json", "repo/.claude-plugin/marketplace.json",
                     "repo/agents/standard-runner.md", "repo/agents/deep-reviewer.md",
-                    "repo/hooks/hooks.json", "repo/hooks/autopilot.py",
+                    "repo/hooks/hooks.json", "repo/hooks/autopilot.py", "repo/hooks/route_prompt.py",
+                    "repo/skills/repo-setup/standard/scripts/router.py", "repo/skills/repo-setup/standard/settings/recipes.yml",
                     "repo/README.md", "repo/skills/repo-setup/SKILL.md", "repo/skills/repo-setup/standard/VERSION",
                     "repo/skills/code-review/SKILL.md", "repo/skills/web-improve/scripts/deliver_git.py",
                     "repo/skills/docs-review/SKILL.md", "release/repo-setup.zip", "release/code-review.zip",
@@ -1576,6 +1580,40 @@ def cmd_selftest() -> int:
             failures.append(f"skills-repo is missing {missing}")
         else:
             print("positive case passed: skills repository")
+
+        # The package once shipped verify.py without the modules it imports. Every packaged script must start.
+        bundle = skills_out / "repo" / "skills" / "repo-setup" / "standard" / "scripts"
+        broken = []
+        for script in BUNDLED_SCRIPTS:
+            ran = subprocess.run([sys.executable, str(bundle / script), "--help"], capture_output=True, text=True, timeout=120)
+            if ran.returncode != 0:
+                tail = ran.stderr.strip().splitlines()
+                broken.append(f"{script}: {tail[-1] if tail else 'exit ' + str(ran.returncode)}")
+        if broken:
+            failures.append(f"a packaged script does not start: {broken}")
+        else:
+            print("positive case passed: every packaged script starts")
+
+        # A work request typed in Claude Code reaches the router through the packaged hook.
+        routed = root / "routed"
+        routed.mkdir()
+        (routed / "index.html").write_text("<h1>Page</h1>\n", encoding="utf-8")
+        subprocess.run(["git", "init", "-q"], cwd=routed, check=True)
+        hook_env = {**os.environ, "CLAUDE_PLUGIN_ROOT": str(skills_out / "repo"), "STANDARDS_HOME": str(root / "router-home")}
+        payload = json.dumps({"prompt": "Fix the title of this page", "cwd": str(routed), "session_id": "selftest"})
+        ran = subprocess.run([sys.executable, str(skills_out / "repo" / "hooks" / "route_prompt.py")], input=payload,
+                             capture_output=True, text=True, timeout=60, env=hook_env)
+        asked = subprocess.run([sys.executable, str(skills_out / "repo" / "hooks" / "route_prompt.py")],
+                               input=json.dumps({"prompt": "What would you change?", "cwd": str(routed)}),
+                               capture_output=True, text=True, timeout=60, env=hook_env)
+        try:
+            added = json.loads(ran.stdout)["hookSpecificOutput"]["additionalContext"]
+        except (ValueError, KeyError):
+            added = ""
+        if "work request" not in added or "static-web" not in added or asked.stdout.strip():
+            failures.append(f"the packaged UserPromptSubmit hook did not route: {ran.stdout[:200]!r} {ran.stderr[-200:]!r} {asked.stdout[:80]!r}")
+        else:
+            print("positive case passed: the packaged hook routes a work request and stays silent on a question")
 
         messy = root / "messy"
         messy.mkdir()

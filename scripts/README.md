@@ -5,6 +5,7 @@
 - `adversarial.py`: tries to break the standard's controls with fake executors and synthetic data, in quick, standard and deep levels.
 - `orchestrate.py`: finds the executors of the machine, chooses one per task under the cost and privacy rules, delegates to OpenCode or Ollama and verifies the result, runs benchmarks, records consent and the cost mode, merges the OpenCode config and prints MCP configs.
 - `colibri.py` and `ecosystem.py`: manage the local Colibri server and install, diagnose, repair, update and verify the whole local AI setup. Run them through `standards.ps1`.
+- `router.py`: says which repository, folder, recipe and tools a request is about (`route`, `tasks`, `done`, `check`). `repo_fingerprint.py` reads what a folder is from its own files, with the file behind every signal.
 - `plan_autopilot.py`: turns an instruction into a work plan, runs it and publishes one pull request (`plan`, `go`, `run`, `publish`). `planner.py` picks Claude Haiku, Sonnet, Opus or the local planner. `plan_contract.py` is the one contract that fixes, repairs and validates a draft.
 - `execute.py`: the executor loop (`check`, `run`, `status`, `resume`, `pause`, `unpause`, `cancel`, `clean`, `report`). `scheduler.py` is its ready queue and resource pools, `resources.py` reads the free memory and `workplan.py` validates a plan and finds file conflicts.
 - `bench_parallel.py`: measures the executor loop at several concurrency levels on the same plan, with simulated agents.

@@ -1,0 +1,264 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/SVN11X/standards/schemas/route-decision.schema.json",
+  "title": "Decision of the router about one request",
+  "type": "object",
+  "required": [
+    "schema",
+    "at",
+    "client",
+    "intent",
+    "intent_why",
+    "repository",
+    "folder",
+    "folder_why",
+    "signals",
+    "recipe_why",
+    "alternatives",
+    "capabilities",
+    "verification",
+    "permission",
+    "leaves_machine",
+    "reused",
+    "questions",
+    "notes",
+    "owner",
+    "task"
+  ],
+  "properties": {
+    "schema": {
+      "type": "string",
+      "enum": [
+        "standards/route-decision/v1"
+      ]
+    },
+    "at": {
+      "type": "string",
+      "minLength": 1
+    },
+    "client": {
+      "type": "string",
+      "enum": [
+        "claude",
+        "opencode",
+        "coordinator"
+      ]
+    },
+    "permission_mode": {},
+    "intent": {
+      "type": "string",
+      "enum": [
+        "work",
+        "query",
+        "review",
+        "setup",
+        "publish",
+        "other"
+      ]
+    },
+    "intent_why": {
+      "type": "string",
+      "minLength": 1
+    },
+    "repository": {
+      "type": "object",
+      "required": [
+        "name",
+        "root",
+        "revision",
+        "standard"
+      ],
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "root": {
+          "type": "string",
+          "minLength": 1
+        },
+        "revision": {},
+        "standard": {}
+      }
+    },
+    "folder": {
+      "type": "string",
+      "minLength": 1
+    },
+    "folder_why": {
+      "type": "string",
+      "minLength": 1
+    },
+    "profile": {},
+    "profile_why": {
+      "type": "string"
+    },
+    "experience": {},
+    "signals": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "evidence"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "evidence": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "recipe": {},
+    "recipe_why": {
+      "type": "string",
+      "minLength": 1
+    },
+    "alternatives": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "recipe",
+          "score"
+        ],
+        "properties": {
+          "recipe": {
+            "type": "string"
+          },
+          "score": {
+            "type": "integer"
+          }
+        }
+      }
+    },
+    "capabilities": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "capability",
+          "provider",
+          "available",
+          "why",
+          "leaves_machine",
+          "alternatives",
+          "requirement"
+        ],
+        "properties": {
+          "capability": {
+            "type": "string",
+            "minLength": 1
+          },
+          "provider": {},
+          "available": {},
+          "status": {},
+          "runs": {},
+          "why": {
+            "type": "string",
+            "minLength": 1
+          },
+          "leaves_machine": {
+            "type": "string"
+          },
+          "requirement": {},
+          "alternatives": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "provider",
+                "why_not"
+              ],
+              "properties": {
+                "provider": {
+                  "type": "string"
+                },
+                "why_not": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "verification": {
+      "type": "object",
+      "required": [
+        "command",
+        "where",
+        "proof"
+      ],
+      "properties": {
+        "command": {},
+        "where": {
+          "type": "string"
+        },
+        "proof": {}
+      }
+    },
+    "permission": {
+      "type": "string",
+      "minLength": 1
+    },
+    "writes": {},
+    "leaves_machine": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "privacy": {},
+    "cost_mode": {},
+    "reused": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "questions": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "notes": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "owner": {
+      "type": "string",
+      "enum": [
+        "session",
+        "coordinator"
+      ]
+    },
+    "handoff": {},
+    "task": {
+      "type": "object",
+      "required": [
+        "key",
+        "state"
+      ],
+      "properties": {
+        "key": {},
+        "state": {
+          "type": "string",
+          "enum": [
+            "new",
+            "updated",
+            "none"
+          ]
+        }
+      }
+    }
+  }
+}

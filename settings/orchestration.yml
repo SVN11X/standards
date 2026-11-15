@@ -186,6 +186,18 @@ planning:
   # {model} is filled in and the prompt goes in on standard input. Flags the installed version lists are added.
   command: [claude, -p, --model, "{model}", --output-format, json]
 
+# The router of scripts/router.py. It reads a request, the folder and settings/recipes.yml and says which
+# recipe and tools fit. In Claude Code the UserPromptSubmit hook adds that decision to a work request.
+routing:
+  # Who runs a work order typed in Claude Code. session: the session does it with the decision as context.
+  # coordinator: the session edits nothing and hands the order to plan_autopilot.py. The owner turns that on
+  # for all folders with `router: {owner: coordinator}` in ~/.standards/local.yml.
+  owner: session
+  # Hours a task without news still counts as the one a follow-up belongs to.
+  task_ttl_h: 12
+  # Characters of context the hook may add to one request.
+  max_context_chars: 1800
+
 # How many units the executor loop runs at once. A unit starts when its own dependencies passed and its pool
 # has a free slot. More slots are not always faster: `python scripts/bench_parallel.py` measures it here.
 concurrency:

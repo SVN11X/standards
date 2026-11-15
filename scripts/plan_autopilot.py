@@ -245,7 +245,20 @@ def make_plan(instruction: str, repo: Path, test: str, *, asked: str | None = No
             choice, used = higher, used + 1
     plan["planner"] = {**choice, "fixes": record.get("fixes", []), "repaired": record.get("repaired", []),
                        "repair_calls": record.get("repair_calls", 0), "calls": calls, "escalations": used}
+    plan["route"] = route_of(instruction, repo)
     return plan
+
+
+def route_of(instruction: str, repo: Path) -> dict | None:
+    """What the router says about the request, kept in the plan so a run can show why its tools were chosen."""
+    try:
+        import router
+        found = router.decide(instruction, repo, "coordinator", save=False)
+    except Exception:  # noqa: BLE001 (a plan is valid without a route)
+        return None
+    return {"recipe": found["recipe"], "recipe_why": found["recipe_why"], "folder": found["folder"], "profile": found["profile"],
+            "verification": found["verification"], "leaves_machine": found["leaves_machine"],
+            "capabilities": [{"capability": c["capability"], "provider": c["provider"]} for c in found["capabilities"]]}
 
 
 def resolve_plan(path: Path, repo: Path) -> dict:

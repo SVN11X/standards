@@ -1,0 +1,193 @@
+# Selection rules of scripts/router.py: which recipe a request gets and who provides each capability.
+# A recipe names capabilities, never tools. A capability lists its providers in order of preference, so a
+# client or a machine without one tool gets the next one, and the request keeps its meaning.
+#
+# status of a provider: read from radar/radar.yml when `radar` names its entry, from settings/mcp/catalog.yml
+# when `mcp` names its server, else written here. adopt and trial are offered. assess is offered and marked as
+# not proven yet. hold is never offered.
+# runs: client (part of the AI client), local (a process on this machine), remote (a server of a third party
+# that receives part of the request), plugin (an extension of one product). A remote provider is never offered
+# in local-only mode or for a work or restricted folder. gh is local: it talks to the host the repository
+# already lives on.
+# leaves_machine: what the provider sends out by itself. The decision lists it for every provider it chose.
+# detect: how the router sees the provider. signal: a fingerprint signal of the project. which: a program on
+# the PATH. mcp: a server in the project's .mcp.json or opencode.json. skill: a skill of this standard.
+# none: it cannot be seen, so the decision says "not checked".
+version: 1
+
+capabilities:
+  visual-design:
+    purpose: set the visual direction of a page and judge the result
+    providers:
+      - {id: web-improve, kind: skill, runs: client, maintainer: SVN11X, source: skills/web-improve, clients: [claude, opencode],
+         writes: true, cost: free, leaves_machine: nothing, status: adopt, detect: {skill: web-improve}}
+      - {id: frontend-design, kind: client-plugin, runs: plugin, maintainer: Anthropic,
+         source: "https://github.com/anthropics/claude-plugins-official/blob/main/plugins/frontend-design/README.md",
+         clients: [claude], writes: true, cost: the model calls of the client, leaves_machine: nothing, status: assess,
+         detect: none, evidence: named in the owner's guide of 2026-11-15, not tested}
+      - {id: impeccable, kind: cli, runs: local, radar: Impeccable, clients: [claude, opencode, coordinator], writes: false,
+         cost: free, leaves_machine: nothing, detect: none}
+  browser-test:
+    purpose: drive the page in a real browser and keep the flow as a test
+    providers:
+      - {id: playwright-test, kind: test-runner, runs: local, radar: Playwright Test, clients: [claude, opencode, coordinator],
+         writes: false, cost: free, leaves_machine: only the pages it opens, detect: {signal: playwright}}
+      - {id: playwright-mcp, kind: mcp, runs: local, radar: Playwright MCP, mcp: playwright, transport: stdio,
+         clients: [claude, opencode], writes: false, cost: free, leaves_machine: only the pages it opens, detect: {mcp: playwright}}
+      - {id: playwright-cli, kind: cli, runs: local, radar: Playwright CLI, clients: [claude, opencode, coordinator],
+         writes: false, cost: free, leaves_machine: only the pages it opens, detect: {which: [playwright-cli]}}
+  accessibility:
+    purpose: check names, focus, contrast and keyboard use of a page
+    providers:
+      - {id: axe-playwright, kind: library, runs: local, maintainer: Deque, source: "https://playwright.dev/docs/accessibility-testing",
+         clients: [claude, opencode, coordinator], writes: false, cost: free, leaves_machine: nothing, status: assess,
+         detect: {signal: axe}, evidence: named in the owner's guide of 2026-11-15, not tested}
+      - {id: web-improve, kind: skill, runs: client, maintainer: SVN11X, source: skills/web-improve, clients: [claude, opencode],
+         writes: false, cost: free, leaves_machine: nothing, status: adopt, detect: {skill: web-improve}}
+  code-navigation:
+    purpose: find definitions and references before changing code
+    providers:
+      - {id: typescript-lsp, kind: lsp, runs: local, maintainer: Anthropic, needs_signal: typescript,
+         source: "https://github.com/anthropics/claude-plugins-official/blob/main/plugins/typescript-lsp/README.md",
+         clients: [claude], writes: false, cost: free, leaves_machine: nothing, status: assess,
+         detect: {which: [typescript-language-server]}, evidence: named in the owner's guide of 2026-11-15, not tested}
+      - {id: pyright, kind: lsp, runs: local, maintainer: Microsoft, needs_signal: python, source: "https://github.com/microsoft/pyright",
+         clients: [claude, opencode, coordinator], writes: false, cost: free, leaves_machine: nothing, status: assess,
+         detect: {which: [pyright, pyright-langserver]}, evidence: named in the owner's guide of 2026-11-15, not tested}
+      - {id: gopls, kind: lsp, runs: local, maintainer: the Go team, needs_signal: go, source: "https://github.com/golang/tools/tree/master/gopls",
+         clients: [claude, opencode, coordinator], writes: false, cost: free, leaves_machine: nothing, status: assess,
+         detect: {which: [gopls]}, evidence: named in the owner's guide of 2026-11-15, not tested}
+      - {id: rust-analyzer, kind: lsp, runs: local, maintainer: the Rust project, needs_signal: rust, source: "https://github.com/rust-lang/rust-analyzer",
+         clients: [claude, opencode, coordinator], writes: false, cost: free, leaves_machine: nothing, status: assess,
+         detect: {which: [rust-analyzer]}, evidence: named in the owner's guide of 2026-11-15, not tested}
+      - {id: client-search, kind: built-in, runs: client, maintainer: the AI client, clients: [claude, opencode, coordinator],
+         writes: false, cost: free, leaves_machine: nothing, status: adopt, detect: always}
+      - {id: serena, kind: mcp, runs: local, radar: Serena MCP, mcp: serena, transport: stdio, clients: [claude, opencode],
+         writes: true, cost: free, leaves_machine: nothing, detect: {mcp: serena}}
+  library-docs:
+    purpose: read how a library works in the version the project uses
+    providers:
+      - {id: project-docs, kind: built-in, runs: client, maintainer: the AI client, clients: [claude, opencode, coordinator],
+         writes: false, cost: free, leaves_machine: nothing, status: adopt, detect: always,
+         evidence: the lockfile, the README and the installed package come first}
+      - {id: context7, kind: mcp, runs: remote, radar: Context7 MCP, mcp: context7, transport: stdio, clients: [claude, opencode],
+         credentials: optional account key, writes: false, cost: free plan with a monthly call limit,
+         leaves_machine: "library names and the questions asked, sent to Upstash", detect: {mcp: context7}}
+      - {id: microsoft-learn, kind: mcp, runs: remote, maintainer: Microsoft, needs_signal: windows,
+         source: "https://learn.microsoft.com/en-us/training/support/mcp", transport: http, clients: [claude, opencode],
+         writes: false, cost: free, leaves_machine: the questions asked, sent to Microsoft, status: assess,
+         detect: {mcp: microsoft-learn}, evidence: named in the owner's guide of 2026-11-15, not tested}
+  unit-test:
+    purpose: run the tests the project already has
+    providers:
+      - {id: project-tests, kind: test-runner, runs: local, maintainer: the project, clients: [claude, opencode, coordinator],
+         writes: false, cost: free, leaves_machine: nothing, status: adopt, detect: {signal: tests}}
+  native-ui-test:
+    purpose: see the application work in its own window on the system it targets
+    providers:
+      - {id: windows-run, kind: manual, runs: local, maintainer: the owner, platforms: [windows], clients: [claude, opencode, coordinator],
+         writes: false, cost: free, leaves_machine: nothing, status: adopt, detect: {platform: windows},
+         evidence: the owner runs the executable. A browser test proves nothing about a native window}
+      - {id: pywinauto, kind: library, runs: local, maintainer: the pywinauto project, platforms: [windows],
+         source: "https://pywinauto.readthedocs.io/en/latest/", clients: [claude, opencode, coordinator], writes: false, cost: free,
+         leaves_machine: nothing, status: assess, detect: {signal: pywinauto}, evidence: named in the owner's guide of 2026-11-15, not tested}
+  data-integrity:
+    purpose: prove that no record, id or asset was lost or doubled
+    providers:
+      - {id: preserve, kind: cli, runs: local, maintainer: SVN11X, source: scripts/preserve.py, clients: [claude, opencode, coordinator],
+         writes: false, cost: free, leaves_machine: nothing, status: adopt, detect: always}
+      - {id: pytest, kind: test-runner, runs: local, radar: pytest, clients: [claude, opencode, coordinator], writes: false,
+         cost: free, leaves_machine: nothing, detect: {signal: pytest}}
+  github:
+    purpose: read pull requests, issues and the checks of a commit
+    providers:
+      - {id: gh, kind: cli, runs: local, maintainer: GitHub, source: "https://cli.github.com/", clients: [claude, opencode, coordinator],
+         credentials: the owner's gh login, writes: true, cost: free, leaves_machine: requests to the GitHub API with the owner's login,
+         status: adopt, detect: {which: [gh]}, evidence: settings/mcp/catalog.yml prefers gh over the GitHub MCP server}
+      - {id: github-mcp, kind: mcp, runs: local, radar: GitHub MCP Server, mcp: github, transport: stdio, clients: [claude, opencode],
+         credentials: a personal access token, writes: false, cost: free, leaves_machine: requests to the GitHub API with a token,
+         detect: {mcp: github}}
+  repo-setup:
+    purpose: give a repository its profile, its rules and one command that verifies it
+    providers:
+      - {id: repo-setup, kind: skill, runs: client, maintainer: SVN11X, source: skills/repo-setup, clients: [claude, opencode],
+         writes: true, cost: free, leaves_machine: nothing, status: adopt, detect: {skill: repo-setup}}
+  code-review:
+    purpose: review a diff against the rules of the repository's profile
+    providers:
+      - {id: code-review, kind: skill, runs: client, maintainer: SVN11X, source: skills/code-review, clients: [claude, opencode],
+         writes: false, cost: free, leaves_machine: nothing, status: adopt, detect: {skill: code-review}}
+  docs-review:
+    purpose: review a thesis or a document and build it
+    providers:
+      - {id: docs-review, kind: skill, runs: client, maintainer: SVN11X, source: skills/docs-review, clients: [claude, opencode],
+         writes: false, cost: free, leaves_machine: nothing, status: adopt, detect: {skill: docs-review}}
+
+# The first recipe whose intent matches and that has the most signals and words wins. `signals_any` are
+# fingerprint signals of the folder the request is about. `words` name the subject of the request, in English
+# and Spanish. They also pick the folder when a repository holds several projects. `verbs` only tell two
+# recipes with the same signals apart, such as a fix from a redesign. `proof` is what shows the task is done.
+# It is evidence to collect, never a claim.
+recipes:
+  - id: repo-onboarding
+    intents: [setup]
+    profile: null
+    capabilities: [repo-setup, unit-test]
+    proof: the profile, the restrictions and one command that verifies the repository are recorded
+  - id: pr-review
+    intents: [review]
+    profile: null
+    capabilities: [code-review, github, unit-test]
+    proof: every finding names a line of the diff and the tests of the repository ran
+  - id: web-experience
+    intents: [work]
+    signals_any: [web, static-web, react, vue, svelte, astro, next, pwa]
+    words: [design, diseño, visual, attention, atención, layout, style, estilo, look, hero, landing, page, página, portada, ui,
+            interface, interfaz, animation, animación, typography, tipografía, mobile, móvil, responsive, understand, entienda]
+    profile: web
+    experience: true
+    capabilities: [visual-design, browser-test, accessibility, unit-test]
+    proof: the main activity can be completed on a phone and on a desktop, with the keyboard, and its explanation is understood
+  - id: web-fix
+    intents: [work]
+    signals_any: [web, static-web, react, vue, svelte, astro, next, pwa]
+    verbs: [bug, fix, corrige, corregir, arregla, arreglar, error, falla, fails, broken, roto, crash, regression, regresión]
+    profile: web
+    capabilities: [code-navigation, browser-test, unit-test]
+    proof: the failure is reproduced first, then a test that fails without the change passes with it
+  - id: windows-app
+    intents: [work]
+    signals_any: [windows, desktop, tauri, dotnet]
+    words: [window, ventana, windows, desktop, escritorio, exe, ejecutable, native, nativa, nativo, focus, foco, tray, win32]
+    profile: software
+    capabilities: [code-navigation, unit-test, native-ui-test]
+    proof: the failure is reproduced and fixed in the window of the executable, on Windows
+    notes: a browser test does not prove that a native window works
+  - id: data-pipeline
+    intents: [work]
+    signals_any: [scraper, http-client, notebook, dataframe, sqlite]
+    words: [extract, extracción, extractor, scraper, resume, reanuda, reanudar, checkpoint, cursor, dataset, transcription,
+            transcripción, duplica, duplicate, ids, pipeline, import, importa]
+    profile: data-ai
+    capabilities: [code-navigation, unit-test, data-integrity]
+    proof: after an interruption the cursor, the ids and the assets are the same as in an uninterrupted run
+    notes: reuse the cached results and the stored collection. Never extract everything again to test one change
+  - id: docs-academic
+    intents: [work, review]
+    signals_any: [latex, bibliography]
+    words: [thesis, tesis, chapter, capítulo, bibliography, bibliografía, pdf, latex, cite, cita]
+    profile: docs
+    capabilities: [docs-review]
+    proof: the document builds and every reference resolves
+  - id: general-code
+    intents: [work]
+    signals_any: [node, python, go, rust, typescript, dotnet, powershell]
+    profile: software
+    capabilities: [code-navigation, unit-test]
+    proof: a test that fails without the change passes with it
+
+# A capability added to any recipe when the request shows the need.
+additions:
+  - capability: library-docs
+    words: [version, versión, upgrade, actualiza, migrate, migra, migration, migración, deprecated, obsoleto, api, breaking]
+    why: the answer depends on the version of a library
