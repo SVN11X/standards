@@ -22,6 +22,7 @@ Every request to a model passes gate(): cost mode first, then privacy, then the 
 from __future__ import annotations
 
 import argparse
+import contextlib
 import datetime as dt
 import fnmatch
 import hashlib
@@ -34,6 +35,7 @@ import statistics
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 import urllib.error
 import urllib.parse
@@ -139,7 +141,9 @@ def kill_tree(proc: subprocess.Popen) -> None:
         proc.kill()
 
 
-def run(cmd, cwd=None, timeout=60, env=None, shell=False) -> dict:
+def run(cmd, cwd=None, timeout=60, env=None, shell=False, stop=None, idle_s=None, stdin=None) -> dict:
+    """Run a program and wait for it. `stop` (a threading.Event) and `idle_s` (seconds without output) end it early,
+    and the result then says `cancelled` or `idle`. `stdin` is text for a program that reads its prompt there."""
     started = time.monotonic()
     if not shell:
         cmd = resolve(cmd)
@@ -148,12 +152,15 @@ def run(cmd, cwd=None, timeout=60, env=None, shell=False) -> dict:
         # A tool that reads PWD instead of asking the system (OpenCode does) would otherwise work in the caller's folder.
         env = {**(os.environ if env is None else env), "PWD": str(cwd)}
     try:
-        proc = subprocess.Popen(cmd, cwd=cwd, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+        proc = subprocess.Popen(cmd, cwd=cwd, stdin=subprocess.DEVNULL if stdin is None else subprocess.PIPE,
+                                stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                                 text=True, encoding="utf-8", errors="replace", env=env, shell=shell, **group)
     except OSError as error:
         return {"exit": None, "stdout": "", "stderr": str(error), "seconds": 0.0, "timeout": False}
+    if stop is not None or idle_s:
+        return watch(proc, started, timeout, stop, idle_s, stdin)
     try:
-        out, err = proc.communicate(timeout=timeout)
+        out, err = proc.communicate(input=stdin, timeout=timeout)
         return {"exit": proc.returncode, "stdout": out, "stderr": err,
                 "seconds": round(time.monotonic() - started, 2), "timeout": False}
     except subprocess.TimeoutExpired:
@@ -164,6 +171,51 @@ def run(cmd, cwd=None, timeout=60, env=None, shell=False) -> dict:
             out = ""
         return {"exit": None, "stdout": out or "", "stderr": f"timed out after {timeout}s",
                 "seconds": round(time.monotonic() - started, 2), "timeout": True}
+
+
+def watch(proc: subprocess.Popen, started: float, timeout: float, stop, idle_s, stdin) -> dict:
+    """Wait for a process while reading its output, so silence and a cancel request are seen while it runs."""
+    chunks: dict[str, list[str]] = {"stdout": [], "stderr": []}
+    last = [time.monotonic()]
+
+    def pump(stream, key: str) -> None:
+        for line in iter(stream.readline, ""):
+            chunks[key].append(line)
+            last[0] = time.monotonic()
+        stream.close()
+
+    readers = [threading.Thread(target=pump, args=(getattr(proc, key), key), daemon=True) for key in chunks]
+    for reader in readers:
+        reader.start()
+    if stdin is not None:
+        try:
+            proc.stdin.write(stdin)
+            proc.stdin.close()
+        except OSError:
+            pass
+    reason = None
+    while proc.poll() is None:
+        now = time.monotonic()
+        if now - started > timeout:
+            reason = f"timed out after {timeout}s"
+        elif idle_s and now - last[0] > idle_s:
+            reason = f"no output for {idle_s}s"
+        elif stop is not None and stop.is_set():
+            reason = "cancelled"
+        if reason:
+            kill_tree(proc)
+            break
+        time.sleep(0.05)
+    for reader in readers:
+        reader.join(timeout=10)
+    try:
+        proc.wait(timeout=10)
+    except subprocess.TimeoutExpired:
+        pass
+    return {"exit": None if reason else proc.returncode, "stdout": "".join(chunks["stdout"]),
+            "stderr": reason or "".join(chunks["stderr"]), "seconds": round(time.monotonic() - started, 2),
+            "timeout": bool(reason) and reason != "cancelled", "idle": bool(reason) and reason.startswith("no output"),
+            "cancelled": reason == "cancelled"}
 
 
 def git(repo: Path, *args, check=True) -> str:
@@ -1312,7 +1364,10 @@ def fill(template: list[str], **values) -> list[str]:
 def delegate_opencode(repo: Path, task: str, allowed: list[str], test: str | None, model: str | None = None,
                       protect: list[str] | None = None, untrusted: str | None = None, keep: bool = False,
                       conf: dict | None = None, local: dict | None = None, command: list[str] | None = None,
-                      executor: str = "opencode", mode: str | None = None, catalog: dict | None = None) -> dict:
+                      executor: str = "opencode", mode: str | None = None, catalog: dict | None = None,
+                      stop=None, timeout_s: int | None = None, test_lock=None) -> dict:
+    """`stop` cancels the run, `timeout_s` lowers the time limit of this run and `test_lock` is held while the
+    tests run, so a caller with several runs decides how many test suites load the machine at once."""
     conf = conf or policy()
     local = local if local is not None else local_config()
     limits = conf["limits"]
@@ -1352,17 +1407,23 @@ def delegate_opencode(repo: Path, task: str, allowed: list[str], test: str | Non
     message = f"Read {TASK_FILE} in this folder and do exactly that task."
     template = command or conf["executors"][executor]["command"]
     set_state(run_data, "running")
+    budget = min(timeout_s, limits["opencode_timeout_s"]) if timeout_s else limits["opencode_timeout_s"]
     result = run(fill(template, model=model or "", message=message), cwd=worktree,
-                 timeout=limits["opencode_timeout_s"], env=child_env())
+                 timeout=budget, env=child_env(), stop=stop, idle_s=limits.get("opencode_idle_s"))
     size = limits["output_tail_chars"]
     run_data["executor_result"] = {"exit": result["exit"], "seconds": result["seconds"], "timeout": result["timeout"],
+                                   "idle": result.get("idle", False), "cancelled": result.get("cancelled", False),
                                    "stdout_tail": tail(result["stdout"], size), "stderr_tail": tail(result["stderr"], size),
                                    "rate_limited": result["exit"] != 0 and bool(RATE_LIMIT.search(result["stdout"] + result["stderr"]))}
     code = failure_code(result["exit"], result["timeout"], result["stdout"] + result["stderr"])
     run_data["executor_result"]["failure_code"] = code
-    if executor in ("opencode", "colibri") and (code or result["exit"] == 0):
+    # A run the owner cancelled says nothing about the health of the model.
+    if executor in ("opencode", "colibri") and (code or result["exit"] == 0) and not result.get("cancelled"):
         record_health(executor, model, code, conf)
     (worktree / TASK_FILE).unlink(missing_ok=True)
+    if result.get("cancelled"):
+        set_state(run_data, "blocked", "cancelled by the owner. The worktree and its branch are kept")
+        return run_data
     changes, ignored = changed_files(worktree, base, conf.get("generated"))
     for rel in ignored:
         path = worktree / rel
@@ -1378,9 +1439,12 @@ def delegate_opencode(repo: Path, task: str, allowed: list[str], test: str | Non
     checks["inside_scope"] = "PASS" if not outside else "FAIL"
     run_data.update(changed=changes, protected_changed=protected_hit, outside_scope=outside, generated_ignored=ignored)
     if test:
-        tested = run(test, cwd=worktree, timeout=limits["test_timeout_s"], shell=True, env=child_env())
+        asked = time.monotonic()
+        with test_lock or contextlib.nullcontext():
+            waited = round(time.monotonic() - asked, 2)
+            tested = run(test, cwd=worktree, timeout=limits["test_timeout_s"], shell=True, env=child_env(), stop=stop)
         checks["tests"] = "PASS" if tested["exit"] == 0 else "FAIL"
-        run_data["test_result"] = {"exit": tested["exit"], "seconds": tested["seconds"],
+        run_data["test_result"] = {"exit": tested["exit"], "seconds": tested["seconds"], "waited_s": waited,
                                    "output_tail": tail(tested["stdout"] + tested["stderr"], size)}
     else:
         checks["tests"] = "NOT_RUN"
@@ -1388,14 +1452,21 @@ def delegate_opencode(repo: Path, task: str, allowed: list[str], test: str | Non
     if failed:
         set_state(run_data, "failed", "checks not passed: " + ", ".join(failed))
     else:
-        git(worktree, "add", "-A")
+        # The tests ran after the scope check and can leave files of their own, such as __pycache__. Only the files
+        # the executor changed are committed, so two units that ran at once never collide on a file neither wrote.
+        for rel in changed_files(worktree, base, conf.get("generated"))[1]:
+            if (worktree / rel).is_file():
+                (worktree / rel).unlink()
+        git(worktree, "add", "-A", "--", *changes)
         git(worktree, "-c", "user.name=standards-delegate", "-c", "user.email=delegate@localhost",
             "commit", "-q", "-m", f"chore(delegate): {task.strip().splitlines()[0][:60]}")
         run_data["commit"] = git(worktree, "rev-parse", "HEAD")
         set_state(run_data, "verified", f"integrate with: git cherry-pick {run_data['commit'][:12]}")
     if not keep and run_data["state"] == "verified":
-        git(repo, "worktree", "remove", "--force", str(worktree), check=False)
-        run_data["worktree"] = None
+        # The work is committed on its branch. A worktree git refuses to remove still holds something, so it stays.
+        git(repo, "worktree", "remove", str(worktree), check=False)
+        if not worktree.exists():
+            run_data["worktree"] = None
         record(run_data)
     return run_data
 

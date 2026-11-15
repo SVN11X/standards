@@ -2,7 +2,10 @@
 
 No Ollama, OpenCode, GitHub or network access is used in these tests.
 """
+import contextlib
+import io
 import json
+import os
 import sys
 import tempfile
 import unittest
@@ -34,6 +37,8 @@ class TestAutopilot(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
         self.repo = Path(self.tmp.name).resolve()
+        os.environ["STANDARDS_HOME"] = str(self.repo / ".home")
+        self.addCleanup(os.environ.pop, "STANDARDS_HOME", None)
         (self.repo / "src.py").write_text("print('hi')\n", encoding="utf-8")
         (self.repo / "tests").mkdir()
         (self.repo / "tests" / "test_src.py").write_text("pass\n")
@@ -248,6 +253,58 @@ class TestAutopilot(unittest.TestCase):
                 autopilot.publish(plan, self.repo, auto_merge=True)
         self.assertTrue(any(c[:2] == ["git", "push"] for c in calls))
         self.assertFalse(any(c[:3] == ["gh", "pr", "merge"] for c in calls))
+
+    def test_moved_base_keeps_the_pr_and_refuses_auto_merge(self):
+        plan = self.make()
+        calls = []
+        def fake_run(args, *, cwd, timeout=120):
+            calls.append(args)
+            if args[:3] == ["gh", "pr", "list"]:
+                return json.dumps([{"number": 99, "url": "https://github.com/SVN11X/standards/pull/99", "headRefOid": SHA_B}])
+            return SHA_B if args[:2] == ["git", "rev-parse"] else ""
+        with mock.patch.object(autopilot, "ensure_base"), \
+             mock.patch.object(autopilot.orchestrate, "git", return_value="main"), \
+             mock.patch.object(autopilot, "integration_ready", return_value=(self.repo, "execute/branch", SHA_B)), \
+             mock.patch.object(autopilot, "gh_repo", return_value=("SVN11X/standards", "main")), \
+             mock.patch.object(autopilot, "regression"), \
+             mock.patch.object(autopilot, "required_checks"), \
+             mock.patch.object(autopilot, "checked_run", side_effect=fake_run):
+            with self.assertRaisesRegex(autopilot.Blocked, "moved since the plan"):
+                autopilot.publish(plan, self.repo, auto_merge=True)
+            self.assertFalse(any(c[:3] == ["gh", "pr", "merge"] for c in calls))
+            self.assertTrue(autopilot.publish(plan, self.repo)["base_moved"])
+
+    def test_independent_units_keep_their_order_only_where_the_draft_asks(self):
+        (self.repo / "other.py").write_text("x\n")
+        draft = {"units": [proposal()["units"][0], {**proposal()["units"][0], "allowed": ["tests/test_src.py"], "depends_on": []},
+                           {**proposal()["units"][0], "allowed": ["tests/test_src.py"], "depends_on": [1, 2]}]}
+        plan = self.make(draft)
+        self.assertEqual([u["depends_on"] for u in plan["units"]], [[], [], ["u1", "u2"]])
+        self.assertEqual(autopilot.workplan.batches(plan, ["src.py", "tests/test_src.py"])[0], ["u1", "u2"])
+
+    def test_the_pr_body_has_the_sections_of_the_pull_request_contract(self):
+        plan = self.make()
+        import standard
+        body = autopilot.pr_body(plan)
+        sections = standard.markdown_sections(body)
+        for name in standard.PR_SECTIONS:
+            self.assertTrue(sections.get(name, "").strip(), name)
+        self.assertRegex("feat: " + plan["goal"].splitlines()[0][:65], standard.CONVENTIONAL_TITLE)
+
+    def test_same_request_on_the_same_commit_reuses_the_plan_and_asks_no_planner(self):
+        plan = self.make()
+        path = autopilot.orchestrate.home() / "plans" / f"{plan['plan_id']}.json"
+        with mock.patch.object(autopilot.orchestrate, "repo_root", return_value=self.repo), \
+             mock.patch.object(autopilot.orchestrate, "git", side_effect=lambda repo, *a, **k: SHA_A if a[0] == "rev-parse" else ""), \
+             mock.patch.object(autopilot, "make_plan", return_value=plan) as made, \
+             mock.patch.object(autopilot.workplan, "validate", return_value=[]):
+            args = ["plan", "--instruction", "Fix src.py", "--test", TEST, "--repo", str(self.repo)]
+            with contextlib.redirect_stdout(io.StringIO()) as out:
+                self.assertEqual(autopilot.main(args), 0)
+                self.assertTrue(path.exists())
+                self.assertEqual(autopilot.main(args), 0)
+        self.assertIn('"reused": true', out.getvalue())
+        self.assertEqual(made.call_count, 1)
 
 
 if __name__ == "__main__":

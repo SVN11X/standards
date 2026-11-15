@@ -10,6 +10,8 @@
     "finished": {"type": ["string", "null"]},
     "integration_branch": {"type": ["string", "null"]},
     "counts": {"type": "object", "additionalProperties": {"type": "integer"}},
+    "metrics": {"type": ["object", "null"]},
+    "publication": {"type": ["object", "null"]},
     "units": {
       "type": "array",
       "items": {
@@ -25,7 +27,10 @@
           "retries": {"type": ["integer", "null"]},
           "executor": {"type": ["string", "null"]},
           "model": {"type": ["string", "null"]},
-          "note": {"type": ["string", "null"]}
+          "note": {"type": ["string", "null"]},
+          "channel": {"type": ["string", "null"]},
+          "seconds": {"type": ["number", "null"]},
+          "depends_on": {"type": "array", "items": {"type": "string"}}
         }
       }
     }

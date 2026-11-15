@@ -134,6 +134,15 @@ def check_settings(repo: Path) -> list[dict]:
     stray = [task for task in [*(conf.get("proven_only") or []), *(conf.get("needs") or {})] if task not in (conf.get("tasks") or {})]
     if stray:
         problems.append(f"rules for task types that do not exist: {stray}")
+    planning = conf.get("planning") or {}
+    tiers = planning.get("tiers") or {}
+    if set(tiers) != {"light", "medium", "advanced"} or planning.get("repair_tier") not in ("light", "medium"):
+        problems.append("planning needs the tiers light, medium and advanced, and a repair tier below advanced")
+    if planning.get("opus_on_block") is not False or planning.get("opus_max_concurrent") != 1:
+        problems.append("a plan could reach Opus on its own or run two Opus calls at once")
+    limits = conf.get("concurrency") or {}
+    if (limits.get("pools") or {}).get("local") != 1 or limits.get("tests") != 1:
+        problems.append("two local models or two test suites could run at once")
     results.append(R("S.orchestration-policy", "security", "FAIL" if problems else "PASS", severity="critical",
                      evidence="; ".join(problems) or "policy loads, client code never reaches free models, free modes never pay",
                      expected="every task names known executors, work code stays local and a free mode cannot reach paid or subscription models"))

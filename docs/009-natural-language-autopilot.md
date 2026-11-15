@@ -4,9 +4,10 @@ This is an additive extension to `workplan.py` and `execute.py`. It does not cha
 
 ## What it does
 
-- `plan`: uses **local Ollama** (default `qwen3.5:9b`) to turn an instruction into an exact-file, policy-validated `schemas/work-plan.schema.json`. Saves the plan **outside Git** in `~/.standards/plans/`. No code edits and no remote API.
-- `go`: creates the plan, checks routing and runs units sequentially through the **existing** `execute.py` (isolated worktrees, checks, second-model review, state/resume). Publishing is optional.
-- `publish`: checks that all original plan units passed, that the integration worktree is clean and has changed only approved files, runs the predefined final regression, pushes the integration branch and creates or reuses a GitHub PR.
+- `plan`: turns an instruction into an exact-file, policy-validated `schemas/work-plan.schema.json`. The planner is the smallest one that is enough: Claude Haiku, Sonnet or Opus through one `claude -p` call, or **local Ollama** (default `qwen3.5:9b`) when the cost mode or the privacy class keeps Claude out, or with `--planner local`. Saves the plan **outside Git** in `~/.standards/plans/`. No code edits. See `docs/010-multiagent-autopilot.md`.
+- `go`: creates the plan, checks routing and runs the units through the **existing** `execute.py` (isolated worktrees, checks, second-model review, state/resume). Independent units run at the same time, up to `concurrency.max_parallel`. `--detach` leaves the run in its own process. Publishing is optional.
+- `run`: runs or resumes a saved plan.
+- `publish`: checks that all original plan units passed, that the integration worktree is clean and has changed only approved files, runs the predefined final regression, pushes the integration branch, creates or reuses a GitHub PR and follows its checks. A failed check gets one fixing unit inside the plan's files (`budgets.max_ci_fix_attempts`).
 - `--publish auto-merge`: additionally asks GitHub to merge the PR **once its required checks and reviews pass**. It uses `gh pr merge --auto --squash --match-head-commit`. Never uses `--admin`, `--force`, deletes a branch, or ignores branch protection.
 
 ## On Windows (PowerShell)
@@ -56,11 +57,11 @@ Branch protection may be implemented through organization rulesets rather than t
 ## Important limitations
 
 - The model drafts a plan; its quality is not guaranteed. `workplan.validate`, path gates, security classification and `execute.check` reject invalid/unsafe/unauthorized requests. A green classification is **not** a guarantee that a task is safe.
-- A local Ollama plan does not depend on Claude; changes are implemented only by the existing authenticated OpenCode/Colibri routes. Colibri can be too slow for large prompts, and the router's previous evidence continues to apply.
+- A local Ollama plan does not depend on Claude, and a Claude plan needs Claude for one call only. Changes are implemented only by the existing authenticated OpenCode/Colibri routes. Colibri can be too slow for large prompts, and the router's previous evidence continues to apply.
 - `execute.py` can return a failed unit, or a blocked route: publishing will then stop without pushing anything. A plan may require attention to acceptance tests or scope.
 - Publication requires the target checkout to be on `main`, at the pinned planning commit and clean. Planning and local execution can run on another clean branch, but automatic publication is intentionally blocked there. If the branch moves, generate a new plan rather than resetting files or forcing a push.
 - The final regression is deliberately run once again **on the integrated branch** before publishing. Earlier passing tests per unit do not establish the final combined tree is correct.
-- Does not yet add a free-text submission control to Standards AI Control; these features are available through CLI in this patch. A separate dashboard endpoint with authentication/CSRF protection is needed before exposing state-changing commands over HTTP.
+- Standards AI Control has an Autopilot view that creates a plan from text, starts or resumes it, pauses assignments and cancels a unit. Each request needs the page token and a loopback origin. Auto-merge is not offered there.
 - Offline unit tests mock GitHub/Ollama; a live end-to-end coding and merge test on the user's Windows computer is still required.
 
 ## Checks

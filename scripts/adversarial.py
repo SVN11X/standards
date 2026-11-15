@@ -32,8 +32,12 @@ sys.path.insert(0, str(ROOT / "hooks"))
 import evidence  # noqa: E402
 import execute  # noqa: E402
 import orchestrate  # noqa: E402
+import plan_autopilot  # noqa: E402
+import plan_contract  # noqa: E402
+import planner  # noqa: E402
 import preserve  # noqa: E402
 import safe_patch  # noqa: E402
+import scheduler  # noqa: E402
 
 R = evidence.result
 LEVELS = {"quick": 0, "standard": 1, "deep": 2}
@@ -566,8 +570,19 @@ def run_suite(level: str = "standard", repo: Path = ROOT, only: str | None = Non
             files = ["calc.py", "other.py"]
             clash = [c[:2] for c in execute.workplan.conflicts(plan, files)]
             together = [b for b in execute.workplan.batches(plan, files) if "u1" in b and "u2" in b]
-            return clash == [("u1", "u2")] and not together, f"conflicts: {clash}, batches holding both: {together}"
-        add("X.overlapping-units-never-parallel", "executor", e3, expected="two independent units that edit the same file never run in the same batch")
+            inside, seen = set(), []
+
+            def work(uid):
+                inside.add(uid)
+                seen.append(sorted(inside))
+                threading.Event().wait(0.03)
+                inside.discard(uid)
+                return "passed"
+            scheduler.Scheduler(["u1", "u2", "u3"], {}, {frozenset(c) for c in clash}, work, max_parallel=3, poll_s=0.01).run()
+            overlap = [group for group in seen if "u1" in group and "u2" in group]
+            return clash == [("u1", "u2")] and not together and not overlap, \
+                f"conflicts: {clash}, batches holding both: {together}, moments with both running: {overlap}"
+        add("X.overlapping-units-never-parallel", "executor", e3, expected="two independent units that edit the same file never run at the same time")
 
         def e4():
             calls: list = []
@@ -616,6 +631,65 @@ def run_suite(level: str = "standard", repo: Path = ROOT, only: str | None = Non
             return calls == ["colibri"] and entry["status"] == "blocked" and "No other model was used" in entry["note"], \
                 f"executors tried: {calls}, status: {entry['status']}, note: {entry['note'][:70]}"
         add("X.stopped-colibri-no-fallback", "executor", e7, expected="a Colibri unit with Colibri stopped is blocked and never moves to another model")
+
+        # X. Multi-agent Autopilot: repair scope, Opus use, private code with a busy GPU, failed checks
+        def e8():
+            repo = e_repo("repair-repo")
+            draft = {"title": "t", "goal": "Change calc.py", "task_type": "edit-small", "allowed": ["calc.py"],
+                     "criteria": [], "risk": "green", "depends_on": []}
+            wider = {**draft, "criteria": ["ok"], "allowed": ["calc.py", "test_calc.py"]}
+            replies = [json.dumps({"units": [draft]}), json.dumps({"units": [wider]})]
+            try:
+                plan_autopilot.build_plan("Change calc.py", repo, "python -m unittest discover -s tests", "a" * 40, conf,
+                                          lambda messages: replies.pop(0))
+            except plan_contract.Blocked as error:
+                return "modified scope" in str(error), f"repair that added a file: refused ({error})"
+            return False, "a repair that added a file to the unit was accepted"
+        add("X.plan-repair-cannot-widen", "planner", e8, expected="a model repair of a plan can fix the fields named to it and never adds a file")
+
+        def e9():
+            small = planner.select("Fix the typo in the title", tmp, conf, public(), "opus", ["README.md"], cli="claude")
+            repair = planner.repairer({**small, "tier": "advanced", "model": "opus"}, conf)
+            climb = planner.escalate({**small, "tier": "medium", "model": "sonnet"}, conf, 0)
+            return small["model"] != "opus" and repair["model"] != "opus" and climb is None, \
+                f"opus asked for a small request: {small['model']}, repair model: {repair['model']}, climb to opus on its own: {bool(climb)}"
+        add("X.opus-needs-a-reason", "planner", e9, expected="a small request, a structure repair and a blocked draft never run on Opus on their own")
+
+        def e10():
+            repo = e_repo("busy-gpu-repo")
+            marker = repo.parent / "busy-gpu-ran.txt"
+            local = {"folders": [{"path": str(repo.resolve()), "class": "work"}],
+                     "free_models": [{"model": "opencode/free-a", "checked": orchestrate.now()[:10]}]}
+            policy = orchestrate.policy()
+            policy["executors"]["opencode"]["command"] = [sys.executable, "-c", f"open({str(marker)!r}, 'w').write('x')"]
+            route = lambda unit: {"executor": "opencode", "model": "ollama/big", "fallbacks": [{"executor": "opencode", "model": "opencode/free-a"}]}  # noqa: E731
+            plan = e_plan("busy-gpu", e_unit("u1", ["calc.py"]), budgets={"max_attempts_per_unit": 2})
+            run = execute.Executor(plan, repo, route=route, conf=policy, local=local)
+            run.local_busy = lambda choice: "the graphics card is full"
+            run.pool_of = lambda choice: "remote_free" if str(choice.get("model")).startswith("opencode/") else "local"
+            entry = run.run()["units"]["u1"]
+            return entry["status"] == "blocked" and not marker.exists(), \
+                f"work code with a full graphics card and a free remote model on offer: {entry['status']}, agent started: {marker.exists()}"
+        add("X.busy-gpu-never-sends-private-code-out", "privacy", e10,
+            expected="a full graphics card never moves work or restricted code to a free remote model")
+
+        def e11():
+            failing = [{"name": "verify", "bucket": "fail", "link": ""}]
+            commands: list = []
+
+            def gh(cmd, cwd=None, timeout=60, **kw):
+                commands.append(cmd)
+                return {"exit": 1, "stdout": json.dumps(failing), "stderr": ""}
+            plan = {"plan_id": "auto-" + "a" * 14, "final_regression": ["python -m unittest discover -s tests"],
+                    "budgets": {"max_ci_fix_attempts": 0}, "units": [e_unit("u1", ["calc.py"])]}
+            try:
+                plan_autopilot.follow_ci(plan, tmp, tmp, "execute/x", "o/r", {"number": 1, "url": "https://github.com/o/r/pull/1"},
+                                         fixer=lambda *a: True, policy=conf, run=gh, sleep=lambda s: None, poll_s=0)
+            except plan_autopilot.Blocked as error:
+                merged = [c for c in commands if c[:3] == ["gh", "pr", "merge"]]
+                return "not merged" in str(error) and not merged, f"failed checks: blocked, merge commands: {merged}"
+            return False, "a pull request with failed checks was reported as fine"
+        add("X.failed-checks-never-merge", "executor", e11, expected="a pull request whose checks failed stays open and is never merged")
 
         # G. Pipeline
         if not only or only.startswith("G."):
