@@ -98,8 +98,10 @@ def local_config() -> dict:
 
 
 def write_json(path: Path, data) -> None:
+    """Write a whole file or nothing. Each writer has its own temp file, so two units that end at the same
+    moment cannot take the temp file from under each other."""
     path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_suffix(path.suffix + ".tmp")
+    tmp = path.with_name(f"{path.name}.{os.getpid()}.{threading.get_ident()}.tmp")
     tmp.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     os.replace(tmp, path)
 
@@ -1005,6 +1007,9 @@ def failure_code(exit_code: int, timeout: bool, text: str) -> str | None:
     return None
 
 
+HEALTH_LOCK = threading.Lock()
+
+
 def health_file() -> Path:
     return home() / "health.json"
 
@@ -1023,18 +1028,20 @@ def health_key(executor: str, model: str | None) -> str:
 
 def record_health(executor: str, model: str | None, code: str | None, conf: dict, at: dt.datetime | None = None) -> None:
     """A failure code starts a cooldown taken from policy. Success (code None) clears the entry."""
-    data = load_health()
     key = health_key(executor, model)
-    if code is None:
-        if data.pop(key, None) is None:
-            return
-    else:
-        at = at or dt.datetime.now(dt.timezone.utc)
-        seconds = ((conf.get("health") or {}).get("cooldown_s") or {}).get(code, 0)
-        data[key] = {"code": code, "at": at.replace(microsecond=0).isoformat(),
-                     "until": (at + dt.timedelta(seconds=seconds)).replace(microsecond=0).isoformat(),
-                     "count": int((data.get(key) or {}).get("count", 0)) + 1}
-    write_json(health_file(), data)
+    # Read, change and write as one step: two units that fail together must both leave their entry.
+    with HEALTH_LOCK:
+        data = load_health()
+        if code is None:
+            if data.pop(key, None) is None:
+                return
+        else:
+            at = at or dt.datetime.now(dt.timezone.utc)
+            seconds = ((conf.get("health") or {}).get("cooldown_s") or {}).get(code, 0)
+            data[key] = {"code": code, "at": at.replace(microsecond=0).isoformat(),
+                         "until": (at + dt.timedelta(seconds=seconds)).replace(microsecond=0).isoformat(),
+                         "count": int((data.get(key) or {}).get("count", 0)) + 1}
+        write_json(health_file(), data)
 
 
 PROVIDER_CODES = {"rate-limit": "rate_limit", "auth": "auth", "unavailable": "unavailable", "network": "unavailable"}

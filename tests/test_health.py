@@ -3,6 +3,7 @@ import datetime as dt
 import os
 import sys
 import tempfile
+import threading
 import unittest
 import urllib.error
 from unittest import mock
@@ -53,6 +54,62 @@ class HealthTests(unittest.TestCase):
         self.assertNotIn(("opencode", "m"), orchestrate.cooling_set(at + dt.timedelta(days=1)))
         orchestrate.record_health("opencode", "m", None, self.conf)
         self.assertEqual(orchestrate.load_health(), {})
+
+    def test_units_that_fail_at_the_same_moment_all_leave_their_cooldown(self):
+        """Parallel units end together. One temp file for every writer lost a write and raised FileNotFoundError."""
+        start, errors = threading.Barrier(8), []
+
+        def fail(n):
+            start.wait()
+            try:
+                for _ in range(25):
+                    orchestrate.record_health("opencode", f"opencode/m{n}", "rate_limit", self.conf)
+            except Exception as error:
+                errors.append(error)
+
+        threads = [threading.Thread(target=fail, args=(n,)) for n in range(8)]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join()
+        self.assertEqual(errors, [])
+        saved = orchestrate.load_health()
+        self.assertEqual(len(saved), 8)
+        self.assertEqual({entry["count"] for entry in saved.values()}, {25})
+        self.assertEqual(list((self.tmp / "home").glob("*.tmp")), [])
+
+    def test_a_file_written_by_many_threads_is_always_whole(self):
+        path, errors = self.tmp / "home" / "state.json", []
+
+        def write(n):
+            try:
+                for step in range(100):
+                    orchestrate.write_json(path, {"writer": n, "step": step, "pad": "x" * 2000})
+                    orchestrate.json.loads(path.read_text(encoding="utf-8"))
+            except Exception as error:
+                errors.append(error)
+
+        threads = [threading.Thread(target=write, args=(n,)) for n in range(6)]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join()
+        self.assertEqual(errors, [])
+
+    def test_a_failed_check_prints_which_test_failed_not_only_its_name(self):
+        """A CI run failed and its log showed 110 characters of the failed check. The rest sat in an artifact."""
+        import verify
+        long_trace = "x" * 500 + "\nFAIL: test_name (module.Class.test_name)\nAssertionError: 1 != 2"
+        results = [{"id": "S.unit-tests", "status": "FAIL", "error": None, "evidence": long_trace},
+                   {"id": "S.selftest", "status": "PASS", "error": None, "evidence": "fine"},
+                   {"id": "L.ollama", "status": "ERROR", "error": "connection refused", "evidence": ""},
+                   {"id": "S.gallery", "status": "SKIP", "error": None, "evidence": "Node is not installed"}]
+        text = "".join(verify.failed_evidence(results))
+        self.assertIn("--- FAIL S.unit-tests ---", text)
+        self.assertIn("FAIL: test_name (module.Class.test_name)\nAssertionError: 1 != 2", text)
+        self.assertIn("--- ERROR L.ollama ---\nconnection refused", text)
+        self.assertNotIn("S.selftest", text)
+        self.assertNotIn("S.gallery", text)
 
     def test_failing_model_is_skipped_and_the_next_one_is_chosen(self):
         first = self.route()
