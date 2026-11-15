@@ -90,7 +90,7 @@ class AutopilotViewTests(unittest.TestCase):
 
     def test_page_has_the_autopilot_view_with_folded_logs(self):
         text = control.PAGE.read_text(encoding="utf-8")
-        for word in ('"Autopilot"', "Pause new assignments", "Create plan", "<details><summary>Events"):
+        for word in ('"Autopilot"', "Pause new assignments", "Create plan", "<summary>Events and planner notes</summary>"):
             self.assertIn(word, text)
 
 
@@ -99,11 +99,34 @@ class AutopilotJobTests(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
         self.root = Path(self.tmp.name)
-        (self.root / "scripts").mkdir()
-        (self.root / "scripts" / "plan_autopilot.py").write_text("")
         (self.root / "plans").mkdir()
         self.plan = self.root / "plans" / f"{PLAN['plan_id']}.json"
         self.plan.write_text("{}")
+
+    def test_the_script_is_the_standards_one_and_the_plan_runs_in_its_own_repository(self):
+        """Found by the browser test: the script was looked up inside the repository the plan changes."""
+        target = self.root / "another-repo"
+        target.mkdir()
+        self.plan.write_text(json.dumps({"repo": str(target)}))
+        seen = {}
+
+        class Proc:
+            pid = 1
+
+            def poll(self):
+                return None
+
+        def popen(argv, cwd=None, **kw):
+            seen.update(argv=argv, cwd=cwd)
+            return Proc()
+
+        manager = control_jobs.AutopilotManager(self.root, self.root / "jobs", self.root / "plans", popen=popen)
+        manager.start(PLAN["plan_id"])
+        self.assertEqual(Path(seen["argv"][1]), ROOT / "scripts" / "plan_autopilot.py")
+        self.assertEqual((seen["cwd"], seen["argv"][seen["argv"].index("--repo") + 1]), (str(target), str(target.resolve())))
+        self.plan.write_text(json.dumps({"repo": str(self.root / "gone")}))
+        with self.assertRaisesRegex(ValueError, "not on this machine"):
+            manager.start(PLAN["plan_id"])
 
     def test_commands_are_fixed_argv_and_auto_merge_is_never_offered(self):
         argv = control_jobs.autopilot_command("plan", self.root, instruction="Add a flag; rm -rf /", planner="haiku")

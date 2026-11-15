@@ -14,7 +14,7 @@ h1{font-size:16px;margin:0}nav{display:flex;gap:4px;flex-wrap:wrap;flex:1}
 nav a{padding:6px 12px;border-radius:8px;color:var(--muted);text-decoration:none;transition:background .2s,color .2s}
 nav a.on{background:var(--chip);color:var(--ink)}button{background:var(--chip);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:6px 10px;cursor:pointer}
 main{padding:20px;max-width:1200px;margin:auto}.grid{display:grid;gap:14px;grid-template-columns:repeat(auto-fit,minmax(240px,1fr))}
-.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px;animation:in .25s ease}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px;animation:in .25s ease;overflow-x:auto;min-width:0}
 @keyframes in{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
 .card h3{margin:0 0 8px;font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
 .big{font-size:26px;font-weight:600}.muted{color:var(--muted)}.chip{display:inline-block;padding:1px 8px;border-radius:99px;background:var(--chip);font-size:12px}
@@ -92,7 +92,7 @@ function planCard(p){const m=p.metrics||{},pub=p.publication||{},live=p.started&
  <td>${esc(u.review||NA)}</td><td>${u.status==="running"||u.status==="pending"?`<button data-cancel="${esc(p.plan_id)}|${esc(u.id)}">Cancel</button>`:""}</td></tr>
  ${u.note?`<tr><td></td><td colspan="7" class="muted">${esc(u.note)}</td></tr>`:""}`).join("");
  return`<div class="card"><h3>${esc(p.plan_id)} · ${p.done} of ${p.total} passed${p.paused?' · <span class="warn">paused</span>':""}${p.finished?" · finished":live?" · running":" · not started"}</h3>
- <div>${esc(p.goal)}</div><div class="muted">Planner ${esc(p.planner.model||NA)} (${esc(p.planner.tier||NA)}, ${esc(p.planner.backend||NA)}), repair calls ${num(p.planner.repair_calls,0)}</div>
+ <div>${esc(p.goal)}</div><div class="muted">Repository ${esc(p.repo||NA)}</div><div class="muted">Planner ${esc(p.planner.model||NA)} (${esc(p.planner.tier||NA)}, ${esc(p.planner.backend||NA)}), repair calls ${num(p.planner.repair_calls,0)}</div>
  ${bar(p.total?p.done/p.total:0)}
  <p>${!p.started||p.paused||!live?`<button data-start="${esc(p.plan_id)}">${p.started?"Resume pending work":"Start execution"}</button> <button data-startpr="${esc(p.plan_id)}">${p.started?"Resume":"Start"} and open a PR</button> `:""}
  ${p.paused?`<button data-unpause="${esc(p.plan_id)}">Allow new assignments</button>`:`<button data-pause="${esc(p.plan_id)}">Pause new assignments</button>`}</p>
@@ -101,16 +101,16 @@ function planCard(p){const m=p.metrics||{},pub=p.publication||{},live=p.started&
  ${pub.pr?`<p>Pull request <a href="${esc(pub.pr)}" rel="noopener">${esc(pub.pr)}</a> · checks ${esc((pub.ci||{}).state||NA)} · auto-merge ${pub.auto_merge_requested?"requested":"not requested"}</p>`:`<p class="muted">No pull request yet.</p>`}
  ${p.approvals.length?`<p class="warn">Needs the owner: ${esc(p.approvals.join(". "))}</p>`:""}
  ${p.orphans.length?`<p class="warn">Kept from an interrupted run: ${esc(p.orphans.map(o=>o.worktree).join(", "))}</p>`:""}
- <details><summary>Events and planner notes</summary><pre>${esc((p.planner.reasons||[]).join("\n"))}
+ <details data-k="${esc(p.plan_id)}"><summary>Events and planner notes</summary><pre>${esc((p.planner.reasons||[]).join("\n"))}
 ${esc((p.planner.fixes||[]).join("\n"))}
 ${esc(p.events.map(e=>`${e.at} ${e.event} ${e.unit||""} ${e.status||""} ${e.note||""}`).join("\n")||NA)}</pre></details></div>`}
 function Autopilot(){const a=S.autopilot||{plans:[],agents:[],jobs:[],planners:["auto"],limits:{}},l=a.limits||{};
- const agents=a.agents.map(u=>`<tr><td>${esc(u.plan_id)}</td><td>${esc(u.id)} ${esc(u.title||"")}</td><td>${esc(u.model||NA)}</td><td>${esc(u.executor||NA)}</td><td>${secs(u.seconds)}</td></tr>`).join("");
- const jobs=a.jobs.map(j=>`<details><summary>${esc(j.kind)} · <span class="${cls(j.state)}">${esc(j.state)}</span> · ${esc(j.started_at)} · exit ${j.exit_code==null?NA:num(j.exit_code,0)}</summary><pre>${esc(j.log||NA)}</pre></details>`).join("");
+ const agents=a.agents.map(u=>`<tr><td>${esc(u.id)} ${esc(u.title||"")}<div class="muted">${esc(u.plan_id)}</div></td><td>${esc(u.model||NA)}<div class="muted">${esc(u.executor||NA)}</div></td><td>${secs(u.seconds)}</td></tr>`).join("");
+ const jobs=a.jobs.map(j=>`<details data-k="${esc(j.id)}"><summary>${esc(j.kind)} · <span class="${cls(j.state)}">${esc(j.state)}</span> · ${esc(j.started_at)} · exit ${j.exit_code==null?NA:num(j.exit_code,0)}</summary><pre>${esc(j.log||NA)}</pre></details>`).join("");
  return`<div class="grid">${card("New plan",`<textarea id="ap-text" placeholder="Describe the change in plain words">${esc(apDraft)}</textarea>
  <p>Planner <select id="ap-planner">${a.planners.map(x=>`<option${x===apPlanner?" selected":""}>${esc(x)}</option>`).join("")}</select> <button id="ap-plan">Create plan</button></p>
  <p class="muted">auto picks the smallest planner that is enough. A plan changes no code.</p>`)}
- ${card("Active agents",agents?`<table><tr><th>Plan</th><th>Task</th><th>Model</th><th>Provider</th><th>Time</th></tr>${agents}</table>`:`<div class="big">0</div><div class="muted">No unit is running.</div>`)}
+ ${card("Active agents",agents?`<table><tr><th>Task</th><th>Model and provider</th><th>Time</th></tr>${agents}</table>`:`<div class="big">0</div><div class="muted">No unit is running.</div>`)}
  ${card("Shared resources",`<div>Units at once: ${num(l.max_parallel,0)}</div><div>Free remote slots: ${num((l.pools||{}).remote_free,0)}</div><div>Local model slots: ${num((l.pools||{}).local,0)}</div><div>Test suites at once: ${num(l.tests,0)}</div>`)}</div>
  <h2>Plans</h2>${a.plans.map(planCard).join("")||`<div class="card muted">No plan yet.</div>`}
  <h2>Jobs started here</h2><div class="card">${jobs||`<span class="muted">None in this dashboard session.</span>`}</div>`}
@@ -150,10 +150,13 @@ async function Logs(){const r=await (await fetch("/api/logs?name="+logName)).jso
 const V={Dashboard,Autopilot,"Agents and models":Agents,Tasks,Operations,Performance,History,Settings};
 function render(){document.querySelectorAll("nav a").forEach(a=>a.classList.toggle("on",decodeURIComponent(a.hash.slice(1))===route()));
  if(route()==="Logs"){Logs();return}if(!S){$("#view").innerHTML=`<div class="card muted">Loading</div>`;return}
- // Typing in the plan box or reading an open log must not be wiped by the next poll.
- const a=document.activeElement,busy=route()==="Autopilot"&&((a&&(a.id==="ap-text"||a.id==="ap-planner"))||document.querySelector("#view details[open]"));
- if(busy&&$("#ap-text"))return;$("#view").innerHTML=(V[route()]||Dashboard)();
+ // A poll must not wipe the plan box while the owner types in it, and a log the owner opened stays open.
+ const a=document.activeElement;if(route()==="Autopilot"&&a&&(a.id==="ap-text"||a.id==="ap-planner"))return;
+ $("#view").innerHTML=(V[route()]||Dashboard)();
+ document.querySelectorAll("#view details[data-k]").forEach(d=>{d.open=opened.has(d.dataset.k)});
  if(route()==="Operations")bindOperations();if(route()==="Autopilot")bindAutopilot()}
+const opened=new Set();
+document.addEventListener("toggle",e=>{const k=e.target.dataset&&e.target.dataset.k;if(k)opened[e.target.open?"add":"delete"](k)},true);
 async function poll(){try{S=await (await fetch("/api/state")).json();const r=S.resources;
  hist.cpu.push(r.cpu_percent||0);hist.ram.push(r.ram_total_bytes&&r.ram_free_bytes!=null?(1-r.ram_free_bytes/r.ram_total_bytes)*100:0);
  const l=S.telemetry.recent.at(-1);if(l&&l.tokens_per_second)hist.tps=S.telemetry.recent.map(x=>x.tokens_per_second||0);

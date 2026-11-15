@@ -157,6 +157,7 @@ def plan_view(plan: dict, state: dict, control: dict, events: list[dict]) -> dic
         approvals.append("the pull request waits for the owner to merge it")
     done = sum(1 for u in units if u["status"] == execute.DONE)
     return {"plan_id": plan.get("plan_id"), "goal": str(plan.get("goal", "")).splitlines()[0][:200] if plan.get("goal") else "",
+            "repo": plan.get("repo"),
             "planner": {k: (plan.get("planner") or {}).get(k) for k in ("backend", "model", "tier", "reasons", "repair_calls", "fixes")},
             "paused": bool(control.get("paused")), "cancel": control.get("cancel") or [], "finished": state.get("finished"),
             "started": bool(entries), "done": done, "total": len(units), "units": units + extra,

@@ -126,6 +126,7 @@ class NormalizeTests(Base):
         for word in ("criteria", "depends_on", "new_files", "risk", "green, yellow, red", "edit-small"):
             self.assertIn(word, text)
         self.assertNotIn("plan,", text)
+        self.assertIn("Protected paths that no unit may change: AGENTS.md.", text)
 
 
 class GuardTests(unittest.TestCase):

@@ -44,6 +44,20 @@ class TierTests(Base):
         self.assertEqual(planner.complexity(MEDIUM, PATHS, CONF)[0], "medium")
         self.assertEqual(planner.complexity(LARGE, PATHS, CONF)[0], "advanced")
 
+    def test_a_large_repository_does_not_raise_the_score_of_a_small_request(self):
+        """Found with a real Sonnet call: any word of the request that appeared in a path counted its folder."""
+        many = [f"{folder}/{name}" for folder in ("scripts", "tests", "docs", "settings", "schemas", "hooks", "skills")
+                for name in ("test_flag.py", "that_file.md", "with_title.yml")]
+        tier, score, _ = planner.complexity("Fix the title that tests print with the flag", many, CONF)
+        self.assertEqual((tier, score), ("light", 0))
+        named = planner.complexity("Change scripts/test_flag.py and the file that_file.md", many, CONF)
+        self.assertEqual(named[1], 0, "one folder by path, and a file name that lives in seven folders names no single one")
+
+    def test_a_design_word_inside_a_file_path_is_not_a_design_word(self):
+        paths = ["docs/010-multiagent-autopilot.md", "schemas/work-plan.schema.json"]
+        self.assertEqual(planner.complexity("Fix a typo in docs/010-multiagent-autopilot.md", paths, CONF)[1], 0)
+        self.assertGreaterEqual(planner.complexity("Change the schema of the plan", paths, CONF)[1], 2)
+
     def test_auto_picks_the_smallest_model_that_is_enough(self):
         self.assertEqual([self.select(t)["model"] for t in (SMALL, MEDIUM, LARGE)], ["haiku", "sonnet", "opus"])
 
@@ -120,6 +134,12 @@ class CallTests(Base):
         self.assertEqual((out["text"], out["input_tokens"], out["output_tokens"]), ('{"units": []}', 900, 100))
         row = json.loads((orchestrate.home() / "telemetry.jsonl").read_text().splitlines()[-1])
         self.assertEqual((row["provider"], row["model"], row["tokens_per_second"]), ("claude", "haiku", 50.0))
+
+    def test_cached_prompt_tokens_count_as_input(self):
+        reply = json.dumps({"is_error": False, "result": "{}", "usage": {"input_tokens": 2, "cache_creation_input_tokens": 3000,
+                                                                          "cache_read_input_tokens": 500, "output_tokens": 10}})
+        out = planner.ask_claude([{"role": "user", "content": "x"}], "haiku", CONF, run=self.run_fake(reply, []), flags=[])
+        self.assertEqual(out["input_tokens"], 3502)
 
     def test_tokens_the_cli_did_not_report_stay_null(self):
         out = planner.ask_claude([{"role": "user", "content": "x"}], "haiku", CONF, run=self.run_fake("plain text", []), flags=[])
