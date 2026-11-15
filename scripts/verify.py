@@ -414,6 +414,13 @@ def live_checks(repo: Path) -> list[dict]:
     return results
 
 
+def failed_evidence(results: list[dict]) -> list[str]:
+    """The evidence of every check that did not pass, in full. The table shows one line per check, so without
+    this the log of a CI run names the failed check and hides which test failed inside it."""
+    return [f"\n--- {item['status']} {item['id']} ---\n{(item['error'] or item['evidence'])[-4000:]}\n"
+            for item in results if item["status"] in ("FAIL", "ERROR") and (item["error"] or item["evidence"])]
+
+
 def default_out(repo: Path) -> Path:
     stamp = dt.datetime.now().strftime("%Y%m%d-%H%M%S")
     try:
@@ -473,6 +480,7 @@ def main(argv: list[str] | None = None) -> int:
     for item in sorted(results, key=lambda r: ({"FAIL": 0, "ERROR": 1, "NOT_RUN": 2, "SKIP": 3, "PASS": 4}[r["status"]], r["id"])):
         flag = "" if item["required"] else " (optional)"
         print(f"{item['status']:<7} {item['id']:<{width}} {(item['error'] or item['evidence']).splitlines()[0][:110] if (item['error'] or item['evidence']) else ''}{flag}")
+    print("".join(failed_evidence(results)), end="")
     counts = report["counts"]
     print(f"\n{report['verdict']} in {report['seconds']}s. PASS {counts['PASS']}, FAIL {counts['FAIL']}, ERROR {counts['ERROR']}, "
           f"NOT_RUN {counts['NOT_RUN']}, SKIP {counts['SKIP']}")
