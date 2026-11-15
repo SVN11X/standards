@@ -30,7 +30,7 @@ No role got a new model where a program or an existing tool already did the job.
 
 ## Choosing the planner
 
-`scripts/planner.py` scores the request with a program: its length, how many folders it names, design words, risk words and listed items. The score picks a tier of `planning.tiers` in `settings/orchestration.yml`.
+`scripts/planner.py` scores the request with a program: its length, how many folders it names (by a file path, by a file name only one tracked file has, or by the folder name), design words outside file paths, risk words and listed items. The size of the repository does not change the score. The score picks a tier of `planning.tiers` in `settings/orchestration.yml`.
 
 | Tier | Model | Picked when |
 | --- | --- | --- |
@@ -49,7 +49,7 @@ No role got a new model where a program or an existing tool already did the job.
 
 ## One contract for the plan
 
-`scripts/plan_contract.py` is the single source for the prompt, the parser, the normalizer, the validator and the repair guard.
+`scripts/plan_contract.py` is the single source for the prompt, the parser, the normalizer, the validator and the repair guard. The prompt lists the task types, the limits and the protected paths the validator enforces.
 
 1. `parse` fixes syntax only: a code fence, text around the object, trailing commas. A reply that was cut off is a problem, never a guess.
 2. `normalize` checks every field of every unit in one pass and reports all problems together.
@@ -187,13 +187,21 @@ The fourth slot adds little: the time waiting for the single test slot doubles. 
 
 The first parallel run of this plan failed one unit with a cherry-pick conflict: both units had committed the same `__pycache__` file their tests created. `delegate_opencode` now commits only the files the agent changed, and a test keeps it that way.
 
+A second request, on a clone of this repository, named files in four folders and a schema. It scored medium and made one Sonnet call: 14.05 s, 1387 output tokens, 98.72 tokens per second, four units with their dependencies, no fix and no repair needed. That run showed two defects, both fixed with a test: every word of a request that appeared in any path counted its folder, so a large repository raised every score, and the input tokens left out the cached part of the prompt.
+
+### Dashboard in a browser
+
+`node tests/web/control.test.mjs` starts the real server on seeded state and drives the Autopilot view in Chromium through Playwright. Twelve checks pass: units with state, model, provider and dependencies, active agents, the pull request and its checks, text shown as text, folded events, pause and allow, cancel, a plan and a run started from the page, the page token, every view without a script error and no sideways scroll at 360 px. `verify.py` runs it as `S.control-page` where Node and Playwright exist.
+
+Its first run found three defects, now fixed: the page looked for `plan_autopilot.py` inside the repository a plan changes, an opened log stopped the view from following the state, and the plan table made the page scroll sideways on a narrow screen.
+
 ## Not tested here
 
 - Real coding agents. The container has no OpenCode, Ollama or Colibri, so units ran with simulated agents. A run with the owner's free and local models on Windows is still needed.
 - The real `gh` calls of `publish`. Pull request creation, check reading and the fixing unit are tested against a fake `gh`.
 - Windows. Process groups, `taskkill` and `.cmd` launchers follow the existing code paths but were run on Linux only.
-- The dashboard in a browser. Its script was parsed with Node and its data functions have tests. Nobody clicked it.
-- Sonnet and Opus calls. Their selection is tested, and only Haiku was called.
+- An Opus call. Its selection is tested, and only Haiku and Sonnet were called.
+- The dashboard on a live plan. The browser test drives it on seeded state, and its start buttons were followed only to a refused run.
 
 ## Claude Code features looked at
 

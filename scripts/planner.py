@@ -61,19 +61,29 @@ def settings(conf: dict) -> dict:
 
 
 def complexity(instruction: str, paths: list[str], conf: dict) -> tuple[str, int, list[str]]:
-    """(tier, score, reasons). Counted by a program: length, folders named, design words, risk words, listed items."""
-    words = re.findall(r"\w+", instruction.lower())
-    keys = {w for w in words if len(w) >= 4}
+    """(tier, score, reasons). Counted by a program: length, folders named, design words, risk words, listed items.
+
+    A folder counts when the request names one of its files by path or by file name, or names the folder itself.
+    Words inside a file path never count as design words.
+    """
+    text = instruction.lower()
+    words = re.findall(r"\w+", text)
+    prose = re.sub(r"\S*[/\\]\S*|\S+\.\w{1,5}\b", " ", instruction)
     score, reasons = 0, []
     if len(words) > 200:
         score, reasons = score + 2, [f"{len(words)} words"]
     elif len(words) > 60:
         score, reasons = score + 1, [f"{len(words)} words"]
-    folders = {p.split("/", 1)[0] for p in paths if "/" in p and any(k in p.lower() for k in keys)}
+    tops = {p.split("/", 1)[0] for p in paths if "/" in p}
+    names = [p.rsplit("/", 1)[-1].lower() for p in paths]
+    # A bare file name points at a folder only when one tracked file has that name.
+    named = {p for p in paths if "/" in p and (p.lower() in text or (names.count(p.rsplit("/", 1)[1].lower()) == 1 and re.search(
+        r"(?<![\w./-])" + re.escape(p.rsplit("/", 1)[1].lower()) + r"(?![\w-])", text)))}
+    folders = {p.split("/", 1)[0] for p in named} | {t for t in tops if len(t) >= 4 and re.search(rf"\b{re.escape(t.lower())}\b", text)}
     if len(folders) >= 3:
         score += 2 if len(folders) >= 6 else 1
         reasons.append(f"names files in {len(folders)} folders")
-    design = sorted({m.lower() for m in DESIGN_TERMS.findall(instruction)})
+    design = sorted({m.lower() for m in DESIGN_TERMS.findall(prose)})
     if design:
         score += min(3, len(design) + 1)
         reasons.append("design words: " + ", ".join(design[:4]))
@@ -215,7 +225,10 @@ def ask_claude(messages: list[dict], model: str, conf: dict, run=None, flags: li
         if reply.get("is_error"):
             raise PlannerError(f"claude -p --model {model} reported an error: " + str(reply.get("result"))[:300])
         usage = reply.get("usage") or {}
-        out.update(text=str(reply["result"]), input_tokens=usage.get("input_tokens"), output_tokens=usage.get("output_tokens"),
+        # The CLI reports the cached part of the prompt apart. The prompt the model read is the sum of the three.
+        parts = [usage.get(k) for k in ("input_tokens", "cache_creation_input_tokens", "cache_read_input_tokens")]
+        read = sum(n for n in parts if isinstance(n, int)) if isinstance(parts[0], int) else None
+        out.update(text=str(reply["result"]), input_tokens=read, output_tokens=usage.get("output_tokens"),
                    reported_cost_usd=reply.get("total_cost_usd"))
     tokens, seconds = out["output_tokens"], out["seconds"]
     # reported_cost_usd is what the CLI prints as the API price of the call. On a subscription nothing is charged for it.

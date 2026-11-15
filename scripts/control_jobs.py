@@ -114,8 +114,11 @@ PUBLISH = ("none", "pr")
 
 def autopilot_command(kind: str, repo: Path, *, instruction: str = "", planner: str = "auto", plan: Path | None = None,
                       publish: str = "none") -> list[str]:
-    """The exact argv of an Autopilot job. Auto-merge is never offered here: it stays an explicit terminal command."""
-    script = Path(repo).resolve() / "scripts" / "plan_autopilot.py"
+    """The exact argv of an Autopilot job. Auto-merge is never offered here: it stays an explicit terminal command.
+
+    The script is the one next to this file. `repo` is the repository the plan changes, which is rarely this one.
+    """
+    script = Path(__file__).resolve().parent / "plan_autopilot.py"
     if not script.is_file():
         raise FileNotFoundError(f"Autopilot missing: {script}")
     if kind == "plan":
@@ -156,7 +159,7 @@ class AutopilotManager:
             row["log"] = read_tail(self.data_dir / f"{row['id']}.log", 6000)
         return sorted(rows, key=lambda r: r["started_at"], reverse=True)[:12]
 
-    def launch(self, kind: str, key: str, argv: list[str]) -> dict:
+    def launch(self, kind: str, key: str, argv: list[str], cwd: Path | None = None) -> dict:
         with self.lock:
             if any(self.refresh(r)["state"] == "running" and r["key"] == key for r in self.jobs.values()):
                 raise RuntimeError("this plan already has a job running")
@@ -166,7 +169,7 @@ class AutopilotManager:
             env["PYTHONUTF8"] = "1"
             flags = ({"creationflags": subprocess.CREATE_NEW_PROCESS_GROUP} if os.name == "nt" else {"start_new_session": True})
             with (self.data_dir / f"{job_id}.log").open("wb") as output:
-                proc = self.popen(argv, cwd=str(self.repo), stdin=subprocess.DEVNULL, stdout=output,
+                proc = self.popen(argv, cwd=str(cwd or self.repo), stdin=subprocess.DEVNULL, stdout=output,
                                   stderr=subprocess.STDOUT, env=env, **flags)
             self.procs[job_id] = proc
             self.jobs[job_id] = {"id": job_id, "kind": kind, "key": key, "state": "running", "pid": proc.pid,
@@ -180,5 +183,12 @@ class AutopilotManager:
     def start(self, plan_id: str, publish: str = "none") -> dict:
         if not PLAN_ID.fullmatch(str(plan_id)):
             raise ValueError("unknown plan")
-        argv = autopilot_command("run", self.repo, plan=self.plans_dir / f"{plan_id}.json", publish=publish)
-        return self.launch("run", plan_id, argv)
+        path = self.plans_dir / f"{plan_id}.json"
+        try:
+            # A plan runs in the repository it was made for, whatever folder the dashboard was started in.
+            repo = Path(str(json.loads(path.read_text(encoding="utf-8")).get("repo") or self.repo))
+        except (OSError, ValueError):
+            raise ValueError("unknown plan") from None
+        if not repo.is_dir():
+            raise ValueError("the repository of this plan is not on this machine")
+        return self.launch("run", plan_id, autopilot_command("run", repo, plan=path, publish=publish), repo)

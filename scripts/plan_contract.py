@@ -76,7 +76,8 @@ def prompt(instruction: str, tracked: list[str], policy: dict) -> str:
         "No shell commands, URLs, credentials, vague targets, globs, or invented existing paths. "
         f"Maximum {MAX_UNITS} units and {MAX_FILES_PER_UNIT} files per unit. Break changes down by file ownership. "
         "Allowed task types: " + ", ".join(candidate_types(policy)) + ".\n"
-        "Existing tracked paths (choose exact spellings):\n" + "\n".join(tracked) + "\n"
+        + ("Protected paths that no unit may change: " + ", ".join(policy["protected"]) + ".\n" if policy.get("protected") else "")
+        + "Existing tracked paths (choose exact spellings):\n" + "\n".join(tracked) + "\n"
         "Owner request:\n" + instruction
     )
 
