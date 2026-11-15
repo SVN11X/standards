@@ -4,6 +4,8 @@ All notable changes to this standard are documented here. The format follows [Ke
 
 ## [Unreleased]
 
+## [1.13.0] - 2026-11-16
+
 ### Added
 
 - Router fixes found on OpenTutor, a Windows tutor. A learning request outside a web page now gets the `learning-app` recipe, where it got the windows-app recipe and a web experience. A Python package under `src/` gets `python -m pip install -e .` in its install step, because its tests cannot import it before that.
