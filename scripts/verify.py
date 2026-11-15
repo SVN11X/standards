@@ -205,6 +205,12 @@ def check_settings(repo: Path) -> list[dict]:
     results.append(R("S.opencode-rules-kept", "security", "FAIL" if lost else "PASS", severity="critical",
                      evidence=f"weakened: {lost}" if lost else "share disabled, force push and merge denied, AGENTS.md protected",
                      expected="the OpenCode config never loses a protective rule"))
+    import router
+    wrong_recipes = router.check(yaml.safe_load((repo / "settings" / "recipes.yml").read_text(encoding="utf-8")))
+    results.append(R("S.recipes", "contract", "FAIL" if wrong_recipes else "PASS", severity="high",
+                     evidence="; ".join(wrong_recipes[:8]) or "every recipe names known capabilities and a proof, and every provider "
+                              "has a status source, its clients and what leaves the machine",
+                     expected="settings/recipes.yml points only at capabilities, radar entries and MCP servers that exist"))
     catalog = yaml.safe_load((repo / "settings" / "mcp" / "catalog.yml").read_text(encoding="utf-8"))
     radar_status = {"adopt", "trial", "assess", "hold"}
     bad = []

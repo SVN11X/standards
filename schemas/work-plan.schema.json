@@ -32,6 +32,10 @@
         "calls": {"type": "array", "items": {"type": "object"}}, "escalations": {"type": "integer"}
       }
     },
+    "route": {
+      "type": "object",
+      "properties": {"recipe": {}, "folder": {"type": "string"}, "capabilities": {"type": "array", "items": {"type": "object"}}}
+    },
     "final_regression": {"type": "array", "items": {"type": "string"}},
     "units": {
       "type": "array",
