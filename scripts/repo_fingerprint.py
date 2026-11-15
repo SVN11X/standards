@@ -34,10 +34,15 @@ NODE_PACKAGES = {
     "playwright": "playwright", "@axe-core/playwright": "axe", "axe-core": "axe", "storybook": "storybook",
     "@storybook/react": "storybook", "@tauri-apps/api": "tauri", "@tauri-apps/cli": "tauri", "electron": "electron",
     "wrangler": "cloudflare-worker", "eslint": "eslint", "tailwindcss": "tailwind",
+    "hyperframes": "hyperframes", "remotion": "remotion", "@motion-canvas/core": "motion-canvas", "@mermaid-js/mermaid-cli": "mermaid",
+    "mermaid": "mermaid", "sharp": "image-processing", "react-native": "react-native", "expo": "expo", "@lhci/cli": "lighthouse",
+    "msw": "msw", "@pact-foundation/pact": "pact", "@redocly/cli": "openapi",
 }
 PYTHON_PACKAGES = {"pytest": "pytest", "httpx": "http-client", "requests": "http-client", "beautifulsoup4": "scraper",
                    "bs4": "scraper", "playwright": "playwright", "ruff": "ruff", "pyright": "pyright", "pandas": "dataframe",
-                   "pywinauto": "pywinauto", "nbval": "nbval"}
+                   "pywinauto": "pywinauto", "nbval": "nbval", "manim": "manim", "pillow": "image-processing",
+                   "pandera": "data-validation", "duckdb": "duckdb", "dvc": "dvc", "dbt-core": "dbt", "sqlfluff": "sql",
+                   "pytesseract": "ocr", "matplotlib": "charts", "plotly": "charts"}
 # A file name pattern and the signal it gives. The first tracked file that matches is the evidence.
 NAME_SIGNALS = [
     (r"(^|/)package\.json$", "node"), (r"(^|/)pnpm-workspace\.yaml$", "monorepo"), (r"(^|/)tsconfig[^/]*\.json$", "typescript"),
@@ -50,6 +55,20 @@ NAME_SIGNALS = [
     (r"\.ipynb$", "notebook"), (r"\.(sqlite3?|db)$", "sqlite"), (r"_windows\.go$", "windows"), (r"\.(rc|manifest)$", "windows"),
     (r"(^|/)(tests?|__tests__|e2e)/", "tests"), (r"(\.test\.[cm]?[jt]sx?|\.spec\.[cm]?[jt]sx?|_test\.go|(^|/)test_[^/]+\.py)$", "tests"),
     (r"(^|/)index\.html$", "html"), (r"\.svelte$", "svelte"), (r"\.astro$", "astro"), (r"\.vue$", "vue"),
+    # Learning content: question banks, lessons and flashcards kept as data.
+    (r"(^|/)[^/]*(question|quiz|exam|lesson|flashcard|pregunta|leccion|lección|curated|imported_q)[^/]*\.(json|ya?ml)$", "learning-content"),
+    # Media and the sources diagrams are drawn from.
+    (r"\.(png|jpe?g|webp|avif|gif)$", "images"), (r"\.svg$", "images"), (r"\.(mp4|webm|mov|m4v)$", "video"), (r"\.vtt$", "captions"),
+    (r"\.(mmd|mermaid)$", "mermaid"), (r"\.d2$", "d2"), (r"\.drawio$", "drawio"), (r"\.(dot|gv)$", "graphviz"),
+    (r"\.excalidraw$", "excalidraw"),
+    # Kinds of project the owner's guide of 2026-11-15 names.
+    (r"(^|/)(openapi|swagger)[^/]*\.(ya?ml|json)$", "openapi"), (r"(^|/)AndroidManifest\.xml$", "android"),
+    (r"(^|/)build\.gradle(\.kts)?$", "android"), (r"\.xcodeproj/", "ios"), (r"(^|/)Podfile$", "ios"),
+    (r"(^|/)project\.godot$", "godot"), (r"(^|/)ProjectSettings/ProjectVersion\.txt$", "unity"),
+    (r"(^|/)dbt_project\.ya?ml$", "dbt"), (r"\.sql$", "sql"), (r"(^|/)(Chart\.ya?ml|kustomization\.ya?ml)$", "kubernetes"),
+    (r"\.Tests\.ps1$", "pester"), (r"(^|/)(lighthouserc|\.lighthouserc)[^/]*$", "lighthouse"),
+    (r"(^|/)_quarto\.ya?ml$|\.qmd$", "quarto"), (r"(^|/)mkdocs\.ya?ml$", "markdown-docs"), (r"(^|/)\.vale\.ini$", "vale"),
+    (r"(^|/)REUSE\.toml$|(^|/)\.reuse/dep5$", "reuse"),
 ]
 # Text inside Go or Python source that only makes sense on Windows.
 WINDOWS_CODE = re.compile(r"golang\.org/x/sys/windows|syscall\.NewLazyDLL|ctypes\.windll|\bimport winreg\b|\bimport win32\w+|"
@@ -171,6 +190,22 @@ def collect(root: Path, files: list[str], prefix: str = "") -> tuple[list[dict],
         elif base == "pyproject.toml" or base.startswith("requirements"):
             for signal in python_facts(root, name):
                 add(signal, name)
+    # What to install before the test command can run, read from the lockfiles and requirement files of this folder.
+    here_files = {n.rsplit("/", 1)[-1] for n in scoped if (n.rsplit("/", 1)[0] if "/" in n else "") == here}
+    install = []
+    if "pnpm-lock.yaml" in here_files:
+        install.append("pnpm install --frozen-lockfile")
+    elif "package-lock.json" in here_files:
+        install.append("npm ci")
+    elif "package.json" in here_files and not prefix:
+        # A package below the root without its own lockfile is installed by the root, as in a workspace.
+        install.append("npm install")
+    install += [f"python -m pip install -r {(here + '/') if here else ''}{n}" for n in sorted(here_files)
+                if re.fullmatch(r"requirements[^/]*\.txt", n)]
+    if "pyproject.toml" in here_files and not any("requirements" in i for i in install):
+        install.append("python -m pip install -e .")
+    if install:
+        commands["install"] = " && ".join(install) if len(install) == 1 else install
     if "python" in found and "pytest" in found and "test" not in commands:
         commands["test"] = "python -m pytest -q"
     if "python" in found and "test" not in commands:

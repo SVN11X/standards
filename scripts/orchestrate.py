@@ -1953,15 +1953,20 @@ def mcp_catalog() -> list[dict]:
     return load_yaml(MCP_CATALOG).get("servers") or []
 
 
-def mcp_config(name: str, client: str) -> dict:
+def mcp_config(name: str, client: str, opencode_format: str = "v1") -> dict:
+    """The block to paste in the client's config. OpenCode 2 reads the v1 shape (servers under `mcp`, `enabled`)
+    and its native v2 shape (`mcp.servers`, `disabled`). OpenCode 1 reads only v1, so v1 is the default: its
+    migration guide says not to point OpenCode 1 at a file converted to the v2 shape."""
     server = next((s for s in mcp_catalog() if s["name"] == name), None)
     if server is None:
         raise SystemExit(f"{name} is not in settings/mcp/catalog.yml")
     launch = windows_launch(server["launch"])
     if client == "claude":
         return {"mcpServers": {name: {"command": launch[0], "args": launch[1:], **({"env": server["env"]} if server.get("env") else {})}}}
-    return {"mcp": {name: {"type": "local", "command": launch, "enabled": True,
-                           **({"environment": server["env"]} if server.get("env") else {})}}}
+    env = {"environment": server["env"]} if server.get("env") else {}
+    if opencode_format == "v2":
+        return {"mcp": {"servers": {name: {"type": "local", "command": launch, **env}}}}
+    return {"mcp": {name: {"type": "local", "command": launch, "enabled": True, **env}}}
 
 
 def mcp_inspect(name: str, timeout: int = 180) -> dict:
@@ -2053,6 +2058,8 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("action", choices=["list", "config", "inspect"])
     p.add_argument("name", nargs="?")
     p.add_argument("--client", choices=["claude", "opencode"], default="claude")
+    p.add_argument("--opencode-format", choices=["v1", "v2"], default="v1",
+                   help="v1 works in OpenCode 1 and 2. v2 (mcp.servers) is read only by OpenCode 2")
     args = parser.parse_args(argv)
 
     if args.command == "doctor":
@@ -2183,7 +2190,7 @@ def main(argv: list[str] | None = None) -> int:
         if not args.name:
             parser.error("give the server name")
         if args.action == "config":
-            print(json.dumps(mcp_config(args.name, args.client), indent=2))
+            print(json.dumps(mcp_config(args.name, args.client, args.opencode_format), indent=2))
             return 0
         result = mcp_inspect(args.name)
         emit(result, True)

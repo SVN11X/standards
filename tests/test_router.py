@@ -55,7 +55,12 @@ class ClassifyTests(unittest.TestCase):
         ("Fix the login bug", "work"), ("Can you add a dark mode?", "work"), ("how would you fix this?", "query"),
         ("What does this function do?", "query"), ("Es mejor usar React o Svelte?", "query"),
         ("The build fails on CI", "other"), ("The release notes are wrong", "other"), ("Los cambios no se guardan", "other"),
-        ("Genera un error al guardar", "other"), ("gracias", "other"), ("/help", "other"), ("", "other"),
+        # A bug report written as "it generates an error" reads as an order to fix it.
+        ("Genera un error al guardar", "work"), ("gracias", "other"), ("/help", "other"), ("", "other"),
+        ("Busca una foto libre de un centro de datos", "work"), ("Dibuja un diagrama del flujo", "work"),
+        ("Find a free photo of a data center", "work"), ("La ventana tarda en cargar, mejora el rendimiento", "work"),
+        ("El botón falla, arréglalo", "work"), ("Los cambios no se guardan, ¿por qué?", "query"),
+        ("Esto está lento y no sé por qué", "other"),
     ]
 
     def test_orders_questions_reviews_setups_and_publications(self):
@@ -199,7 +204,8 @@ class SelectionTests(Base):
         self.assertEqual((inside["folder"], inside["folder_why"], inside["questions"]), ("apps/desktop", "the session is inside this folder", []))
         named = self.decide("Arregla el problema de audio en apps/web", mono, session="s2")
         self.assertEqual((named["folder"], named["folder_why"]), ("apps/web", "the request names this folder"))
-        self.assertEqual(named["verification"], {"command": "pnpm test", "where": "apps/web", "proof": named["verification"]["proof"]})
+        self.assertEqual(named["verification"], {"command": "pnpm test", "where": "apps/web", "proof": named["verification"]["proof"],
+                                                 "install": "pnpm install --frozen-lockfile"})
 
     def test_a_client_only_gets_the_providers_it_can_use(self):
         claude = self.decide("Mejora el diseño de la página", client="claude")
@@ -246,6 +252,74 @@ class SelectionTests(Base):
         text = router.render(self.decide("Mejora el diseño de la página"), 600)
         self.assertLessEqual(len(text), 600)
         self.assertTrue(text.endswith("(shortened)"))
+
+
+class LearningVisualWritingTests(Base):
+    """Recipes added on 2026-11-16: learning sites, visual assets, clarity of the text, and the guide's other families."""
+
+    QUIZ = {"package.json": {"scripts": {"test": "vitest run"}, "dependencies": {"react": "19"}, "devDependencies": {"vitest": "3"}},
+            "src/App.tsx": "x\n", "src/content/questions.json": [{"question": "q", "options": ["a", "b", "c"], "answer": 0}]}
+
+    def test_a_learning_request_in_a_repository_with_a_question_bank(self):
+        quiz = repo(self.root / "quiz", self.QUIZ)
+        decision = self.decide("Mejora el aprendizaje, que las preguntas ayuden a recordar", quiz)
+        self.assertEqual(decision["recipe"], "learning-site")
+        chosen = {c["capability"]: c["provider"] for c in decision["capabilities"]}
+        self.assertEqual((chosen["question-quality"], chosen["learning-design"], chosen["comprehension-test"]),
+                         ("learning-check", "learning-science", "reader-test"))
+        self.assertIn("recall later", decision["notes"][0])
+        self.assertIn("five learners", decision["verification"]["proof"])
+
+    def test_a_diagram_and_a_clip_get_the_visual_recipe_with_their_tools(self):
+        files = {**WEB, "docs/flow.mmd": "graph LR\n a-->b\n", "assets/clip.webm": "x", "assets/clip.vtt": "WEBVTT\n"}
+        decision = self.decide("Agrega un diagrama de la arquitectura y un video corto que lo explique", repo(self.root / "vis", files))
+        self.assertEqual(decision["recipe"], "visual-asset")
+        chosen = {c["capability"]: c["provider"] for c in decision["capabilities"]}
+        self.assertEqual((chosen["diagram"], chosen["image-attach"]), ("mermaid-cli", "media-attach"))
+        self.assertIn(chosen["short-video"], ("hyperframes", "manim", "motion-canvas", "remotion", "opencut"))
+        self.assertIn("media-search: the search words, sent to Openverse and Wikimedia", decision["leaves_machine"])
+        self.assertIn("captions and a poster", decision["verification"]["proof"])
+
+    def test_an_image_search_never_leaves_the_machine_in_local_mode(self):
+        decision = self.decide("Busca una foto libre para la portada", limits=LOCAL)
+        search = self.provider(decision, "image-search")
+        self.assertIsNone(search["provider"])
+        self.assertIn("keeps the task on this machine", search["alternatives"][0]["why_not"])
+        self.assertFalse(any("Openverse" in line for line in decision["leaves_machine"]))
+
+    def test_a_request_about_the_text_gets_the_writing_check_and_the_reader_test(self):
+        decision = self.decide("Reescribe el README para que se entienda mejor", repo(self.root / "data", DATA))
+        self.assertEqual(decision["recipe"], "content-clarity")
+        self.assertEqual([c["provider"] for c in decision["capabilities"]], ["text-check", "reader-test", "web-improve"])
+        self.assertIn("a readability score is a proxy", decision["notes"][0])
+
+    def test_words_add_capabilities_to_another_recipe(self):
+        decision = self.decide("Mejora el diseño de la página, agrega un diagrama y que cargue más rápido, está lenta")
+        names = [c["capability"] for c in decision["capabilities"]]
+        self.assertEqual(decision["recipe"], "web-experience")
+        self.assertIn("diagram", names)
+        self.assertIn("performance", names)
+        self.assertTrue(any(note.startswith("diagram added") for note in decision["notes"]))
+
+    def test_the_families_of_the_guide_get_their_recipes(self):
+        cases = [({"setup.ps1": "Write-Host hi\n", "tests/setup.Tests.ps1": "Describe x {}\n"}, "Corrige el script de instalación", "powershell-script"),
+                 ({"openapi.yaml": "openapi: 3.1.0\n", "package.json": {"devDependencies": {"msw": "2"}}}, "Agrega un endpoint al contrato de la API", "api-service"),
+                 ({"main.tf": "terraform {}\n"}, "Ajusta la infraestructura de terraform", "infra"),
+                 ({"board/main.kicad_pcb": "x", "fw/platformio.ini": "[env]\n"}, "Corrige el firmware del sensor", "hardware"),
+                 ({"project.godot": "x", "main.gd": "x"}, "Corrige el salto del personaje", "mobile-app"),
+                 ({".github/workflows/ci.yml": "on: push\n", "a.py": "x"}, "Actualiza el workflow de CI", "ci-maintenance")]
+        for files, prompt, recipe in cases:
+            with self.subTest(recipe):
+                self.assertEqual(self.decide(prompt, repo(self.root / recipe, files), session=recipe)["recipe"], recipe)
+
+    def test_the_catalog_names_hyperframes_and_every_provider_says_who_keeps_it(self):
+        providers = [p for c in RECIPES["capabilities"].values() for p in c["providers"]]
+        ids = {p["id"] for p in providers}
+        for name in ("hyperframes", "manim", "mermaid-cli", "d2", "graphviz", "remotion", "motion-canvas", "media-search",
+                     "learning-check", "text-check", "reader-test", "lighthouse-ci", "vale", "tesseract", "ffprobe"):
+            self.assertIn(name, ids)
+        for provider in providers:
+            self.assertTrue(provider.get("radar") or provider.get("source") or provider.get("maintainer"), provider["id"])
 
 
 class TaskTests(Base):

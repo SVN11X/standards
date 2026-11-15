@@ -50,6 +50,9 @@ When the site teaches something, such as a diagram, a model, a simulation or tec
 - Separate measured data, derived calculations and illustrative examples, and label each one.
 - Read `references/interactive-explanations.md` before designing controls, diagrams or simulations.
 - For study sites and explainers (progress, bookmarks, profiles, hotspots, why-it-matters introductions), read `references/learning-experience.md`.
+- For anything that should teach, read `references/learning-science.md` and run `python <standard>/scripts/learning_check.py <folder>` on its question bank.
+- For the text of a page, read `references/writing-and-usability.md`. Run `python <standard>/scripts/text_check.py check <files>` and, before saying a page helps, the comprehension test with five readers it describes.
+- For images, diagrams and clips, `python <standard>/scripts/media.py search` finds open-licensed images with their author, `attach` saves one with its alt text and credit, and `audit` lists what a reader or a license would miss.
 
 ## 5. Implement
 

@@ -30,6 +30,7 @@ flowchart LR
 - `profiles/`: one folder per profile with its `profile.yml`: folders, fixed rules, techniques that need a reason and setup questions. `profiles/web/subprofiles.yml` describes the five web sub-profiles.
 - `scripts/standard.py`: the engine. It creates, regenerates, checks and migrates repositories, and packages the skills.
 - `scripts/orchestrate.py`: routing, delegation, bench, consent and the gate every model call passes.
+- `scripts/learning_check.py`, `scripts/text_check.py` and `scripts/media.py`: whether a question bank teaches, whether a text helps its reader, and whether images and clips reach every reader with their credit.
 - `scripts/router.py`, `scripts/repo_fingerprint.py` and `settings/recipes.yml`: a request in plain words gets a decision before work starts: the repository and folder, the recipe, and the tool on this machine that provides each capability. `hooks/route_prompt.py` adds it to a work request in Claude Code.
 - `scripts/plan_autopilot.py`, `scripts/planner.py` and `scripts/plan_contract.py`: an instruction in plain words becomes a validated work plan. The planner is the smallest Claude model that is enough, or a local one, and one contract fixes, repairs and validates its draft.
 - `scripts/execute.py`, `scripts/scheduler.py`, `scripts/resources.py` and `scripts/workplan.py`: the executor loop. Units run at once in their own worktrees from a ready queue, under resource limits, and their results are integrated one at a time.
