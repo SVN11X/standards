@@ -200,7 +200,8 @@
         "where": {
           "type": "string"
         },
-        "proof": {}
+        "proof": {},
+        "install": {}
       }
     },
     "permission": {

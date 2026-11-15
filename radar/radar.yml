@@ -596,3 +596,135 @@ entries:
     expression: [sober, balanced, expressive]
     notes: Official repository, homepage impeccable.style, npm package impeccable 4.8.2 with one maintainer, license file and package both Apache-2.0. Its detector in crates/detect has 62 deterministic rules for AI slop, run with npx impeccable detect --json. Trial only the detect command on a throwaway copy of a site, and do not run npx impeccable install, which writes hooks and files for more than a dozen agents. Compare its findings with the standard's own web judgment before any adoption.
     evaluated: 2026-11-12
+  - name: D2
+    url: https://github.com/terrastruct/d2
+    status: assess
+    profiles: [web, software, docs, infra]
+    kind: tool
+    license: MPL-2.0
+    cost: free
+    privacy: renders on the machine from a text file
+    expression: [sober, balanced]
+    notes: Diagrams as text with automatic layout, rendered to SVG or PNG by one binary. Mermaid stays the default because GitHub renders it in a README. Before trial, use it for one architecture diagram Mermaid lays out badly, commit the .d2 source next to the SVG and check the labels at the width the page shows it.
+    evaluated: 2026-11-16
+  - name: Graphviz
+    url: https://gitlab.com/graphviz/graphviz
+    status: assess
+    profiles: [software, data-ai, docs]
+    kind: tool
+    license: EPL-2.0
+    cost: free
+    privacy: renders on the machine
+    expression: [sober]
+    notes: Renders DOT graphs with the dot command. Fits graphs a program generates, such as dependency or pipeline graphs, where the layout must be computed. Commit the generator and the SVG, never only the image.
+    evaluated: 2026-11-16
+  - name: draw.io desktop
+    url: https://github.com/jgraph/drawio-desktop
+    status: assess
+    profiles: [web, software, docs, hardware]
+    kind: app
+    license: GPL-3.0 for the desktop app, the diagrams you draw are yours
+    cost: free
+    privacy: the desktop app works offline
+    expression: [sober, balanced]
+    notes: Diagrams drawn by hand and saved as .drawio XML. The owner's drawio_to_png repository converts them in the browser. Keep the .drawio source in the repository next to the exported SVG or PNG, so the next edit starts from the source.
+    evaluated: 2026-11-16
+  - name: Excalidraw
+    url: https://github.com/excalidraw/excalidraw
+    status: assess
+    profiles: [web, docs]
+    kind: app
+    license: MIT
+    cost: free
+    privacy: drawing happens in the browser, and sharing a live collaboration link sends the drawing to its server
+    expression: [balanced, expressive]
+    notes: Hand-drawn style sketches for explanations and early layouts. Export SVG with the scene embedded, so the file can be opened and edited again. Its look reads as a sketch, so it fits drafts and teaching, not a precise architecture.
+    evaluated: 2026-11-16
+  - name: Remotion
+    url: https://github.com/remotion-dev/remotion
+    status: assess
+    profiles: [web]
+    kind: library
+    license: Remotion License, free for individuals and for-profit companies with up to 3 employees, a company license above that
+    cost: free for the owner as an individual, paid for larger companies
+    privacy: renders on the machine
+    expression: [balanced, expressive]
+    notes: Videos written as React components. HyperFrames covers the same need with HTML and an Apache-2.0 license, so Remotion is only for a project that already uses React video. Check the license terms again before any work for a company.
+    evaluated: 2026-11-16
+  - name: Motion Canvas
+    url: https://github.com/motion-canvas/motion-canvas
+    status: assess
+    profiles: [web, docs]
+    kind: library
+    license: MIT
+    cost: free
+    privacy: renders on the machine
+    expression: [balanced, expressive]
+    notes: Explanatory animations written in TypeScript, with a timeline editor. An alternative to Manim for a project that is already TypeScript. Ship a short clip with captions and a poster, never the editor.
+    evaluated: 2026-11-16
+  - name: Openverse
+    url: https://github.com/WordPress/openverse
+    status: assess
+    profiles: [web, docs]
+    kind: tool
+    license: MIT for the code, each image keeps its own license
+    cost: free
+    privacy: the search words go to the Openverse API, run by WordPress
+    expression: [sober, balanced, expressive]
+    notes: Search of openly licensed images with the license and the author of each one. scripts/media.py search uses its API and keeps only licenses that allow commercial use and changes unless the owner allows more. Not yet called live from a session of this standard, because its API host was outside the network allowed there.
+    evaluated: 2026-11-16
+  - name: Wikimedia Commons
+    url: https://commons.wikimedia.org/wiki/Commons:API
+    status: assess
+    profiles: [web, docs]
+    kind: tool
+    license: each file keeps its own license, read from its LicenseShortName
+    cost: free
+    privacy: the search words go to the Wikimedia API
+    expression: [sober, balanced, expressive]
+    notes: Free media with license and author in the file metadata. scripts/media.py search reads them from the CommonsMetadata fields and drops files under fair use or with no license. Not yet called live from a session of this standard, because its API host was outside the network allowed there.
+    evaluated: 2026-11-16
+  - name: Lighthouse CI
+    url: https://github.com/GoogleChrome/lighthouse-ci
+    status: assess
+    profiles: [web]
+    kind: tool
+    license: Apache-2.0
+    cost: free
+    privacy: runs Chrome on the machine or in CI against the built site
+    expression: []
+    notes: Performance, accessibility and best practice scores with budgets that fail a build. Named in the owner's guide of 2026-11-15. Before trial, set budgets from the web profile's performance budget and run it on one built site.
+    evaluated: 2026-11-16
+  - name: Vale
+    url: https://github.com/errata-ai/vale
+    status: assess
+    profiles: [docs, web]
+    kind: tool
+    license: MIT
+    cost: free
+    privacy: runs on the machine
+    expression: []
+    notes: Prose linter with house style rules. scripts/text_check.py measures readability and sentence length, and Vale adds terminology and style rules where several documents must say things the same way. Named in the owner's guide of 2026-11-15.
+    evaluated: 2026-11-16
+  - name: Tesseract
+    url: https://github.com/tesseract-ocr/tesseract
+    status: assess
+    profiles: [web, data-ai, docs]
+    kind: tool
+    license: Apache-2.0
+    cost: free
+    privacy: runs on the machine
+    expression: []
+    notes: OCR that turns text inside an image into text, to write its alt text or a transcript. Named in the owner's guide of 2026-11-15. Check the result by reading it, because OCR misreads small and stylized text.
+    evaluated: 2026-11-16
+  - name: FFmpeg
+    url: https://ffmpeg.org/ffprobe.html
+    status: trial
+    profiles: [web, data-ai]
+    kind: tool
+    license: LGPL-2.1 or GPL depending on the build
+    cost: free
+    privacy: runs on the machine
+    expression: []
+    notes: ffprobe reads the container, codecs and length of a video, and ffmpeg converts it. Manim renders in GCP_Data_Engineer_Fieldnotes already need it. Check a shipped clip with ffprobe for H.264 or VP9, its size and its duration.
+    evaluated: 2026-11-16

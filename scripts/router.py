@@ -70,9 +70,14 @@ CHANGE = verbs(
     "traduce/tradúce/traducir/traduzca haz/haz/hacer/haga pon/pon/poner/ponga ajusta/ajústa/ajustar/ajuste "
     "simplifica/simplifíca/simplificar/simplifique repara/repára/reparar/repare "
     "soluciona/solucióna/solucionar/solucione resuelve/resuélve/resolver/resuelva escribe/escríbe/escribir/escriba "
-    "limpia/límpia/limpiar/limpie ordena/ordéna/ordenar/ordene",
+    "limpia/límpia/limpiar/limpie ordena/ordéna/ordenar/ordene busca/búsca/buscar/busque encuentra/encuéntra/encontrar/encuentre "
+    "genera/génera/generar/genere dibuja/dibúja/dibujar/dibuje diseña/diséña/diseñar/diseñe ilustra/ilústra/ilustrar/ilustre "
+    "documenta/documénta/documentar/documente redacta/redácta/redactar/redacte graba/grába/grabar/grabe anima/ánima/animar/anime "
+    "incluye/inclúye/incluir/incluya adjunta/adjúnta/adjuntar/adjunte sustituye/sustitúye/sustituir/sustituya "
+    "reemplaza/reempláza/reemplazar/reemplace acelera/aceléra/acelerar/acelere reduce/redúce/reducir/reduzca",
     "fix add improve implement create change update refactor remove delete optimi[sz]e rewrite migrate convert make "
-    "build write rename move translate finish integrate simplify repair solve clean")
+    "build write rename move translate finish integrate simplify repair solve clean find search draw design generate "
+    "illustrate document include attach replace reduce speed")
 PUBLISH = verbs("sube/súbe/subir/suba publica/publíca/publicar/publique despliega/despliéga/desplegar/despliegue "
                 "fusiona/fusióna/fusionar/fusione lanza/lánza/lanzar/lance", "push deploy merge release publish ship")
 REVIEW = verbs("revisa/revísa/revisar/revise audita/audíta/auditar/audite critica/critíca/criticar/critique", "review audit critique")
@@ -118,6 +123,11 @@ def classify(prompt: str) -> tuple[str, str]:
     change = CHANGE.search(lead)
     if change:
         return "work", f"starts with the verb '{change.group(0)}'"
+    # An order after a description: "la ventana tarda en cargar, mejora el rendimiento".
+    for clause in re.split(r"[,;:]\s+|\s+(?:y|and|pero|but|entonces|so)\s+", text)[1:]:
+        found = CHANGE.match(clause.strip()) or CHANGE.search(" ".join(clause.split()[:2]))
+        if found and not QUESTION.match(clause.strip()):
+            return "work", f"a clause starts with the verb '{found.group(0)}'"
     # Without a change verb, the first of the two decides: "review it before pushing" is a review.
     found = sorted((m.start(), name, m.group(0)) for name, m in (("publish", PUBLISH.search(lead)), ("review", REVIEW.search(lead))) if m)
     if found:
@@ -334,9 +344,10 @@ def scope_signals(fp: dict, folder: str) -> tuple[list[dict], dict, str]:
     have = {s["id"] for s in sub["signals"]}
     signals = sub["signals"] + [s for s in root_signals if s["id"] in SHARED_TOOLING and s["id"] not in have]
     if sub["commands"].get("test"):
-        return signals, sub["commands"], folder
-    return signals, {**sub["commands"], **({"test": root_commands["test"]} if root_commands.get("test") else {})}, \
-        "." if root_commands.get("test") else folder
+        return signals, {**({"install": root_commands["install"]} if root_commands.get("install") and not sub["commands"].get("install") else {}),
+                         **sub["commands"]}, folder
+    inherited = {key: root_commands[key] for key in ("test", "install") if root_commands.get(key)} if root_commands.get("test") else {}
+    return signals, {**sub["commands"], **inherited}, "." if root_commands.get("test") else folder
 
 
 def experience_for(prompt: str, root: Path) -> dict | None:
@@ -481,7 +492,8 @@ def decide(prompt: str, cwd: Path, client: str = "claude", session: str | None =
         "experience": experience_for(prompt, root) if recipe and recipe.get("experience") else None,
         "signals": signal_rows, "recipe": recipe["id"] if recipe else None, "recipe_why": recipe_why, "alternatives": alternatives,
         "capabilities": chosen,
-        "verification": {"command": commands.get("test"), "where": where, "proof": (recipe or {}).get("proof")},
+        "verification": {"command": commands.get("test"), "where": where, "proof": (recipe or {}).get("proof"),
+                         "install": commands.get("install") if commands.get("test") else None},
         "permission": permission, "writes": writes, "leaves_machine": leaves,
         "privacy": limits.get("privacy"), "cost_mode": limits.get("cost_mode"),
         "reused": ["the fingerprint saved for this commit"] if fp.get("cached") else [],
@@ -520,6 +532,10 @@ def render(decision: dict, limit: int = DEFAULTS["max_context_chars"]) -> str:
     check = decision["verification"]
     if check["command"] or check["proof"]:
         place = "at the repository root" if check["where"] == "." else f"in {check['where']}"
+        setup = check.get("install")
+        if setup:
+            steps = setup if isinstance(setup, list) else [setup]
+            lines.append("Before the tests, install: " + ", then ".join(f"`{step}`" for step in steps) + ".")
         lines.append("Verification: " + (f"`{check['command']}` {place}. " if check["command"] else "")
                      + (f"Done means: {check['proof']}." if check["proof"] else ""))
     lines.append(f"Permission: {decision['permission']}.")

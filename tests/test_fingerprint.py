@@ -64,7 +64,7 @@ class FingerprintTests(Base):
         for name in ("node", "react", "vite", "typescript", "vitest", "playwright", "axe", "tests", "web"):
             self.assertIn(name, found)
         self.assertEqual((found["react"], found["playwright"], found["tests"]), ("package.json", "package.json", "tests/app.spec.ts"))
-        self.assertEqual(data["commands"], {"test": "npm test", "build": "npm run build"})
+        self.assertEqual(data["commands"], {"test": "npm test", "build": "npm run build", "install": "npm install"})
         self.assertEqual(data["schema"], "standards/repo-fingerprint/v1")
         self.assertRegex(data["revision"], r"^[0-9a-f]{40}$")
 
@@ -102,6 +102,7 @@ class FingerprintTests(Base):
         self.assertNotIn("tauri", subs["apps/web"])
         web = next(s for s in data["subprojects"] if s["path"] == "apps/web")
         self.assertEqual(web["commands"], {"test": "pnpm test"})
+        self.assertEqual(data["commands"]["install"], "pnpm install --frozen-lockfile")
 
     def test_latex_hardware_and_infrastructure_files_are_seen(self):
         files = {"thesis/main.tex": "x", "thesis/refs.bib": "x", "board/main.kicad_pcb": "x", "fw/platformio.ini": "x",
@@ -144,12 +145,49 @@ class RealLayoutTests(Base):
         self.assertEqual(data["subprojects"], [])
         self.assertEqual(data["commands"]["test"], "npm test")
 
+    def test_the_install_step_comes_from_the_lockfile_and_every_requirements_file(self):
+        """Found on extractor_exambase: one test module needs a package of requirements_scrapling.txt."""
+        files = {"requirements_dev.txt": "PyYAML\n", "requirements_scrapling.txt": "scrapling\n", "a.py": "x",
+                 "tests/test_a.py": "import unittest\n"}
+        data = fingerprint.fingerprint(repo(self.root / "py", files))
+        self.assertEqual(data["commands"]["install"], ["python -m pip install -r requirements_dev.txt",
+                                                       "python -m pip install -r requirements_scrapling.txt"])
+        node = fingerprint.fingerprint(repo(self.root / "node", {"package.json": {"scripts": {"test": "x"}}, "package-lock.json": "{}"}))
+        self.assertEqual(node["commands"]["install"], "npm ci")
+
     def test_tests_written_with_unittest_give_the_unittest_command(self):
         files = {"requirements_dev.txt": "PyYAML>=6\n", "extractor.py": "import json\n",
                  "tests/test_extractor.py": "import unittest\n\n\nclass T(unittest.TestCase):\n    pass\n"}
         data = fingerprint.fingerprint(repo(self.root / "ext", files))
         self.assertEqual(data["commands"]["test"], "python -m unittest discover -s tests")
         self.assertEqual(self.signals(data)["unittest"], "tests/test_extractor.py")
+
+
+class NewSignalTests(Base):
+    def test_learning_content_media_and_diagram_sources_are_seen(self):
+        files = {"index.html": "<h1>x</h1>", "content/questions-d1.json": "[]", "data/lessons.json": "{}", "assets/a.webp": "x",
+                 "assets/clip.mp4": "x", "assets/clip.vtt": "WEBVTT", "docs/flow.mmd": "x", "docs/net.d2": "x", "docs/board.drawio": "x",
+                 "docs/deps.dot": "x", "docs/sketch.excalidraw": "{}"}
+        found = self.signals(fingerprint.fingerprint(repo(self.root / "site", files)))
+        self.assertEqual(found["learning-content"], "content/questions-d1.json")
+        for name in ("images", "video", "captions", "mermaid", "d2", "drawio", "graphviz", "excalidraw"):
+            self.assertIn(name, found)
+
+    def test_packages_for_video_images_and_data_are_seen(self):
+        files = {"package.json": {"devDependencies": {"hyperframes": "0.9", "remotion": "4", "@motion-canvas/core": "3", "sharp": "0.35",
+                                                      "@lhci/cli": "0.14"}},
+                 "requirements.txt": "manim==0.22\npandera\nduckdb\nmatplotlib\n"}
+        found = self.signals(fingerprint.fingerprint(repo(self.root / "vid", files)))
+        for name in ("hyperframes", "remotion", "motion-canvas", "image-processing", "lighthouse", "manim", "data-validation", "duckdb", "charts"):
+            self.assertIn(name, found)
+
+    def test_kinds_of_project_from_the_owners_guide(self):
+        files = {"openapi.yaml": "x", "android/app/src/main/AndroidManifest.xml": "x", "game/project.godot": "x",
+                 "unity/ProjectSettings/ProjectVersion.txt": "x", "dbt_project.yml": "x", "models/a.sql": "x", "chart/Chart.yaml": "x",
+                 "tests/x.Tests.ps1": "x", "report/_quarto.yml": "x", ".vale.ini": "x", "REUSE.toml": "version = 1"}
+        found = self.signals(fingerprint.fingerprint(repo(self.root / "many", files)))
+        for name in ("openapi", "android", "godot", "unity", "dbt", "sql", "kubernetes", "pester", "quarto", "vale", "reuse"):
+            self.assertIn(name, found)
 
 
 class CacheTests(Base):

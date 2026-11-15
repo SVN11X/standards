@@ -22,8 +22,8 @@ Run them in this order and keep the findings of each pass together.
 2. Structure and consistency. Chapter order, content repeated across chapters, terms used consistently with the glossary, numbering, and cross references that resolve.
 3. Evidence and method. Every claim is supported by data or a citation. Methods can be reproduced: parameters, versions, conditions. Measured data, derived results and illustrative examples are labeled as such. Units, significant figures and statistics are reported correctly.
 4. Citations. Every citation resolves to a bibliography entry and the style is applied consistently. Prefer primary sources. When you can check a reference exists, check it. Never invent or complete a reference from memory.
-5. Figures and tables. Each one is referenced in the text before it appears, has a caption that explains it, is legible, has units, and keeps its source file next to the export.
-6. Language. Written in the document's language, plain and precise, consistent in tense and person as the institution requires. Flag filler and AI-sounding prose. Use antislop-copywriting for this if it is installed.
+5. Figures and tables. Each one is referenced in the text before it appears, has a caption that explains it, is legible, has units, and keeps its source file next to the export. `python <standard>/scripts/media.py audit` lists figures without alt text or credit, and heavy files.
+6. Language. Written in the document's language, plain and precise, consistent in tense and person as the institution requires. Flag filler and AI-sounding prose. Use antislop-copywriting for this if it is installed. Run `python <standard>/scripts/text_check.py check <chapters> --audience expert` for long sentences, paragraphs, acronyms not expanded at first use and the readability score, and read its examples before acting: a score is a proxy, not a verdict.
 7. Build. The document builds with its documented command without broken references or warnings, and submitted versions are tagged.
 
 ## Output

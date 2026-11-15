@@ -73,3 +73,19 @@ Sources behind the rules. Prefer the original source. The check verifies these l
 - DVC: https://dvc.org/
 - Git LFS: https://git-lfs.com/
 - The Twelve-Factor App: https://12factor.net/
+
+## Learning, writing and usability
+
+- Dunlosky et al. (2013), effective learning techniques: https://doi.org/10.1177/1529100612453266
+- Roediger and Karpicke (2006), test-enhanced learning: https://doi.org/10.1111/j.1467-9280.2006.01693.x
+- Cepeda et al. (2006), distributed practice: https://doi.org/10.1037/0033-2909.132.3.354
+- Haladyna, Downing and Rodriguez (2002), multiple-choice item-writing guidelines: https://doi.org/10.1207/S15324818AME1503_5
+- Hattie and Timperley (2007), the power of feedback: https://doi.org/10.3102/003465430298487
+- ISO 24495-1:2023, plain language: https://www.iso.org/standard/78907.html
+- Nielsen (2000), test with five users: https://www.nngroup.com/articles/why-you-only-need-to-test-with-5-users/
+
+## Visual assets
+
+- Openverse API, licenses of openly licensed media: https://github.com/WordPress/openverse
+- Wikimedia Commons API: https://commons.wikimedia.org/wiki/Commons:API
+- HyperFrames, video from HTML: https://github.com/heygen-com/hyperframes

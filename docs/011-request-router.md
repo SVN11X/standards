@@ -118,8 +118,8 @@ The first run got three of them wrong, and each became a test. The `src/index.ht
 
 ## Not done
 
-- The tool catalog of the owner's guide of 2026-11-15 has 16 families. Only the providers the eight recipes need are registered. Eight of them are new and in `assess`: frontend-design, axe with Playwright, typescript-lsp, pyright, gopls, rust-analyzer, pywinauto and the Microsoft Learn server were named in the guide and not tested here.
-- The OpenCode MCP config. The guide says the current OpenCode documentation uses `mcp.servers`. `opencode.ai` could not be reached from the session that wrote this, so `orchestrate.py mcp config --client opencode` is unchanged. Check the file it prints against the installed OpenCode before using it.
+- Every family of the owner's guide of 2026-11-15 now has its providers, and the visual, learning and writing tools of `docs/012-learning-visuals-writing.md` too. The ones not tested here stay in `assess`.
+- The OpenCode MCP format was checked in the OpenCode source. See `docs/012-learning-visuals-writing.md`.
 - The three pilots of the guide (a study site, a native Windows app, a data extractor) need the owner's repositories and a Windows machine.
 - No change was made to the other repositories, to `SVN11X/skills` or to the templates. Publishing the plugin is the release step.
 - Whether a Claude Code plugin is installed cannot be seen from a hook, so such a provider is always "not checked".

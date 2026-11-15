@@ -123,6 +123,1198 @@ capabilities:
       - {id: docs-review, kind: skill, runs: client, maintainer: SVN11X, source: skills/docs-review, clients: [claude, opencode],
          writes: false, cost: free, leaves_machine: nothing, status: adopt, detect: {skill: docs-review}}
 
+  diagram:
+    purpose: draw a diagram from a text source that stays in the repository next to the image
+    providers:
+    - id: mermaid-cli
+      kind: cli
+      runs: local
+      radar: Mermaid CLI
+      clients: [claude, opencode, coordinator]
+      writes: false
+      cost: free
+      leaves_machine: nothing
+      detect: {signal: mermaid}
+    - id: pele
+      kind: library
+      runs: local
+      radar: Pele
+      clients: [claude, opencode, coordinator]
+      writes: false
+      cost: free
+      leaves_machine: nothing
+      detect: {signal: mermaid}
+    - id: d2
+      kind: cli
+      runs: local
+      radar: D2
+      clients: [claude, opencode, coordinator]
+      writes: false
+      cost: free
+      leaves_machine: nothing
+      detect:
+        which: [d2]
+    - id: graphviz
+      kind: cli
+      runs: local
+      radar: Graphviz
+      clients: [claude, opencode, coordinator]
+      writes: false
+      cost: free
+      leaves_machine: nothing
+      detect:
+        which: [dot]
+    - id: drawio-desktop
+      kind: app
+      runs: local
+      radar: draw.io desktop
+      clients: [claude, opencode, coordinator]
+      writes: false
+      cost: free
+      leaves_machine: nothing
+      detect: {signal: drawio}
+    - id: excalidraw
+      kind: app
+      runs: local
+      radar: Excalidraw
+      clients: [claude, opencode, coordinator]
+      writes: false
+      cost: free
+      leaves_machine: nothing
+      detect: {signal: excalidraw}
+    - id: anatomy
+      kind: skill
+      runs: client
+      radar: anatomy
+      clients: [claude, opencode]
+      writes: false
+      cost: free
+      leaves_machine: nothing
+      detect: none
+    - id: archify
+      kind: cli
+      runs: local
+      radar: Archify
+      clients: [claude, opencode, coordinator]
+      writes: false
+      cost: free
+      leaves_machine: nothing
+      detect: none
+    - id: svg-by-hand
+      kind: built-in
+      runs: client
+      status: adopt
+      maintainer: the AI client
+      clients: [claude, opencode, coordinator]
+      writes: true
+      cost: free
+      leaves_machine: nothing
+      detect: always
+      evidence: a small diagram the agent writes as SVG, with a title and a desc element
+  image-search:
+    purpose: find an existing image whose license allows the use, with its author
+    providers:
+    - id: media-search
+      kind: cli
+      runs: remote
+      status: assess
+      maintainer: SVN11X
+      source: scripts/media.py
+      clients: [claude, opencode, coordinator]
+      writes: false
+      cost: free
+      leaves_machine: the search words, sent to Openverse and Wikimedia
+      detect: always
+      evidence: tested with recorded answers. Its API hosts were outside the network of the session that wrote it
+  image-create:
+    purpose: make an illustration, a chart or a still that does not exist yet
+    providers:
+    - id: svg-by-hand
+      kind: built-in
+      runs: client
+      status: adopt
+      maintainer: the AI client
+      clients: [claude, opencode, coordinator]
+      writes: true
+      cost: free
+      leaves_machine: nothing
+      detect: always
+      evidence: icons, simple illustrations and charts as SVG the page can style and translate
+    - id: matplotlib-charts
+      kind: library
+      runs: local
+      status: adopt
+      maintainer: the Matplotlib team
+      source: https://matplotlib.org/
+      clients: [claude, opencode, coordinator]
+      writes: false
+      cost: free
+      leaves_machine: nothing
+      detect: {signal: charts}
+      evidence: a chart drawn from the data it shows, with the script committed
+    - id: manim
+      kind: cli
+      runs: local
+      radar: Manim Community
+      clients: [claude, opencode, coordinator]
+      writes: false
+      cost: free
+      leaves_machine: nothing
+      detect: {signal: manim}
+    - id: imagegen-skills
+      kind: skill
+      runs: client
+      radar: Imagegen Skills
+      clients: [claude, opencode]
+      writes: false
+      cost: free
+      leaves_machine: nothing
+      detect: none
+    - id: perchance
+      kind: app
+      runs: remote
+      radar: Perchance
+      clients: [claude]
+      writes: false
+      cost: free
+      leaves_machine: the prompt, typed by the owner in the browser
+      detect: none
+  image-attach:
+    purpose: put an image in the repository with alt text, size, credit and a reasonable weight
+    providers:
+    - id: media-attach
+      kind: cli
+      runs: local
+      status: trial
+      maintainer: SVN11X
+      source: scripts/media.py
+      clients: [claude, opencode, coordinator]
+      writes: true
+      cost: free
+      leaves_machine: nothing
+      detect: always
+      evidence: refuses an image without alt text, license or author, writes assets/CREDITS.json, and audit finds what a reader would miss
+    - id: sharp
+      kind: library
+      runs: local
+      status: assess
+      maintainer: Lovell Fuller
+      source: https://github.com/lovell/sharp
+      needs_signal: node
+      clients: [claude, opencode, coordinator]
+      writes: false
+      cost: free
+      leaves_machine: nothing
+      detect: {signal: image-processing}
+      evidence: named in the owner's guide of 2026-11-15, not tested
+    - id: pillow
+      kind: library
+      runs: local
+      status: assess
+      maintainer: the Pillow team
+      source: https://github.com/python-pillow/Pillow
+      needs_signal: python
+      clients: [claude, opencode, coordinator]
+      writes: false
+      cost: free
+      leaves_machine: nothing
+      detect: {signal: image-processing}
+      evidence: named in the owner's guide of 2026-11-15, not tested
+  short-video:
+    purpose: make a short explanatory clip that plays everywhere, with captions and a poster
+    providers:
+    - id: hyperframes
+      kind: skill
+      runs: local
+      radar: HyperFrames
+      clients: [claude, opencode, coordinator]
+      writes: true
+      cost: free
+      leaves_machine: nothing
+      detect: none
+    - id: manim
+      kind: cli
+      runs: local
+      radar: Manim Community
+      clients: [claude, opencode, coordinator]
+      writes: false
+      cost: free
+      leaves_machine: nothing
+      detect: {signal: manim}
+    - id: motion-canvas
+      kind: library
+      runs: local
+      radar: Motion Canvas
+      needs_signal: node
+      clients: [claude, opencode, coordinator]
+      writes: false
+      cost: free
+      leaves_machine: nothing
+      detect: {signal: motion-canvas}
+    - id: remotion
+      kind: library
+      runs: local
+      radar: Remotion
+      needs_signal: react
+      clients: [claude, opencode, coordinator]
+      writes: false
+      cost: free for individuals and companies of up to 3 employees
+      leaves_machine: nothing
+      detect: {signal: remotion}
+    - id: opencut
+      kind: app
+      runs: local
+      radar: OpenCut
+      clients: [claude, opencode, coordinator]
+      writes: false
+      cost: free
+      leaves_machine: nothing
+      detect: none
+  media-check:
+    purpose: 'read what a media file is: codec, size, length, and the text inside an image'
+    providers:
+    - id: ffprobe
+      kind: cli
+      runs: local
+      radar: FFmpeg
+      clients: [claude, opencode, coordinator]
+      writes: false
+      cost: free
+      leaves_machine: nothing
+      detect:
+        which: [ffprobe]
+    - id: tesseract
+      kind: cli
+      runs: local
+      radar: Tesseract
+      clients: [claude, opencode, coordinator]
+      writes: false
+      cost: free
+      leaves_machine: nothing
+      detect:
+        which: [tesseract]
+    - id: media-audit
+      kind: cli
+      runs: local
+      status: trial
+      maintainer: SVN11X
+      source: scripts/media.py
+      clients: [claude, opencode, coordinator]
+      writes: false
+      cost: free
+      leaves_machine: nothing
+      detect: always
+      evidence: alt text, size, weight, credits, SVG scripts and video captions of a whole repository
+  learning-design:
+    purpose: 'apply what the research says helps people learn: retrieval, spacing, mixing, feedback and worked examples'
+    providers:
+    - id: learning-science
+      kind: reference
+      runs: client
+      status: adopt
+      maintainer: SVN11X
+      source: skills/web-improve/references/learning-science.md
+      clients: [claude, opencode, coordinator]
+      writes: false
+      cost: free
+      leaves_machine: nothing
+      detect: {skill: web-improve}
+      evidence: each practice with the study behind it
+    - id: learn-agent
+      kind: reference
+      runs: client
+      radar: learn
+      clients: [claude, opencode]
+      writes: false
+      cost: free
+      leaves_machine: nothing
+      detect: none
+  question-quality:
+    purpose: 'check that practice questions are correct and teach: keys, explanations, balance and topics'
+    providers:
+    - id: learning-check
+      kind: cli
+      runs: local
+      status: trial
+      maintainer: SVN11X
+      source: scripts/learning_check.py
+      clients: [claude, opencode, coordinator]
+      writes: false
+      cost: free
+      leaves_machine: nothing
+      detect: {signal: learning-content}
+      evidence: run on the question banks of three of the owner's repositories on 2026-11-16
+  writing-check:
+    purpose: measure how hard a text is to read and what a reader would trip on
+    providers:
+    - id: text-check
+      kind: cli
+      runs: local
+      status: trial
+      maintainer: SVN11X
+      source: scripts/text_check.py
+      clients: [claude, opencode, coordinator]
+      writes: false
+      cost: free
+      leaves_machine: nothing
+      detect: always
+      evidence: Szigriszt-Pazos with the INFLESZ scale in Spanish, Flesch in English, and the findings of plain language guidance
+    - id: vale
+      kind: cli
+      runs: local
+      radar: Vale
+      clients: [claude, opencode, coordinator]
+      writes: false
+      cost: free
+      leaves_machine: nothing
+      detect: {signal: vale}
+    - id: markdownlint
+      kind: cli
+      runs: local
+      status: assess
+      maintainer: David Anson
+      source: https://github.com/DavidAnson/markdownlint
+      clients: [claude, opencode, coordinator]
+      writes: false
+      cost: free
+      leaves_machine: nothing
+      detect:
+        which: [markdownlint]
+      evidence: named in the owner's guide of 2026-11-15, not tested
+  comprehension-test:
+    purpose: 'show with real readers that the page helps: they do its task and answer its questions'
+    providers:
+    - id: reader-test
+      kind: manual
+      runs: local
+      status: adopt
+      maintainer: the owner
+      source: scripts/text_check.py
+      clients: [claude, opencode, coordinator]
+      writes: false
+      cost: free
+      leaves_machine: nothing
+      detect: always
+      evidence: text_check.py protocol writes the card, five readers of the audience do it, text_check.py evidence reads the result
+  ux-review:
+    purpose: judge a page against usability heuristics and the task it is for
+    providers:
+    - id: web-improve
+      kind: skill
+      runs: client
+      status: adopt
+      maintainer: SVN11X
+      source: skills/web-improve
+      clients: [claude, opencode]
+      writes: true
+      cost: free
+      leaves_machine: nothing
+      detect: {skill: web-improve}
+      evidence: named in the owner's guide of 2026-11-15, not tested
+    - id: impeccable
+      kind: cli
+      runs: local
+      radar: Impeccable
+      clients: [claude, opencode, coordinator]
+      writes: false
+      cost: free
+      leaves_machine: nothing
+      detect: none
+    - id: ux-heuristics
+      kind: reference
+      runs: client
+      status: adopt
+      maintainer: SVN11X
+      source: skills/web-improve/references/writing-and-usability.md
+      clients: [claude, opencode, coordinator]
+      writes: false
+      cost: free
+      leaves_machine: nothing
+      detect: {skill: web-improve}
+      evidence: Nielsen's ten heuristics and a task test with five people
+  performance:
+    purpose: keep the page fast on a mid-range phone
+    providers:
+    - id: lighthouse-ci
+      kind: cli
+      runs: local
+      radar: Lighthouse CI
+      clients: [claude, opencode, coordinator]
+      writes: false
+      cost: free
+      leaves_machine: nothing
+      detect: {signal: lighthouse}
+    - id: web-improve
+      kind: skill
+      runs: client
+      status: adopt
+      maintainer: SVN11X
+      source: skills/web-improve
+      clients: [claude, opencode]
+      writes: false
+      cost: free
+      leaves_machine: nothing
+      detect: {skill: web-improve}
+      evidence: named in the owner's guide of 2026-11-15, not tested
+  powershell-check:
+    purpose: lint and test PowerShell scripts
+    providers:
+    - id: psscriptanalyzer
+      kind: module
+      runs: local
+      status: assess
+      maintainer: Microsoft
+      source: https://github.com/PowerShell/PSScriptAnalyzer
+      needs_signal: powershell
+      clients: [claude, opencode, coordinator]
+      writes: false
+      cost: free
+      leaves_machine: nothing
+      detect:
+        which: [pwsh, powershell]
+      evidence: named in the owner's guide of 2026-11-15, not tested
+    - id: pester
+      kind: test-runner
+      runs: local
+      status: assess
+      maintainer: the Pester team
+      source: https://pester.dev/docs/quick-start
+      needs_signal: powershell
+      clients: [claude, opencode, coordinator]
+      writes: false
+      cost: free
+      leaves_machine: nothing
+      detect: {signal: pester}
+      evidence: named in the owner's guide of 2026-11-15, not tested
+  data-validation:
+    purpose: check tables, schemas and batches of data
+    providers:
+    - id: pandera
+      kind: library
+      runs: local
+      status: assess
+      maintainer: the Pandera team
+      source: https://pandera.readthedocs.io/
+      needs_signal: python
+      clients: [claude, opencode, coordinator]
+      writes: false
+      cost: free
+      leaves_machine: nothing
+      detect: {signal: data-validation}
+      evidence: named in the owner's guide of 2026-11-15, not tested
+    - id: duckdb
+      kind: cli
+      runs: local
+      status: assess
+      maintainer: DuckDB Labs
+      source: https://github.com/duckdb/duckdb
+      clients: [claude, opencode, coordinator]
+      writes: false
+      cost: free
+      leaves_machine: nothing
+      detect:
+        which: [duckdb]
+      evidence: named in the owner's guide of 2026-11-15, not tested
+    - id: sqlite-cli
+      kind: cli
+      runs: local
+      status: assess
+      maintainer: the SQLite team
+      source: https://sqlite.org/cli.html
+      needs_signal: sqlite
+      clients: [claude, opencode, coordinator]
+      writes: false
+      cost: free
+      leaves_machine: nothing
+      detect:
+        which: [sqlite3]
+      evidence: named in the owner's guide of 2026-11-15, not tested
+    - id: sqlfluff
+      kind: cli
+      runs: local
+      status: assess
+      maintainer: the SQLFluff team
+      source: https://docs.sqlfluff.com/en/stable/
+      needs_signal: sql
+      clients: [claude, opencode, coordinator]
+      writes: false
+      cost: free
+      leaves_machine: nothing
+      detect:
+        which: [sqlfluff]
+      evidence: named in the owner's guide of 2026-11-15, not tested
+    - id: dvc
+      kind: cli
+      runs: local
+      status: assess
+      maintainer: Iterative
+      source: https://dvc.org/doc/start
+      clients: [claude, opencode, coordinator]
+      writes: false
+      cost: free
+      leaves_machine: nothing
+      detect: {signal: dvc}
+      evidence: named in the owner's guide of 2026-11-15, not tested
+    - id: nbval
+      kind: library
+      runs: local
+      status: assess
+      maintainer: the nbval team
+      source: https://nbval.readthedocs.io/en/latest/
+      needs_signal: notebook
+      clients: [claude, opencode, coordinator]
+      writes: false
+      cost: free
+      leaves_machine: nothing
+      detect: {signal: nbval}
+      evidence: named in the owner's guide of 2026-11-15, not tested
+    - id: nbstripout
+      kind: cli
+      runs: local
+      status: assess
+      maintainer: Florian Rathgeber
+      source: https://github.com/kynan/nbstripout
+      needs_signal: notebook
+      clients: [claude, opencode, coordinator]
+      writes: false
+      cost: free
+      leaves_machine: nothing
+      detect:
+        which: [nbstripout]
+      evidence: named in the owner's guide of 2026-11-15, not tested
+  database-access:
+    purpose: query a database the project really uses, with bounded queries
+    providers:
+    - id: mcp-toolbox
+      kind: mcp
+      runs: local
+      status: assess
+      maintainer: Google
+      source: https://github.com/googleapis/mcp-toolbox
+      clients: [claude, opencode]
+      credentials: database credentials
+      writes: false
+      cost: free
+      leaves_machine: the queries, sent to the database it connects
+      detect: {mcp: toolbox}
+      evidence: named in the owner's guide of 2026-11-15, not tested
+    - id: dbt-mcp
+      kind: mcp
+      runs: local
+      status: assess
+      maintainer: dbt Labs
+      source: https://github.com/dbt-labs/dbt-mcp
+      needs_signal: dbt
+      clients: [claude, opencode]
+      writes: false
+      cost: free
+      leaves_machine: project metadata and queries, sent to the dbt platform when it is configured
+      detect: {mcp: dbt}
+      evidence: named in the owner's guide of 2026-11-15, not tested
+    - id: supabase-mcp
+      kind: mcp
+      runs: remote
+      status: assess
+      maintainer: Supabase
+      source: https://supabase.com/docs/guides/getting-started/mcp
+      clients: [claude, opencode]
+      credentials: a Supabase token
+      writes: false
+      cost: free
+      leaves_machine: queries and project data, sent to Supabase
+      detect: {mcp: supabase}
+      evidence: named in the owner's guide of 2026-11-15, not tested
+    - id: huggingface-mcp
+      kind: mcp
+      runs: remote
+      status: assess
+      maintainer: Hugging Face
+      source: https://huggingface.co/docs/hub/agents-mcp
+      clients: [claude, opencode]
+      writes: false
+      cost: free
+      leaves_machine: the search words, sent to Hugging Face
+      detect: {mcp: huggingface}
+      evidence: named in the owner's guide of 2026-11-15, not tested
+  api-contract:
+    purpose: check an API against its description and its consumers
+    providers:
+    - id: redocly
+      kind: cli
+      runs: local
+      status: assess
+      maintainer: Redocly
+      source: https://redocly.com/docs/cli
+      needs_signal: openapi
+      clients: [claude, opencode, coordinator]
+      writes: false
+      cost: free
+      leaves_machine: nothing
+      detect: {signal: openapi}
+      evidence: named in the owner's guide of 2026-11-15, not tested
+    - id: pact
+      kind: library
+      runs: local
+      status: assess
+      maintainer: the Pact Foundation
+      source: https://docs.pact.io/
+      clients: [claude, opencode, coordinator]
+      writes: false
+      cost: free
+      leaves_machine: nothing
+      detect: {signal: pact}
+      evidence: named in the owner's guide of 2026-11-15, not tested
+    - id: msw
+      kind: library
+      runs: local
+      status: assess
+      maintainer: the MSW team
+      source: https://mswjs.io/docs/
+      needs_signal: node
+      clients: [claude, opencode, coordinator]
+      writes: false
+      cost: free
+      leaves_machine: nothing
+      detect: {signal: msw}
+      evidence: named in the owner's guide of 2026-11-15, not tested
+    - id: postman-mcp
+      kind: mcp
+      runs: remote
+      status: assess
+      maintainer: Postman
+      source: https://github.com/postmanlabs/postman-mcp-server
+      clients: [claude, opencode]
+      credentials: a Postman key
+      writes: false
+      cost: free
+      leaves_machine: collections and requests, sent to Postman
+      detect: {mcp: postman}
+      evidence: named in the owner's guide of 2026-11-15, not tested
+  ci-maintenance:
+    purpose: keep workflows, dependencies and releases safe and current
+    providers:
+    - id: actionlint
+      kind: cli
+      runs: local
+      radar: actionlint
+      clients: [claude, opencode, coordinator]
+      writes: false
+      cost: free
+      leaves_machine: nothing
+      detect:
+        which: [actionlint]
+    - id: zizmor
+      kind: cli
+      runs: local
+      radar: zizmor
+      clients: [claude, opencode, coordinator]
+      writes: false
+      cost: free
+      leaves_machine: nothing
+      detect:
+        which: [zizmor]
+    - id: dependabot
+      kind: service
+      runs: remote
+      status: assess
+      maintainer: GitHub
+      source: https://docs.github.com/en/code-security/dependabot/dependabot-version-updates/about-dependabot-version-updates
+      clients: [claude, opencode, coordinator]
+      writes: false
+      cost: free
+      leaves_machine: the manifests, which GitHub already hosts
+      detect: none
+      evidence: named in the owner's guide of 2026-11-15, not tested
+    - id: renovate
+      kind: cli
+      runs: remote
+      radar: Renovate
+      clients: [claude, opencode, coordinator]
+      writes: false
+      cost: free
+      leaves_machine: the manifests, read by the Renovate app
+      detect: none
+    - id: release-please
+      kind: service
+      runs: remote
+      status: assess
+      maintainer: Google
+      source: https://github.com/googleapis/release-please
+      clients: [claude, opencode, coordinator]
+      writes: false
+      cost: free
+      leaves_machine: the commit history, which GitHub already hosts
+      detect: none
+      evidence: named in the owner's guide of 2026-11-15, not tested
+  supply-chain:
+    purpose: find secrets, known vulnerabilities and licenses before shipping
+    providers:
+    - id: gitleaks
+      kind: cli
+      runs: local
+      status: adopt
+      maintainer: Zachary Rice
+      source: https://github.com/gitleaks/gitleaks
+      clients: [claude, opencode, coordinator]
+      writes: false
+      cost: free
+      leaves_machine: nothing
+      detect:
+        which: [gitleaks]
+      evidence: the standard's own CI runs it in check.yml
+    - id: osv-scanner
+      kind: cli
+      runs: remote
+      status: assess
+      maintainer: Google
+      source: https://github.com/google/osv-scanner
+      clients: [claude, opencode, coordinator]
+      writes: false
+      cost: free
+      leaves_machine: package names and versions, sent to the OSV database
+      detect:
+        which: [osv-scanner]
+      evidence: named in the owner's guide of 2026-11-15, not tested
+    - id: syft
+      kind: cli
+      runs: local
+      status: assess
+      maintainer: Anchore
+      source: https://github.com/anchore/syft
+      clients: [claude, opencode, coordinator]
+      writes: false
+      cost: free
+      leaves_machine: nothing
+      detect:
+        which: [syft]
+      evidence: named in the owner's guide of 2026-11-15, not tested
+    - id: reuse
+      kind: cli
+      runs: local
+      status: assess
+      maintainer: the FSFE
+      source: https://github.com/fsfe/reuse-tool
+      clients: [claude, opencode, coordinator]
+      writes: false
+      cost: free
+      leaves_machine: nothing
+      detect: {signal: reuse}
+      evidence: named in the owner's guide of 2026-11-15, not tested
+  infrastructure:
+    purpose: plan, test and inspect infrastructure the project declares
+    providers:
+    - id: terraform-test
+      kind: cli
+      runs: local
+      status: assess
+      maintainer: HashiCorp
+      source: https://developer.hashicorp.com/terraform/cli/commands/test
+      needs_signal: terraform
+      clients: [claude, opencode, coordinator]
+      writes: false
+      cost: free
+      leaves_machine: nothing
+      detect:
+        which: [terraform]
+      evidence: named in the owner's guide of 2026-11-15, not tested
+    - id: terraform-mcp
+      kind: mcp
+      runs: remote
+      status: assess
+      maintainer: HashiCorp
+      source: https://github.com/hashicorp/terraform-mcp-server
+      needs_signal: terraform
+      clients: [claude, opencode]
+      writes: false
+      cost: free
+      leaves_machine: provider and module names, sent to the Terraform Registry
+      detect: {mcp: terraform}
+      evidence: named in the owner's guide of 2026-11-15, not tested
+    - id: cloudflare-workers-vitest
+      kind: library
+      runs: local
+      status: assess
+      maintainer: Cloudflare
+      source: https://developers.cloudflare.com/workers/testing/vitest-integration/
+      needs_signal: cloudflare-worker
+      clients: [claude, opencode, coordinator]
+      writes: false
+      cost: free
+      leaves_machine: nothing
+      detect: {signal: vitest}
+      evidence: named in the owner's guide of 2026-11-15, not tested
+    - id: cloudflare-mcp
+      kind: mcp
+      runs: remote
+      status: assess
+      maintainer: Cloudflare
+      source: https://github.com/cloudflare/mcp-server-cloudflare
+      needs_signal: cloudflare-worker
+      clients: [claude, opencode]
+      credentials: a Cloudflare token
+      writes: false
+      cost: free
+      leaves_machine: account resources and queries, sent to Cloudflare
+      detect: {mcp: cloudflare}
+      evidence: named in the owner's guide of 2026-11-15, not tested
+    - id: kubernetes-mcp
+      kind: mcp
+      runs: local
+      status: assess
+      maintainer: the containers project
+      source: https://github.com/containers/kubernetes-mcp-server
+      needs_signal: kubernetes
+      clients: [claude, opencode]
+      writes: false
+      cost: free
+      leaves_machine: requests to the cluster it is pointed at
+      detect: {mcp: kubernetes}
+      evidence: named in the owner's guide of 2026-11-15, not tested
+    - id: azure-mcp
+      kind: mcp
+      runs: remote
+      status: assess
+      maintainer: Microsoft
+      source: https://learn.microsoft.com/en-us/azure/developer/azure-mcp-server/overview
+      clients: [claude, opencode]
+      credentials: an Azure login
+      writes: false
+      cost: free
+      leaves_machine: requests to the Azure subscription
+      detect: {mcp: azure}
+      evidence: named in the owner's guide of 2026-11-15, not tested
+    - id: oci-cli
+      kind: cli
+      runs: remote
+      status: assess
+      maintainer: Oracle
+      source: https://docs.oracle.com/en-us/iaas/Content/API/Concepts/cliconcepts.htm
+      clients: [claude, opencode, coordinator]
+      credentials: an OCI profile
+      writes: false
+      cost: free
+      leaves_machine: requests to the OCI tenancy
+      detect:
+        which: [oci]
+      evidence: named in the owner's guide of 2026-11-15, not tested
+  observability:
+    purpose: read the errors, metrics and traces of a running application
+    providers:
+    - id: sentry-mcp
+      kind: mcp
+      runs: remote
+      status: assess
+      maintainer: Sentry
+      source: https://docs.sentry.io/product/sentry-mcp/
+      clients: [claude, opencode]
+      credentials: a Sentry login
+      writes: false
+      cost: free
+      leaves_machine: issue and event queries, sent to Sentry
+      detect: {mcp: sentry}
+      evidence: named in the owner's guide of 2026-11-15, not tested
+    - id: grafana-mcp
+      kind: mcp
+      runs: remote
+      status: assess
+      maintainer: Grafana Labs
+      source: https://github.com/grafana/mcp-grafana
+      clients: [claude, opencode]
+      credentials: a Grafana token
+      writes: false
+      cost: free
+      leaves_machine: dashboard and metric queries, sent to the Grafana instance
+      detect: {mcp: grafana}
+      evidence: named in the owner's guide of 2026-11-15, not tested
+    - id: opentelemetry-collector
+      kind: service
+      runs: local
+      status: assess
+      maintainer: the OpenTelemetry project
+      source: https://opentelemetry.io/docs/collector/
+      clients: [claude, opencode, coordinator]
+      writes: false
+      cost: free
+      leaves_machine: nothing
+      detect: none
+      evidence: named in the owner's guide of 2026-11-15, not tested
+  work-tracking:
+    purpose: read the issue or the specification a task comes from
+    providers:
+    - id: gh-issues
+      kind: cli
+      runs: local
+      status: adopt
+      maintainer: GitHub
+      source: https://cli.github.com/manual/
+      clients: [claude, opencode, coordinator]
+      credentials: the owner's gh login
+      writes: false
+      cost: free
+      leaves_machine: requests to the GitHub API with the owner's login
+      detect:
+        which: [gh]
+      evidence: the owner already uses gh
+    - id: linear-mcp
+      kind: mcp
+      runs: remote
+      status: assess
+      maintainer: Linear
+      source: https://linear.app/docs/mcp
+      clients: [claude, opencode]
+      writes: false
+      cost: free
+      leaves_machine: issue queries, sent to Linear
+      detect: {mcp: linear}
+      evidence: named in the owner's guide of 2026-11-15, not tested
+    - id: notion-mcp
+      kind: mcp
+      runs: remote
+      status: assess
+      maintainer: Notion
+      source: https://developers.notion.com/docs/mcp
+      clients: [claude, opencode]
+      writes: false
+      cost: free
+      leaves_machine: page queries, sent to Notion
+      detect: {mcp: notion}
+      evidence: named in the owner's guide of 2026-11-15, not tested
+    - id: atlassian-mcp
+      kind: mcp
+      runs: remote
+      status: assess
+      maintainer: Atlassian
+      source: https://www.atlassian.com/platform/remote-mcp-server
+      clients: [claude, opencode]
+      writes: false
+      cost: free
+      leaves_machine: Jira and Confluence queries, sent to Atlassian
+      detect: {mcp: atlassian}
+      evidence: named in the owner's guide of 2026-11-15, not tested
+    - id: azure-devops-mcp
+      kind: mcp
+      runs: remote
+      status: assess
+      maintainer: Microsoft
+      source: https://github.com/microsoft/azure-devops-mcp
+      clients: [claude, opencode]
+      writes: false
+      cost: free
+      leaves_machine: Boards, repository and pipeline queries, sent to Azure DevOps
+      detect: {mcp: azure-devops}
+      evidence: named in the owner's guide of 2026-11-15, not tested
+  docs-build:
+    purpose: build a document from its sources and convert between formats
+    providers:
+    - id: latexmk
+      kind: cli
+      runs: local
+      status: assess
+      maintainer: John Collins
+      source: https://ctan.org/pkg/latexmk
+      needs_signal: latex
+      clients: [claude, opencode, coordinator]
+      writes: false
+      cost: free
+      leaves_machine: nothing
+      detect:
+        which: [latexmk]
+      evidence: named in the owner's guide of 2026-11-15, not tested
+    - id: better-bibtex
+      kind: plugin
+      runs: local
+      status: assess
+      maintainer: Emiliano Heyns
+      source: https://retorque.re/zotero-better-bibtex/
+      needs_signal: bibliography
+      clients: [claude, opencode, coordinator]
+      writes: false
+      cost: free
+      leaves_machine: nothing
+      detect: none
+      evidence: named in the owner's guide of 2026-11-15, not tested
+    - id: pandoc
+      kind: cli
+      runs: local
+      status: assess
+      maintainer: John MacFarlane
+      source: https://pandoc.org/MANUAL.html
+      clients: [claude, opencode, coordinator]
+      writes: false
+      cost: free
+      leaves_machine: nothing
+      detect:
+        which: [pandoc]
+      evidence: named in the owner's guide of 2026-11-15, not tested
+    - id: quarto
+      kind: cli
+      runs: local
+      status: assess
+      maintainer: Posit
+      source: https://quarto.org/
+      needs_signal: quarto
+      clients: [claude, opencode, coordinator]
+      writes: false
+      cost: free
+      leaves_machine: nothing
+      detect:
+        which: [quarto]
+      evidence: named in the owner's guide of 2026-11-15, not tested
+    - id: markitdown
+      kind: cli
+      runs: local
+      status: assess
+      maintainer: Microsoft
+      source: https://github.com/microsoft/markitdown
+      clients: [claude, opencode, coordinator]
+      writes: false
+      cost: free
+      leaves_machine: nothing
+      detect:
+        which: [markitdown]
+      evidence: named in the owner's guide of 2026-11-15, not tested
+    - id: lychee
+      kind: cli
+      runs: remote
+      status: adopt
+      maintainer: the lychee team
+      source: https://github.com/lycheeverse/lychee
+      clients: [claude, opencode, coordinator]
+      writes: false
+      cost: free
+      leaves_machine: a request to every linked address
+      detect:
+        which: [lychee]
+      evidence: the standard's own CI runs it
+  hardware-check:
+    purpose: check schematics, boards and firmware without the hardware when possible
+    providers:
+    - id: kicad-cli
+      kind: cli
+      runs: local
+      status: assess
+      maintainer: the KiCad project
+      source: https://docs.kicad.org/9.0/en/cli/cli.html
+      needs_signal: kicad
+      clients: [claude, opencode, coordinator]
+      writes: false
+      cost: free
+      leaves_machine: nothing
+      detect:
+        which: [kicad-cli]
+      evidence: named in the owner's guide of 2026-11-15, not tested
+    - id: platformio-test
+      kind: cli
+      runs: local
+      status: assess
+      maintainer: PlatformIO Labs
+      source: https://docs.platformio.org/en/latest/advanced/unit-testing/index.html
+      needs_signal: firmware
+      clients: [claude, opencode, coordinator]
+      writes: false
+      cost: free
+      leaves_machine: nothing
+      detect:
+        which: [pio, platformio]
+      evidence: named in the owner's guide of 2026-11-15, not tested
+    - id: renode
+      kind: cli
+      runs: local
+      status: assess
+      maintainer: Antmicro
+      source: https://renode.readthedocs.io/en/latest/
+      needs_signal: firmware
+      clients: [claude, opencode, coordinator]
+      writes: false
+      cost: free
+      leaves_machine: nothing
+      detect:
+        which: [renode]
+      evidence: named in the owner's guide of 2026-11-15, not tested
+  mobile-test:
+    purpose: build and test a mobile or game project on a device or an emulator
+    providers:
+    - id: adb
+      kind: cli
+      runs: local
+      status: assess
+      maintainer: Google
+      source: https://developer.android.com/tools/adb
+      needs_signal: android
+      clients: [claude, opencode, coordinator]
+      writes: false
+      cost: free
+      leaves_machine: nothing
+      detect:
+        which: [adb]
+      evidence: named in the owner's guide of 2026-11-15, not tested
+    - id: appium
+      kind: cli
+      runs: local
+      status: assess
+      maintainer: the Appium project
+      source: https://appium.io/docs/en/latest/
+      clients: [claude, opencode, coordinator]
+      writes: false
+      cost: free
+      leaves_machine: nothing
+      detect:
+        which: [appium]
+      evidence: named in the owner's guide of 2026-11-15, not tested
+    - id: detox
+      kind: library
+      runs: local
+      status: assess
+      maintainer: Wix
+      source: https://github.com/wix/Detox
+      needs_signal: react-native
+      clients: [claude, opencode, coordinator]
+      writes: false
+      cost: free
+      leaves_machine: nothing
+      detect: {signal: react-native}
+      evidence: named in the owner's guide of 2026-11-15, not tested
+    - id: fastlane
+      kind: cli
+      runs: local
+      status: assess
+      maintainer: the fastlane team
+      source: https://docs.fastlane.tools/
+      clients: [claude, opencode, coordinator]
+      writes: false
+      cost: free
+      leaves_machine: nothing
+      detect:
+        which: [fastlane]
+      evidence: named in the owner's guide of 2026-11-15, not tested
+    - id: godot-cli
+      kind: cli
+      runs: local
+      status: assess
+      maintainer: the Godot project
+      source: https://docs.godotengine.org/en/stable/tutorials/editor/command_line_tutorial.html
+      needs_signal: godot
+      clients: [claude, opencode, coordinator]
+      writes: false
+      cost: free
+      leaves_machine: nothing
+      detect:
+        which: [godot]
+      evidence: named in the owner's guide of 2026-11-15, not tested
+    - id: unity-mcp
+      kind: mcp
+      runs: local
+      status: assess
+      maintainer: Coplay
+      source: https://github.com/CoplayDev/unity-mcp
+      needs_signal: unity
+      clients: [claude, opencode]
+      writes: false
+      cost: free
+      leaves_machine: nothing by itself
+      detect: {mcp: unity}
+      evidence: named in the owner's guide of 2026-11-15, not tested
+
 # The first recipe whose intent matches and that has the most signals and words wins. `signals_any` are
 # fingerprint signals of the folder the request is about. `words` name the subject of the request, in English
 # and Spanish. They also pick the folder when a repository holds several projects. `verbs` only tell two
@@ -179,6 +1371,74 @@ recipes:
     profile: docs
     capabilities: [docs-review]
     proof: the document builds and every reference resolves
+  - id: learning-site
+    intents: [work, review]
+    signals_any: [learning-content, web, static-web]
+    words: [aprender, aprendizaje, aprende, estudiar, estudio, estudiante, estudiantes, examen, exámenes, quiz, pregunta, preguntas, lección, lecciones, curso,
+      repaso, repasar, memorizar, recordar, practicar, práctica, flashcards, tarjetas, learn, learning, learner, learners, study, student, exam, question,
+      questions, lesson, lessons, course, flashcard, practice, retention, remember, certificación, certification]
+    profile: web
+    experience: true
+    capabilities: [learning-design, question-quality, writing-check, comprehension-test, ux-review, browser-test, accessibility, unit-test]
+    proof: the question audit shows no integrity error, every question explains why, practice mixes topics and comes back over days, and five learners finish
+      a lesson and answer its questions from memory
+    notes: learning is shown by what learners recall later, not by how the page looks
+  - id: content-clarity
+    intents: [work, review]
+    words: [texto, textos, redacción, redacta, reescribe, claridad, claro, clara, legible, entender, entienda, entiende, comprender, comprensión, explicación,
+      explica, copy, wording, readme, documentación, mensaje, mensajes, instrucciones, tono, text, writing, clear, clarity, readable, understand, docs, documentation,
+      instructions, message, messages, microcopy, ux]
+    capabilities: [writing-check, comprehension-test, ux-review]
+    proof: the text check shows no finding the owner did not accept, and five readers of the audience finish the task the page is for
+    notes: a readability score is a proxy. Only readers who finish the task show that the text helps
+  - id: visual-asset
+    intents: [work]
+    words: [diagrama, diagramas, diagram, diagrams, imagen, imágenes, image, images, ilustración, illustration, foto, fotos, photo, icono, iconos, icon, icons,
+      video, vídeo, videos, animación, animation, clip, clips, gráfico, gráficos, chart, charts, figura, figure, captura, screenshot, infografía, infographic,
+      gif, miniatura, thumbnail, esquema, visual, visuales]
+    capabilities: [diagram, image-search, image-create, image-attach, short-video, media-check, accessibility]
+    proof: every image has alt text, a size and a credit its license allows, the media audit shows nothing new, and every clip plays as H.264 or WebM with
+      captions and a poster
+    notes: keep the source of every diagram and clip next to the file it renders
+  - id: powershell-script
+    intents: [work]
+    signals_any: [powershell]
+    words: [powershell, ps1, script, instalación, install, setup]
+    profile: software
+    capabilities: [code-navigation, powershell-check, unit-test]
+    proof: PSScriptAnalyzer reports nothing new and a Pester test covers the changed branch, run in Windows PowerShell 5.1
+  - id: api-service
+    intents: [work]
+    signals_any: [openapi, pact, msw, cloudflare-worker]
+    words: [api, endpoint, contrato, contract, openapi, swagger, worker, servicio, service]
+    profile: software
+    capabilities: [code-navigation, api-contract, unit-test]
+    proof: the API description validates and a contract or mock test covers the change
+  - id: infra
+    intents: [work]
+    signals_any: [terraform, kubernetes, docker, cloudflare-worker]
+    words: [infra, infraestructura, infrastructure, terraform, despliegue, deploy, cluster, kubernetes, docker, contenedor, container]
+    profile: infra
+    capabilities: [infrastructure, supply-chain, unit-test]
+    proof: the plan or the test of the module passes and changes no resource outside the request
+  - id: hardware
+    intents: [work]
+    signals_any: [kicad, firmware]
+    profile: hardware
+    capabilities: [hardware-check, diagram, docs-build]
+    proof: the board passes its rule checks and the firmware tests pass in the emulator or on the board
+  - id: mobile-app
+    intents: [work]
+    signals_any: [android, ios, react-native, expo, godot, unity]
+    profile: software
+    capabilities: [code-navigation, mobile-test, unit-test]
+    proof: the build installs on an emulator or a device and the changed flow passes its test there
+  - id: ci-maintenance
+    intents: [work, review]
+    signals_any: [ci]
+    words: [workflow, workflows, actions, ci, pipeline, dependabot, renovate, dependencias, dependencies, release, versión]
+    capabilities: [ci-maintenance, supply-chain]
+    proof: actionlint and zizmor report nothing new and the workflow runs green on a pull request
   - id: general-code
     intents: [work]
     signals_any: [node, python, go, rust, typescript, dotnet, powershell]
@@ -191,3 +1451,42 @@ additions:
   - capability: library-docs
     words: [version, versión, upgrade, actualiza, migrate, migra, migration, migración, deprecated, obsoleto, api, breaking]
     why: the answer depends on the version of a library
+  - capability: diagram
+    words: [diagrama, diagramas, diagram, diagrams, esquema, flujo, flowchart, arquitectura, architecture]
+    why: the request asks for a diagram
+  - capability: image-search
+    words: [foto, fotos, photo, photos, busca una imagen, buscar imágenes, stock, find an image, imagen libre]
+    why: the request asks for an existing image
+  - capability: image-attach
+    words: [imagen, imágenes, image, images, foto, fotos, photo, ilustración, illustration, icono, icon]
+    why: an image needs alt text, a size and a credit
+  - capability: short-video
+    words: [video, vídeo, videos, clip, clips, animación, animation, gif]
+    why: the request asks for a clip
+  - capability: writing-check
+    words: [texto, textos, redacción, claridad, claro, entender, entienda, explicación, text, wording, clear, readable]
+    why: the request is about how the text reads
+  - capability: learning-design
+    words: [aprender, aprendizaje, estudiar, repaso, memorizar, learn, learning, study, retention]
+    why: the request is about learning
+  - capability: performance
+    words: [lento, lenta, rendimiento, carga, velocidad, slow, performance, speed, load time, pesa]
+    why: the request is about speed
+  - capability: supply-chain
+    words: [dependencia, dependencias, dependency, dependencies, vulnerabilidad, vulnerability, secreto, secret, licencia, license]
+    why: the request touches dependencies, secrets or licenses
+  - capability: observability
+    words: [producción, production, incidente, incident, sentry, grafana, logs, traza, trace, métricas, metrics]
+    why: the request is about a running application
+  - capability: work-tracking
+    words: [issue, jira, linear, notion, confluence, ticket, azure devops]
+    why: the task comes from a tracker
+  - capability: database-access
+    words: [base de datos, database, supabase, consulta sql, sql query, dbt, hugging face, dataset]
+    why: the request needs data a database or a hub holds
+  - capability: data-validation
+    words: [esquema de datos, schema, columnas, columns, nulos, nulls, tabla, tables, lote, batch, notebook]
+    why: the request is about the shape of data
+  - capability: docs-build
+    words: [pdf, word, docx, latex, compilar, build the document, pandoc, quarto, bibliografía, bibliography]
+    why: the request asks for a built document
