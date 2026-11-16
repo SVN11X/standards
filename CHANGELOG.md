@@ -12,6 +12,7 @@ All notable changes to this standard are documented here. The format follows [Ke
 
 ### Changed
 
+- The standard check flags a decision record with `Status: proposed` that names who accepted it, and an `accepted` one that does not. The decision template used to carry `Accepted by: owner` on a proposed record, so an AI tool could leave that false claim behind. It now says `pending`. OpenTutor decision 0001 had this mistake.
 - A work order goes to the coordinator by default, so the owner no longer types `consent --route coordinator`. `consent --route session` still keeps the session as the owner of the work.
 - `blockers.py` and `supervisor.py` are part of the scripts the skills plugin ships.
 
