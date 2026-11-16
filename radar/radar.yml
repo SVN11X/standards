@@ -728,3 +728,58 @@ entries:
     expression: []
     notes: ffprobe reads the container, codecs and length of a video, and ffmpeg converts it. Manim renders in GCP_Data_Engineer_Fieldnotes already need it. Check a shipped clip with ffprobe for H.264 or VP9, its size and its duration.
     evaluated: 2026-11-16
+  - name: Axe.Windows
+    url: https://github.com/microsoft/axe-windows
+    status: assess
+    profiles: [software]
+    kind: tool
+    license: MIT
+    cost: free
+    privacy: local
+    expression: [sober, balanced, expressive]
+    notes: Microsoft's rules engine for automated accessibility tests of Windows apps through UI Automation, the one inside Accessibility Insights for Windows. Its CLI, AxeWindowsCLI, installs from an MSI, needs the .NET runtime and scans a running process with --processId or --processName, and writes an .a11ytest file when it finds errors. Not run by the standard yet. scripts/desktop_ux.py uia checks a few of the same rules with pywinauto and prints JSON an agent reads.
+    evaluated: 2026-11-16
+  - name: Windows-MCP
+    url: https://github.com/CursorTouch/Windows-MCP
+    status: hold
+    profiles: [software]
+    kind: tool
+    license: MIT
+    cost: free
+    privacy: local, with full access to the desktop it runs on
+    expression: [sober, balanced, expressive]
+    notes: MCP server that lets an agent click, type, read the UI Automation tree and take screenshots on Windows, to reproduce a problem the way a person would. Version 0.8.8 needs Python 3.14 or later and uv. Its own security note says it runs with full system access, can do irreversible things, and that taking control back is best effort. Use it on a test account or machine with nothing else open, never on a desktop with open work. Not run by the standard yet. On hold, because FlaUI-MCP does the UX part with no shell, file or registry tool and no Python 3.14.
+    evaluated: 2026-11-16
+  - name: FlaUI-MCP
+    url: https://github.com/shanselman/FlaUI-MCP
+    status: assess
+    profiles: [software]
+    kind: tool
+    license: MIT
+    cost: free
+    privacy: local
+    expression: [sober, balanced, expressive]
+    notes: MCP server built on FlaUI and UI Automation. Its twelve tools launch an app, read its accessibility tree, click, type, send keys, fill fields, read text, list and focus windows, capture a window as PNG and close it. It has no shell, file or registry tool. A self-contained release for x64 needs no .NET runtime. It drives whatever has the keyboard focus, so run it with nothing else open. Suggested to the owner on 2026-11-16 for FocoLocal and OpenTutor. Not run by the standard yet.
+    evaluated: 2026-11-16
+  - name: Microsoft Learn MCP Server
+    url: https://learn.microsoft.com/api/mcp
+    status: trial
+    profiles: [software, web, infra]
+    kind: tool
+    license: a free service of Microsoft
+    cost: free
+    privacy: the questions asked go to Microsoft
+    expression: [sober, balanced, expressive]
+    notes: Remote MCP server that searches and fetches official Microsoft documentation. On 2026-11-16 it returned the Windows UX guidelines behind desktop_ux.py and the desktop-improve skill, Segoe UI at 9 points or larger, 23 by 23 pixel targets, 5 pixels between targets, and windows opened by the system that do not take the keyboard focus.
+    evaluated: 2026-11-16
+  - name: Accessibility Insights for Windows
+    url: https://accessibilityinsights.io/docs/windows/overview/
+    status: assess
+    profiles: [software]
+    kind: app
+    license: MIT
+    cost: free
+    privacy: local
+    expression: [sober, balanced, expressive]
+    notes: Microsoft's app to inspect the UI Automation tree of a window, run the Axe.Windows rules on it, and see the tab order. For a person to find why Tab skips or traps a control. Not run by the standard yet.
+    evaluated: 2026-11-16

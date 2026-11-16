@@ -73,6 +73,10 @@ NAME_SIGNALS = [
 # Text inside Go or Python source that only makes sense on Windows.
 WINDOWS_CODE = re.compile(r"golang\.org/x/sys/windows|syscall\.NewLazyDLL|ctypes\.windll|\bimport winreg\b|\bimport win32\w+|"
                           r"\bfrom win32\w+ import|\bimport tkinter\b|\bfrom tkinter import")
+# A tkinter interface, which desktop_ux.py can measure from inside its own process.
+TKINTER_CODE = re.compile(r"\bimport tkinter\b|\bfrom tkinter import|\bimport customtkinter\b")
+# Part of the cache key, so a saved fingerprint from an older detector is not reused.
+DETECTOR = "2"
 MANIFESTS = re.compile(r"(^|/)(package\.json|pyproject\.toml|go\.mod|Cargo\.toml|requirements[^/]*\.txt|\.standard\.yml|"
                        r"pnpm-workspace\.yaml|platformio\.ini|wrangler\.(toml|jsonc?))$")
 PROJECT_FILES = re.compile(r"(^|/)(package\.json|pyproject\.toml|go\.mod|Cargo\.toml)$")
@@ -225,12 +229,15 @@ def collect(root: Path, files: list[str], prefix: str = "") -> tuple[list[dict],
         commands.setdefault("test", "cargo test --quiet")
     checked = 0
     for name in scoped:
-        if "windows" in found or checked >= 200:
+        if checked >= 200 or {"windows", "tkinter"} <= found.keys():
             break
-        if name.endswith((".go", ".py")):
+        if name.endswith(".py") or (name.endswith(".go") and "windows" not in found):
             checked += 1
-            if WINDOWS_CODE.search(read(root, name)[:65536]):
+            text = read(root, name)[:65536]
+            if "windows" not in found and WINDOWS_CODE.search(text):
                 add("windows", name)
+            if name.endswith(".py") and "tkinter" not in found and TKINTER_CODE.search(text):
+                add("tkinter", name)
     # A page with no build step: HTML without a package manifest beside it.
     if "html" in found and "node" not in found:
         add("static-web", found["html"])
@@ -262,7 +269,7 @@ def subprojects(root: Path, files: list[str]) -> list[dict]:
 
 
 def cache_key(root: Path, revision: str | None, files: list[str]) -> str:
-    digest = hashlib.sha256((revision or "no-git").encode())
+    digest = hashlib.sha256(f"{DETECTOR}:{revision or 'no-git'}".encode())
     for name in sorted(f for f in files if MANIFESTS.search(f)):
         try:
             stat = (root / name).stat()

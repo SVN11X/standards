@@ -74,6 +74,14 @@ class FingerprintTests(Base):
         bare = fingerprint.fingerprint(repo(self.root / "go", GO))
         self.assertEqual((bare["standard"]["present"], bare["standard"]["profile"]), (False, None))
 
+    def test_a_tkinter_interface_is_its_own_signal(self):
+        tk_app = {"pyproject.toml": "[project]\nname = 'tutor'\n", "src/tutor/__init__.py": "",
+                  "src/tutor/core.py": "import json\n", "src/tutor/desktop.py": "import tkinter as tk\nimport ctypes\n"}
+        found = self.signals(fingerprint.fingerprint(repo(self.root / "tk", tk_app)))
+        self.assertEqual((found["tkinter"], found["windows"], found["desktop"]),
+                         ("src/tutor/desktop.py", "src/tutor/desktop.py", "src/tutor/desktop.py"))
+        self.assertNotIn("tkinter", self.signals(fingerprint.fingerprint(repo(self.root / "go", GO))))
+
     def test_go_code_for_windows_is_a_desktop_project_with_go_tests(self):
         found = self.signals(fingerprint.fingerprint(repo(self.root / "go", GO)))
         self.assertEqual((found["go"], found["windows"], found["desktop"]), ("go.mod", "main.go", "main.go"))

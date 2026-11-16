@@ -4,6 +4,19 @@ All notable changes to this standard are documented here. The format follows [Ke
 
 ## [Unreleased]
 
+## [1.17.0] - 2026-11-16
+
+### Added
+
+- Desktop UX (`docs/013-desktop-ux.md`). The owner found that no tool or agent improved the UX of the desktop apps OpenTutor (Python, tkinter) and FocoLocal (Go, Win32): every UX tool of the standard read web pages. `scripts/desktop_ux.py tk MODULE:FACTORY` builds a tkinter interface, opens every tab at every size, saves screenshots, and checks contrast, text size, target size and spacing, text cut by its widget, content hidden by a small window, and clicks without a key. `uia --title` reads the UI Automation tree of a running window of any technology with pywinauto and checks names, keyboard focus, target size and controls outside the window. `shot --title` saves a window. `protocol` and `evidence` prepare and read a usability test with five people, with task success, time and the System Usability Scale. Each rule names its source in WCAG 2.2 or the Windows UX guidelines.
+- On a clone of OpenTutor in a Linux virtual display it found a minimum window height of 640 px where the content needs 663, which hides the last setting without a scrollbar, and five checkboxes 21 px tall and too close together. Nothing was run on Windows yet.
+- The `desktop-tester` agent (Sonnet) runs those measures, judges the screenshots against the ten usability heuristics and reports which findings were measured and which were judged. The router names it for the `windows-app` and `learning-app` recipes and for a desktop or tkinter folder.
+- The capabilities `desktop-ux` (desktop_ux.py, Axe.Windows, Windows-MCP) and `usability-test` in `settings/recipes.yml`, on the `windows-app` and `learning-app` recipes. `learning-app` drops the web `ux-review`. Axe.Windows and Windows-MCP are radar entries with status assess, and Windows-MCP 0.8.8 is in the MCP catalog with its warning that it has full access to the desktop.
+- The `desktop-improve` skill: do the task the way a person does in the running executable, fix the code, do the same task again, and show the screenshots before and after. It works on a test profile and checks that a window the system opens does not take the keyboard from the app the person is typing in, as the Windows window management guidelines ask. The owner proposed this loop and FlaUI-MCP on 2026-11-16.
+- FlaUI-MCP is the first MCP server of `desktop-ux`, with no shell, file or registry tool. Windows-MCP is on hold, because it has full access to the system and needs Python 3.14. Accessibility Insights for Windows is in the radar. The windows-app recipe also answers to notice, tray, dialog, popup and keyboard words.
+- The MCP catalog holds remote servers reached by URL. `mcp config` prints an `http` block for Claude Code and a `remote` block for OpenCode, and `verify.py` asks such a server for an https URL. The Microsoft Learn MCP server moves to trial, after it returned the Windows guidelines behind these rules.
+- The fingerprint has a `tkinter` signal, and its cache key names the detector version, so a fingerprint saved by an older detector is not reused.
+
 ## [1.16.1] - 2026-11-16
 
 ### Fixed

@@ -219,7 +219,11 @@ def check_settings(repo: Path) -> list[dict]:
         if server.get("status") not in radar_status:
             bad.append(f"{server.get('name')}: status")
         pinned = re.search(r"@\d+\.\d+\.\d+|==\d+\.\d+\.\d+", launch)
-        if server.get("status") in {"adopt", "trial"} and not pinned:
+        if server.get("url"):
+            # A remote server has no version to pin. It must at least be reached over HTTPS.
+            if not str(server["url"]).startswith("https://") or launch:
+                bad.append(f"{server.get('name')}: a remote server needs an https url and no launch")
+        elif server.get("status") in {"adopt", "trial"} and not pinned:
             bad.append(f"{server.get('name')}: not pinned")
         if "latest" in launch:
             bad.append(f"{server.get('name')}: uses latest")

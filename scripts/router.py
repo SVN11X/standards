@@ -352,6 +352,7 @@ def scope_signals(fp: dict, folder: str) -> tuple[list[dict], dict, str]:
 
 LEARNING = {"learning-site", "learning-app", "content-clarity", "docs-academic"}
 WEB = {"web-experience", "web-fix", "learning-site"}
+DESKTOP = {"windows-app", "learning-app"}
 
 
 def fitting_agents(decision: dict) -> list[str]:
@@ -362,6 +363,8 @@ def fitting_agents(decision: dict) -> list[str]:
         out.append("content-auditor before and after content changes.")
     if decision.get("recipe") in WEB or signals & {"web", "static-web"}:
         out.append("web-tester after a page changes.")
+    if decision.get("recipe") in DESKTOP or signals & {"desktop", "tkinter"}:
+        out.append("For a window, notice, tray or dialog: the desktop-improve skill, then desktop-tester.")
     return out
 
 

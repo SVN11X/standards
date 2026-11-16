@@ -26,6 +26,14 @@ class McpConfigTests(unittest.TestCase):
         self.assertNotIn("disabled", server)
         self.assertIsInstance(server["command"], list)
 
+    def test_a_remote_server_is_reached_by_url_and_runs_nothing_here(self):
+        self.assertEqual(orchestrate.mcp_config("microsoft-learn", "claude"),
+                         {"mcpServers": {"microsoft-learn": {"type": "http", "url": "https://learn.microsoft.com/api/mcp"}}})
+        self.assertEqual(orchestrate.mcp_config("microsoft-learn", "opencode")["mcp"]["microsoft-learn"],
+                         {"type": "remote", "url": "https://learn.microsoft.com/api/mcp", "enabled": True})
+        self.assertNotIn("enabled", orchestrate.mcp_config("microsoft-learn", "opencode", "v2")["mcp"]["servers"]["microsoft-learn"])
+        self.assertEqual(orchestrate.mcp_inspect("microsoft-learn")["status"], "SKIP")
+
     def test_an_unknown_server_is_refused(self):
         with self.assertRaises(SystemExit):
             orchestrate.mcp_config("no-such-server", "opencode", "v2")

@@ -1992,6 +1992,13 @@ def mcp_config(name: str, client: str, opencode_format: str = "v1") -> dict:
     server = next((s for s in mcp_catalog() if s["name"] == name), None)
     if server is None:
         raise SystemExit(f"{name} is not in settings/mcp/catalog.yml")
+    if server.get("url"):
+        # A remote server: the client connects over HTTP and nothing runs on this machine.
+        if client == "claude":
+            return {"mcpServers": {name: {"type": "http", "url": server["url"]}}}
+        if opencode_format == "v2":
+            return {"mcp": {"servers": {name: {"type": "remote", "url": server["url"]}}}}
+        return {"mcp": {name: {"type": "remote", "url": server["url"], "enabled": True}}}
     launch = windows_launch(server["launch"])
     if client == "claude":
         return {"mcpServers": {name: {"command": launch[0], "args": launch[1:], **({"env": server["env"]} if server.get("env") else {})}}}
@@ -2005,6 +2012,8 @@ def mcp_inspect(name: str, timeout: int = 180) -> dict:
     server = next((s for s in mcp_catalog() if s["name"] == name), None)
     if server is None:
         return {"status": "ERROR", "error": "not in the catalog"}
+    if server.get("url"):
+        return {"status": "SKIP", "error": "a remote server: list its tools from the client, for example /mcp in Claude Code"}
     if not shutil.which("npx"):
         return {"status": "SKIP", "error": "npx is not installed"}
     inspector = load_yaml(MCP_CATALOG).get("inspector", "@modelcontextprotocol/inspector")
