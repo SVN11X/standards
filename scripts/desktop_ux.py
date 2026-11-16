@@ -46,8 +46,8 @@ SOURCES = {
     "name": "WCAG 2.2, 4.1.2 Name, Role, Value: every control has a name assistive technology reads. "
             "https://www.w3.org/TR/WCAG22/#name-role-value",
     "labels": "WCAG 2.2, 2.4.6 Headings and Labels: labels describe their purpose. https://www.w3.org/TR/WCAG22/#headings-and-labels",
-    "sus": "Brooke 1996, the System Usability Scale, retold in Brooke 2013: https://uxpajournal.org/sus-a-retrospective/. "
-           "68 is the average score of hundreds of studies (Sauro 2011)",
+    "sus": "Brooke 1996, the System Usability Scale, retold in Brooke 2013, Journal of Usability Studies 8(2). "
+           "https://en.wikipedia.org/wiki/System_usability_scale. 68 is the average score of hundreds of studies (Sauro 2011)",
     "people": "Nielsen and Landauer 1993: five people find most usability problems of a design. "
               "https://www.nngroup.com/articles/why-you-only-need-to-test-with-5-users/",
     "heuristics": "Nielsen 1994, ten usability heuristics. https://www.nngroup.com/articles/ten-usability-heuristics/",

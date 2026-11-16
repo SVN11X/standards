@@ -762,7 +762,7 @@ entries:
     notes: MCP server built on FlaUI and UI Automation. Its twelve tools launch an app, read its accessibility tree, click, type, send keys, fill fields, read text, list and focus windows, capture a window as PNG and close it. It has no shell, file or registry tool. A self-contained release for x64 needs no .NET runtime. It drives whatever has the keyboard focus, so run it with nothing else open. Suggested to the owner on 2026-11-16 for FocoLocal and OpenTutor. Not run by the standard yet.
     evaluated: 2026-11-16
   - name: Microsoft Learn MCP Server
-    url: https://learn.microsoft.com/api/mcp
+    url: https://learn.microsoft.com/training/support/mcp
     status: trial
     profiles: [software, web, infra]
     kind: tool
