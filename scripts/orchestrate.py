@@ -10,6 +10,7 @@ Commands:
   models             per task type: discovered, tested and authorized models with the evidence expiry date
   delegate           run one task on OpenCode (in its own worktree) or on Ollama, then verify it
   runs               list delegated runs and their state, or show one
+  runs ID --clean    remove the worktree and branch of a finished delegation
   bench              compare executors on synthetic tasks and keep the history, or print the report
   consent            record in the owner's local file a folder's privacy class, a free model or the cost mode
   merge-opencode     merge the standard's OpenCode config into the owner's, keeping the stricter rule
@@ -1357,6 +1358,37 @@ def record(run_data: dict) -> Path:
     return path
 
 
+def clean_run(run_id: str, force: bool = False) -> dict:
+    """Remove the worktree and the delegate/<id> branch of a finished run.
+
+    A verified commit that the current branch of the repository does not hold yet is kept unless `force`, because
+    nothing else keeps it. The run record stays, with its commit."""
+    data = json.loads((home() / "runs" / f"{run_id}.json").read_text(encoding="utf-8"))
+    if data.get("state") in ("planned", "approved", "running"):
+        raise RuntimeError(f"run {run_id} is still {data['state']}")
+    repo = Path(data["repo"])
+    branch = data.get("branch") or f"delegate/{run_id}"
+    commit = data.get("commit")
+    if data.get("state") == "verified" and commit and not force:
+        pending = git(repo, "cherry", "HEAD", commit, data.get("base") or f"{commit}^", check=False)
+        if any(line.startswith("+") for line in pending.splitlines()):
+            raise RuntimeError(f"the verified commit {commit[:12]} is not in the current branch yet. "
+                               f"Integrate it with git cherry-pick {commit[:12]}, or pass --force to drop it")
+    removed = []
+    worktree = home() / "worktrees" / run_id
+    if worktree.exists():
+        git(repo, "worktree", "remove", "--force", str(worktree), check=False)
+        if not worktree.exists():
+            removed.append(str(worktree))
+    git(repo, "worktree", "prune", check=False)
+    if git(repo, "branch", "--list", branch, check=False):
+        git(repo, "branch", "-D", branch)
+        removed.append(branch)
+    data.update(worktree=str(worktree) if worktree.exists() else None, cleaned=now())
+    record(data)
+    return {"id": run_id, "removed": removed, "left": [str(worktree)] if worktree.exists() else []}
+
+
 def set_state(run_data: dict, state: str, note: str = "") -> None:
     assert state in STATES
     run_data["state"] = state
@@ -2036,6 +2068,8 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--mode", choices=modes, help="a stricter cost mode for this run")
     p = sub.add_parser("runs")
     p.add_argument("id", nargs="?")
+    p.add_argument("--clean", action="store_true", help="remove the worktree and the delegate branch of a finished run")
+    p.add_argument("--force", action="store_true", help="with --clean, also drop a verified commit not integrated yet")
     p = sub.add_parser("bench")
     p.add_argument("--task", choices=BENCH_NAMES, default="fix-bug")
     p.add_argument("--executors", nargs="*", default=[],
@@ -2124,12 +2158,21 @@ def main(argv: list[str] | None = None) -> int:
         return 0 if result["state"] == "verified" else 1
     if args.command == "runs":
         folder = home() / "runs"
+        if args.id and args.clean:
+            try:
+                emit(clean_run(args.id, args.force), True)
+            except (OSError, RuntimeError, ValueError) as error:
+                print(f"not cleaned: {error}")
+                return 1
+            return 0
         if args.id:
             print((folder / f"{args.id}.json").read_text(encoding="utf-8"))
             return 0
         for path in sorted(folder.glob("*.json"))[-20:]:
             data = json.loads(path.read_text(encoding="utf-8"))
-            print(f"{data['id']}  {data['executor']:<9} {data['state']:<9} {data.get('model') or '-'}  {data['task'][:60]!r}")
+            why = ((data.get("history") or [{}])[-1].get("note") or "").replace("\n", " ")
+            print(f"{data['id']}  {data['executor']:<9} {data['state']:<9} {data.get('model') or '-'}  {data['task'][:50]!r}"
+                  + (f"  {why[:100]}" if why else ""))
         return 0
     if args.command == "bench":
         if args.report:
