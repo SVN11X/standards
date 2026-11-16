@@ -130,6 +130,15 @@ class ControlCases(Base):
             self.assertFalse(any("context7" in line for line in decision["leaves_machine"]))
             self.assertFalse(any(c["runs"] == "remote" for c in decision["capabilities"] if c["provider"]))
 
+    def test_with_merges_allowed_the_permission_names_the_checked_merge(self):
+        home = Path(os.environ["STANDARDS_HOME"])
+        home.mkdir(parents=True, exist_ok=True)
+        (home / "local.yml").write_text("autopilot:\n  merge: when-green\n", encoding="utf-8")
+        decision = self.decide("Sube los cambios y abre un PR", permission_mode="default")
+        self.assertIn("merge_when_green.py", decision["permission"])
+        self.assertIn("deploying waits for the owner", decision["permission"])
+        self.assertNotIn("merge_when_green", self.decide("Explica el router")["permission"])
+
     def test_control_a_publication_goes_through_the_configured_permission(self):
         decision = self.decide("Sube los cambios y abre un PR", permission_mode="default")
         self.assertEqual((decision["intent"], decision["permission_mode"]), ("publish", "default"))

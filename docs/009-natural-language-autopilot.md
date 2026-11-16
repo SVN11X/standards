@@ -45,14 +45,24 @@ For another test runner, extend the trusted command catalog with tests in a sepa
 GitHub must have these conditions before a merge can be scheduled. If protection cannot be verified, the command may still create the PR, but will stop **without enabling auto-merge**:
 
 1. Authenticated `gh` with write permission to the repository.
-2. Base branch `main` with verifiable branch protection, **required status checks**, and up-to-date branch requirement (`strict=true`). The command refuses to weaken/create branch protection itself.
+2. Base branch `main` with **required status checks**: a ruleset with a required status checks rule (what `settings/ruleset-main.json` applies), or classic branch protection with `strict=true`. The command refuses to weaken or create protection itself. This applies to GitHub's own auto-merge, used when checks are not followed.
 3. GitHub repository setting **Allow auto-merge** enabled, or compatible merge-queue behavior.
 4. Green-risk units, each with an independent `pass` review; no failed, blocked or incomplete unit; final regression passing in the integration worktree.
-5. Existing **Claude Code/Git/standards permissions** must permit the actual push/PR/merge operations. This script does not silently change those rules. If `gh pr merge` is denied, run the approved operation yourself; it will not override a denial.
+5. Existing **Claude Code/Git/standards permissions** must permit the actual push/PR/merge operations. This script does not silently change those rules. If `gh pr merge` is denied, run the approved operation yourself; it will not override a denial. With the owner's setting below, merges go through `scripts/merge_when_green.py`, which the guard hook lets through.
 
 GitHub's auto-merge may remain pending until required reviews and checks finish. The CLI returning success **does not prove the PR is already merged**; check its final state with `gh pr view <number>`.
 
-Branch protection may be implemented through organization rulesets rather than the classic branch-protection endpoint. This conservative first version does **not** auto-merge if it cannot verify classic branch protection; it fails closed for the merge step, leaving any created PR available for manual review. Use `--publish pr` to publish without requesting a merge.
+If neither a ruleset nor classic protection with required checks can be read, the command fails closed for the merge step and leaves the PR open for the owner. Use `--publish pr` to publish without requesting a merge.
+
+## Merging without the owner
+
+The owner decides once, on their machine:
+
+```
+python scripts/orchestrate.py consent --merge when-green
+```
+
+From then on an agent merges with `python scripts/merge_when_green.py <PR> --wait 1800`. It merges only when the pull request is open, has no conflict, changes no workflow, deploy or secret file, and every check on its head passed. The merge names that head with `--match-head-commit`, so a later push cannot slip in, and never uses `--admin`, so every rule of the repository still applies. A direct `gh pr merge` is answered by the guard hook with that command. `plan_autopilot.py --publish pr` merges the same way once the checks it follows pass. `consent --merge ask` turns it off. Deploys, secrets and history rewrites always wait for the owner.
 
 ## Important limitations
 
