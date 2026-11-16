@@ -260,7 +260,11 @@ class SelectionTests(Base):
     def test_the_context_stays_short(self):
         text = router.render(self.decide("Mejora el diseño de la página"), 600)
         self.assertLessEqual(len(text), 600)
-        self.assertTrue(text.endswith("(shortened)"))
+        self.assertIn("(shortened)", text)
+        self.assertRegex(text.splitlines()[-1], r"^Task \w+ opened")
+        lines = ["first fact", "Note: a", "second fact", "Note: b", "Task k opened. `router.py done k` closes it."]
+        self.assertEqual(router.shorten(lines, 80), "first fact\nsecond fact\n(shortened)\nTask k opened. `router.py done k` closes it.")
+        self.assertEqual(router.shorten(["a" * 50, "b" * 50], 70), "a" * 50 + "\n(shortened)")
 
 
 class LearningVisualWritingTests(Base):
@@ -393,6 +397,16 @@ class TaskTests(Base):
         self.assertNotIn("item-worker", handed)
         self.assertNotIn("item-worker", router.render(self.decide("Revisa este PR", session="s3")))
         self.assertNotIn("item-worker", router.render(self.decide("Corrige el botón", client="opencode", session="s4")))
+
+    def test_the_agents_that_fit_the_repository_are_named(self):
+        web = router.render(self.decide("Corrige el botón"))
+        self.assertIn("delegate-runner", web)
+        self.assertIn("ci-fixer", web)
+        self.assertIn("web-tester", web)
+        self.assertNotIn("content-auditor", web)
+        self.assertEqual(router.fitting_agents({"recipe": "learning-app", "signals": []}),
+                         ["content-auditor before and after content changes."])
+        self.assertEqual(router.fitting_agents({"recipe": "api-service", "signals": [{"id": "python"}]}), [])
 
     def test_consent_hands_work_orders_to_the_coordinator(self):
         home = Path(os.environ["STANDARDS_HOME"])

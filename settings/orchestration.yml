@@ -196,7 +196,7 @@ routing:
   # Hours a task without news still counts as the one a follow-up belongs to.
   task_ttl_h: 12
   # Characters of context the hook may add to one request.
-  max_context_chars: 1800
+  max_context_chars: 2400
 
 # How many units the executor loop runs at once. A unit starts when its own dependencies passed and its pool
 # has a free slot. More slots are not always faster: `python scripts/bench_parallel.py` measures it here.

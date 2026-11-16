@@ -4,6 +4,15 @@ All notable changes to this standard are documented here. The format follows [Ke
 
 ## [Unreleased]
 
+## [1.16.0] - 2026-11-16
+
+### Added
+
+- Four Claude Code agents, each for a function the standard had a script for and no agent: `delegate-runner` (Haiku) hands a green part to OpenCode or Ollama through the router and reports the verified run, `ci-fixer` (Sonnet) fixes a failed check and calls `merge_when_green.py` again, `content-auditor` (Sonnet) runs `learning_check.py`, `text_check.py` and `media.py audit` and ranks what they find, and `web-tester` (Sonnet) checks a page in a real browser at 360 and 1280 px. The owner asked for more agents after a session did everything with one model.
+- The router context names `delegate-runner` and `ci-fixer` in every work order the session keeps, `content-auditor` for a learning or documentation recipe and `web-tester` for a web recipe or folder. The repo-improve and web-improve skills name them too.
+- The router context names the folder of the standard's scripts once and the scripts by name, because the plugin's path on Windows is long. Its limit is 2400 characters, up from 1800, which a web work order with merges allowed passed on Windows, so the line that closes the task was cut. When the context is too long, notes go first and that line always stays.
+- `agents/README.md` lists every agent with its model. The selftest fails when an agent is missing from it, names itself differently from its file, or uses a model, tool or field Claude Code does not know, because Claude Code ignores those without a word.
+
 ## [1.15.0] - 2026-11-16
 
 ### Added

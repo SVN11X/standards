@@ -1683,6 +1683,27 @@ def cmd_selftest() -> int:
         else:
             print("positive case passed: autopilot hook")
 
+        # Claude Code ignores an unknown subagent field or model without a word, so a typo would only show as an agent
+        # that never runs on the model it names.
+        known_tools = {"Bash", "Read", "Edit", "Write", "Glob", "Grep", "WebFetch", "WebSearch"}
+        broken = []
+        for card in sorted((STANDARD_ROOT / "agents").glob("*.md")):
+            if card.name == "README.md":
+                continue
+            head = card.read_text(encoding="utf-8").split("---")
+            meta = (yaml.safe_load(head[1]) or {}) if len(head) > 2 else {}
+            tools = {t.strip() for t in str(meta.get("tools") or "").split(",") if t.strip()}
+            if (meta.get("name") != card.stem or not str(meta.get("description") or "").strip()
+                    or meta.get("model") not in {"haiku", "sonnet", "opus", "inherit"} or not tools or tools - known_tools
+                    or set(meta) - {"name", "description", "model", "tools", "isolation", "effort", "maxTurns"}):
+                broken.append(card.name)
+        listed = (STANDARD_ROOT / "agents" / "README.md").read_text(encoding="utf-8")
+        missing = [c.stem for c in (STANDARD_ROOT / "agents").glob("*.md") if c.name != "README.md" and f"| {c.stem} |" not in listed]
+        if broken or missing:
+            failures.append(f"agents with a bad header {broken} or missing from agents/README.md {missing}")
+        else:
+            print("positive case passed: agents")
+
         radar = load_yaml(STANDARD_ROOT / "radar" / "radar.yml").get("entries") or []
         fields = {"name", "url", "status", "profiles", "kind", "license", "cost", "privacy", "expression", "notes", "evaluated"}
         bad = [entry.get("name") for entry in radar

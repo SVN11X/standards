@@ -66,7 +66,7 @@ When the site teaches something, such as a diagram, a model, a simulation or tec
 
 ## 6. Verify with evidence
 
-Follow `references/quality-and-delivery.md`. Check syntax and paths under the repository base path. Test every control at its minimum, maximum, repeated changes and reset. Test mobile at 360 px, desktop, keyboard, touch, reduced motion, dark mode if the site has it, the build and existing tests. Report exactly what ran. Say "verified in a browser" only after a real browser test.
+Follow `references/quality-and-delivery.md`. Check syntax and paths under the repository base path. Test every control at its minimum, maximum, repeated changes and reset. Test mobile at 360 px, desktop, keyboard, touch, reduced motion, dark mode if the site has it, the build and existing tests. Report exactly what ran. Say "verified in a browser" only after a real browser test. In Claude Code the `web-tester` agent runs these checks with a clean context, and `content-auditor` runs the learning, text and media checks.
 
 A site with a reactive object or a pointer effect gets this test: with reduced motion and no task running, the object stays still while the pointer moves.
 

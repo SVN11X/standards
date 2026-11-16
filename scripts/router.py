@@ -36,7 +36,7 @@ import repo_fingerprint  # noqa: E402
 SCHEMA = "standards/route-decision/v1"
 CLIENTS = ("claude", "opencode", "coordinator")
 INTENTS = ("work", "query", "review", "setup", "publish", "other")
-DEFAULTS = {"owner": "session", "task_ttl_h": 12, "max_context_chars": 1800}
+DEFAULTS = {"owner": "session", "task_ttl_h": 12, "max_context_chars": 2400}
 # Words that open a question. A request that starts with one asks for an answer, whatever verb follows.
 QUESTION = re.compile(r"^(qué|que|por qué|porque|cómo|como|cuál|cual|cuáles|cuándo|dónde|quién|what|why|how|which|when|where|who|"
                       r"is|are|does|do|should|would|will|es|son|hay|debería|conviene)\b")
@@ -350,6 +350,21 @@ def scope_signals(fp: dict, folder: str) -> tuple[list[dict], dict, str]:
     return signals, {**sub["commands"], **inherited}, "." if root_commands.get("test") else folder
 
 
+LEARNING = {"learning-site", "learning-app", "content-clarity", "docs-academic"}
+WEB = {"web-experience", "web-fix", "learning-site"}
+
+
+def fitting_agents(decision: dict) -> list[str]:
+    """The agents that fit this repository, beyond the ones every work order gets."""
+    signals = {s.get("id") for s in decision.get("signals") or []}
+    out = []
+    if decision.get("recipe") in LEARNING:
+        out.append("content-auditor before and after content changes.")
+    if decision.get("recipe") in WEB or signals & {"web", "static-web"}:
+        out.append("web-tester after a page changes.")
+    return out
+
+
 def merge_setting() -> str:
     try:
         import merge_when_green
@@ -489,8 +504,8 @@ def decide(prompt: str, cwd: Path, client: str = "claude", session: str | None =
                                          "Pushing follows the owner's rules. Deploying waits for the owner")
                       .replace("pushing, merging or deploying: the owner's configured permission decides, and the client may ask",
                                "pushing follows the owner's rules and deploying waits for the owner"))
-        permission += (f". Merging: the owner allows it once every check passed. Merge with python \"{HERE / 'merge_when_green.py'}\" "
-                       "<PR> --wait 1800, never with gh pr merge")
+        permission += (". Merging: the owner allows it once every check passed. Merge with `merge_when_green.py "
+                       "<PR> --wait 1800`, never with gh pr merge")
     if intent == "work" and PUBLISH.search(first_sentence(prompt)):
         permission += ". The request also asks to publish: that part waits for the owner's configured permission"
     if not fp["standard"]["present"] and intent in ("work", "setup"):
@@ -554,13 +569,15 @@ def render(decision: dict, limit: int = DEFAULTS["max_context_chars"]) -> str:
             lines.append("Before the tests, install: " + ", then ".join(f"`{step}`" for step in steps) + ".")
         lines.append("Verification: " + (f"`{check['command']}` {place}. " if check["command"] else "")
                      + (f"Done means: {check['proof']}." if check["proof"] else ""))
+    # One path for every script named below: the plugin's path on Windows is long and the context has a fixed size.
+    lines.append(f"Scripts of the standard: `{HERE}`. Run them with python.")
     lines.append(f"Permission: {decision['permission']}.")
     if decision["intent"] == "work" and decision["owner"] == "session" and decision["client"] == "claude":
         # The session does the work, so it should not do it alone: the agents and executors the standard ships are named here.
-        lines.append("Agents: give independent parts to item-worker agents at once, each with isolation worktree, up to 3, "
-                     "and lookups to repo-scout. Before doing a part yourself, "
-                     f"`python \"{HERE / 'orchestrate.py'}\" route --all --repo .` says which parts OpenCode or Ollama take, "
-                     "and `orchestrate.py delegate` runs them.")
+        lines.append("Agents: independent parts to item-worker agents at once, each with isolation worktree, up to 3. "
+                     "Lookups to repo-scout. Parts that `orchestrate.py route --all --repo .` gives to OpenCode or Ollama "
+                     "to delegate-runner. A failed check to ci-fixer."
+                     + "".join(f" {line}" for line in fitting_agents(decision)))
     if decision["leaves_machine"]:
         lines.append("Leaves the machine: " + "; ".join(decision["leaves_machine"]) + ".")
     for note in decision["notes"]:
@@ -570,11 +587,26 @@ def render(decision: dict, limit: int = DEFAULTS["max_context_chars"]) -> str:
     if decision["owner"] == "coordinator":
         lines.append(f"Owner of this task: the standards coordinator, so the session edits no file. It starts with: {decision['handoff']}")
     if task.get("key"):
-        lines.append(f"Task {task['key']} opened. `python \"{HERE / 'router.py'}\" done {task['key']}` closes it.")
+        lines.append(f"Task {task['key']} opened. `router.py done {task['key']}` closes it.")
     if task.get("unfinished"):
         lines.append(f"Unfinished task {task['unfinished']['key']} in this repository: \"{task['unfinished']['prompt'][:120]}\".")
-    text = "\n".join(lines)
-    return text if len(text) <= limit else text[:limit - 20].rsplit("\n", 1)[0] + "\n(shortened)"
+    return shorten(lines, limit)
+
+
+def shorten(lines: list[str], limit: int) -> str:
+    """Fit the limit. Notes go first, then lines from the end, and the line that closes the task always stays."""
+    if len("\n".join(lines)) <= limit:
+        return "\n".join(lines)
+    keep = [line for line in lines if line.startswith(("Task ", "Unfinished task "))]
+    body = [line for line in lines if line not in keep]
+    mark = "(shortened)"
+    while len("\n".join([*body, mark, *keep])) > limit and any(line.startswith("Note: ") for line in body):
+        body.remove(next(line for line in reversed(body) if line.startswith("Note: ")))
+    room = limit - len("\n".join([mark, *keep])) - 1
+    text = "\n".join(body)
+    if len(text) > room:
+        text = text[:max(room, 0)].rsplit("\n", 1)[0]
+    return "\n".join([text, mark, *keep]) if keep else f"{text}\n{mark}"
 
 
 def check(recipes: dict | None = None) -> list[str]:

@@ -79,9 +79,9 @@ A new session in the same repository is told about a task an old session left, s
 
 ## In Claude Code
 
-The plugin's `UserPromptSubmit` hook runs on every prompt, in about a quarter of a second on a small repository. It adds context only to a work, review, setup or publish request inside a git repository. A question gets nothing. It never blocks a prompt: on any error it prints nothing. The context is a list of facts, at most `routing.max_context_chars` characters (1800).
+The plugin's `UserPromptSubmit` hook runs on every prompt, in about a quarter of a second on a small repository. It adds context only to a work, review, setup or publish request inside a git repository. A question gets nothing. It never blocks a prompt: on any error it prints nothing. The context is a list of facts, at most `routing.max_context_chars` characters (2400). When it is longer, the notes go first, then lines from the end, and the line that closes the task always stays.
 
-By default the session does the work with that context (`routing.owner: session`). The context of a work order then also names the agents and executors the standard ships, because a session left alone does everything itself with its own model: independent parts go to `item-worker` agents at once, each in its own worktree, lookups go to `repo-scout`, and `orchestrate.py route --all` says which parts OpenCode or Ollama take.
+By default the session does the work with that context (`routing.owner: session`). The context of a work order then also names the agents and executors the standard ships, because a session left alone does everything itself with its own model: independent parts go to `item-worker` agents at once, each in its own worktree, lookups go to `repo-scout`, `orchestrate.py route --all` says which parts OpenCode or Ollama take and `delegate-runner` hands them over, and a failed check goes to `ci-fixer`. A learning or documentation recipe also names `content-auditor`, and a web recipe or a web folder names `web-tester`. `agents/README.md` lists every agent with its model.
 
 To hand every work order to the coordinator instead, the owner runs:
 
