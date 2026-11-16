@@ -4,6 +4,18 @@ All notable changes to this standard are documented here. The format follows [Ke
 
 ## [Unreleased]
 
+## [1.18.0] - 2026-11-16
+
+### Added
+
+- `desktop_ux.py --save RUN.json` and `--compare RUN.json`. A second review says what was fixed, what is still there and what is new, matched by rule, control and window state rather than by tkinter's widget paths. With `--strict` only a new error fails. The owner asked how a second review would find the UX errors again.
+- `desktop_ux.py tk` measures a dialog, quiz or notice: the factory may return a Toplevel or an object holding one as `.window`. Two rules more: an action below the visible part of a scrolled window, and a paragraph in bold.
+- The desktop-improve skill saves the first run and compares the run after the fix.
+
+### Fixed
+
+- `desktop_ux.py tk` reported a clean window when the window was never on screen. It is now an error, and a hidden window measures nothing. Found on the OpenTutor quiz window, whose first measurement read no control.
+
 ## [1.17.0] - 2026-11-16
 
 ### Added

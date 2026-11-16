@@ -61,6 +61,19 @@ class Rules(unittest.TestCase):
         found = ux.uia_findings(items, window, 1)
         self.assertEqual(sorted(f["rule"] for f in found), ["clipped", "keyboard", "labels", "name"])
 
+    def test_a_new_run_says_what_was_fixed_kept_and_added(self):
+        def run(*items):
+            return {"target": "app", "findings": [ux.finding(rule, "error", where, "d") | {"at": "800x600, tab Hoy"}
+                                                   for rule, where in items]}
+        before = run(("target", 'TButton .!frame.!button3 "Guardar"'), ("contrast", 'TLabel .!frame.!label "Hola"'))
+        # The widget paths move when the code adds a widget, so they do not count when matching.
+        after = run(("target", 'TButton .!frame.!button4 "Guardar"'), ("keyboard", 'Label .!frame.!label2 "Clic"'))
+        diff = ux.compare(before, after)
+        self.assertEqual([f["rule"] for f in diff["fixed"]], ["contrast"])
+        self.assertEqual([f["rule"] for f in diff["still"]], ["target"])
+        self.assertEqual([f["rule"] for f in diff["new"]], ["keyboard"])
+        self.assertIn("1 fixed, 1 still there, 1 new", ux.compare_summary(diff))
+
     def test_sus_score(self):
         self.assertEqual(ux.sus_score([3] * 10), 50.0)
         self.assertEqual(ux.sus_score([5, 1] * 5), 100.0)
@@ -130,6 +143,24 @@ class Tk(unittest.TestCase):
             self.assertEqual(len(result["screenshots"]) + sum("screenshot" in n for n in result["notes"]), 4)
             self.assertTrue(all(Path(p).stat().st_size > 0 for p in result["screenshots"]))
 
+
+    def run_tk(self, target, sizes):
+        ran = subprocess.run([*tk_runner(), str(ROOT / "scripts" / "desktop_ux.py"), "tk", target,
+                              "--src", str(ROOT / "tests" / "fixtures"), "--sizes", sizes, "--json"],
+                             capture_output=True, text=True, timeout=120)
+        self.assertEqual(ran.returncode, 0, ran.stderr)
+        return json.loads(ran.stdout)
+
+    def test_a_dialog_the_factory_returns_is_measured_with_its_hidden_action(self):
+        result = self.run_tk("tk_demo_app:build_dialog", "400x200")
+        found = {(f["rule"], f["where"].split(" ")[0]) for f in result["findings"]}
+        self.assertIn(("out-of-view", "TButton"), found)
+        self.assertIn(("emphasis", "TLabel"), found)
+
+    def test_a_window_that_is_never_shown_is_an_error_not_a_clean_report(self):
+        result = self.run_tk("tk_demo_app:build_hidden", "300x200")
+        self.assertEqual([f["rule"] for f in result["findings"]], ["shown"])
+        self.assertEqual(result["counts"]["error"], 1)
 
 if __name__ == "__main__":
     unittest.main()

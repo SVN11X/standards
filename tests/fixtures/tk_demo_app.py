@@ -28,3 +28,23 @@ class Demo:
 
 def build(root):
     return Demo(root)
+
+
+def build_dialog(root):
+    """A dialog whose long bold text pushes its only action below the visible part of the window."""
+    top = tk.Toplevel(root)
+    canvas = tk.Canvas(top, highlightthickness=0)
+    canvas.pack(fill="both", expand=True)
+    content = ttk.Frame(canvas, padding=10)
+    canvas.create_window((0, 0), window=content, anchor="nw")
+    ttk.Label(content, text="Pregunta larga " * 12, wraplength=300, font=("Segoe UI", 12, "bold")).pack(anchor="w")
+    ttk.Button(content, text="Siguiente").pack(anchor="e", pady=(400, 0))
+    return top
+
+
+def build_hidden(root):
+    """A dialog that is never shown, so nothing can be measured."""
+    top = tk.Toplevel(root)
+    ttk.Button(top, text="Invisible").pack()
+    top.withdraw()
+    return top

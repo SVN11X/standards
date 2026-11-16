@@ -22,7 +22,7 @@ Write the task in the person's words, with what done looks like, before touching
 
 ## 2. See what the window exposes
 
-- tkinter exposes little to UI Automation. Measure it from inside: `python <standard>/scripts/desktop_ux.py tk <module>:<factory> --shots <scratch>` builds the interface on a Tk root, opens every tab at 1024x700 and 800x600 and saves screenshots. Add `--scale 1.5` for Windows scaling at 150 percent.
+- tkinter exposes little to UI Automation. Measure it from inside: `python <standard>/scripts/desktop_ux.py tk <module>:<factory> --shots <scratch> --save <scratch>/before.json` builds the interface on a Tk root, opens every tab at 1024x700 and 800x600, saves screenshots and keeps the run. For a dialog, a quiz or a notice, write a small factory in the scratch folder that opens it with sample data and returns it. Add `--scale 1.5` for Windows scaling at 150 percent.
 - Win32, Go, WinForms, WPF and Electron expose controls to UI Automation. Read them with the FlaUI MCP server (`windows_snapshot`) or with `python <standard>/scripts/desktop_ux.py uia --title "<title>"`.
 - When `AxeWindowsCLI` is installed, scan the process too: `AxeWindowsCLI --processName <exe>`.
 
@@ -41,7 +41,7 @@ Check these every time a window, notice or dialog is involved:
 
 ## 4. Fix and do the same task again
 
-Change the code, then repeat the same steps and screenshots. Run `desktop_ux.py` again, the repository's tests, and the standard check. Keep the evidence: a test that drives the interface (a tkinter test that calls the window's own methods, a Go test, or a pywinauto script for a Win32 window) so the problem cannot come back unnoticed.
+Change the code, then repeat the same steps and screenshots. Run `desktop_ux.py` again with `--compare <scratch>/before.json`: it says what was fixed, what is still there and what is new, matched by rule and control, so a fix that breaks something else shows. Then run the repository's tests and the standard check. Keep the evidence: a test that drives the interface (a tkinter test that calls the window's own methods, a Go test, or a pywinauto script for a Win32 window) so the problem cannot come back unnoticed.
 
 ## 5. Report
 
