@@ -3,7 +3,9 @@
 
 Asks the owner before actions that cannot be undone or that leave the machine (merge, deploy,
 force push, mass deletion, publishing secrets), and blocks a git commit while the standard check
-of the repository fails. The rules live in hooks, so they hold even when the agent forgets them.
+of the repository fails. When the owner allowed merges (`orchestrate.py consent --merge when-green`),
+a direct `gh pr merge` is turned to scripts/merge_when_green.py, which merges only after every check
+passed. The rules live in hooks, so they hold even when the agent forgets them.
 """
 import json
 import os
@@ -12,8 +14,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+MERGE = re.compile(r"\bgh\s+pr\s+merge\b")
 ASK = [
-    (r"\bgh\s+pr\s+merge\b", "merging a pull request"),
     (r"\bgit\s+push\b[^\n]*\s(--force\b|--force-with-lease\b|-f\b)", "a force push"),
     (r"\bgit\s+reset\s+--hard\b", "discarding local changes with git reset --hard"),
     (r"\bgit\s+clean\s+-[a-z]*f", "deleting untracked files with git clean"),
@@ -74,8 +76,38 @@ def commit_gate(cwd: Path) -> str | None:
     return ("The standard check fails, so this commit is blocked. Fix these first:\n" + "\n".join(errors))
 
 
+def merge_script() -> Path | None:
+    """merge_when_green.py from the standards checkout or from the copy the plugin ships."""
+    candidates = [Path(__file__).resolve().parents[1] / "scripts"]
+    if os.environ.get("CLAUDE_PLUGIN_ROOT"):
+        candidates.append(Path(os.environ["CLAUDE_PLUGIN_ROOT"]) / "skills" / "repo-setup" / "standard" / "scripts")
+    return next((c / "merge_when_green.py" for c in candidates if (c / "merge_when_green.py").is_file()), None)
+
+
+def merge_decision(command: str) -> dict:
+    """A direct merge asks the owner. With the owner's setting when-green it goes through the checked merge instead."""
+    script = merge_script()
+    setting = "ask"
+    if script is not None:
+        sys.path.insert(0, str(script.parent))
+        try:
+            import merge_when_green
+            setting = merge_when_green.owner_setting()
+        except Exception:  # noqa: BLE001 (a broken tool keeps the merge with the owner)
+            setting = "ask"
+    if setting == "when-green" and not re.search(r"--admin\b", command):
+        return {"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "deny",
+                                       "permissionDecisionReason": (
+                                           "The owner allows merges once every check passed. Merge with "
+                                           f'python "{script}" <PR> --wait 1800, which checks that first and never bypasses the rules.')}}
+    return {"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "ask",
+                                   "permissionDecisionReason": "This is merging a pull request. The owner decides."}}
+
+
 def decide(data: dict) -> dict | None:
     command = (data.get("tool_input") or {}).get("command") or ""
+    if MERGE.search(command):
+        return merge_decision(command)
     for pattern, what in ASK:
         if re.search(pattern, command, re.IGNORECASE):
             return {"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "ask",

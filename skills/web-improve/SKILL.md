@@ -13,7 +13,7 @@ Improve a real site so visitors understand it, can use it, and it stays fast, ac
 - Work on what exists. Keep the brand, valuable content, URLs and working features. Do not migrate frameworks without evidence that the change pays off.
 - Check which tools you really have: files, git, terminal, browser, network, GitHub. Never claim you ran, tested or published something you did not.
 - Find information yourself before asking. Ask only for what you cannot get, such as an original measurement or the base commit for a patch.
-- Do not delete content, push, merge, publish, change DNS or credentials, or add paid services without the owner's go-ahead.
+- Do not delete content, push, publish, change DNS or credentials, or add paid services without the owner's go-ahead. Merge only with `python <standard>/scripts/merge_when_green.py <PR> --wait 1800`, which merges only when the owner allowed merges and every check passed.
 
 ## Read the repository's own rules first
 

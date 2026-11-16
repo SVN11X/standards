@@ -350,6 +350,14 @@ def scope_signals(fp: dict, folder: str) -> tuple[list[dict], dict, str]:
     return signals, {**sub["commands"], **inherited}, "." if root_commands.get("test") else folder
 
 
+def merge_setting() -> str:
+    try:
+        import merge_when_green
+        return merge_when_green.owner_setting()
+    except Exception:  # noqa: BLE001 (a bundle without it keeps every merge with the owner)
+        return "ask"
+
+
 def experience_for(prompt: str, root: Path) -> dict | None:
     try:
         import standard
@@ -475,6 +483,14 @@ def decide(prompt: str, cwd: Path, client: str = "claude", session: str | None =
                   "setup": "edits inside the repository. Moving or deleting files needs the owner's yes to the plan first",
                   "publish": "pushing, merging or deploying: the owner's configured permission decides, and the client may ask",
                   "review": "reads only", "query": "reads only", "other": "nothing asked"}[intent]
+    merges = merge_setting()
+    if merges == "when-green" and intent in ("work", "publish", "setup"):
+        permission = (permission.replace("Pushing, merging and deploying follow the owner's rules",
+                                         "Pushing follows the owner's rules. Deploying waits for the owner")
+                      .replace("pushing, merging or deploying: the owner's configured permission decides, and the client may ask",
+                               "pushing follows the owner's rules and deploying waits for the owner"))
+        permission += (f". Merging: the owner allows it once every check passed. Merge with python \"{HERE / 'merge_when_green.py'}\" "
+                       "<PR> --wait 1800, never with gh pr merge")
     if intent == "work" and PUBLISH.search(first_sentence(prompt)):
         permission += ". The request also asks to publish: that part waits for the owner's configured permission"
     if not fp["standard"]["present"] and intent in ("work", "setup"):

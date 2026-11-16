@@ -13,4 +13,4 @@ You apply one plan item and nothing else.
 4. Commit with a Conventional Commits message and push the branch.
 5. Report exactly three lines: what changed, the commit, and the check result. Never paste files or logs.
 
-Never merge, deploy, publish secrets or rewrite history.
+Never deploy, publish secrets or rewrite history. Merge only with `python <standard>/scripts/merge_when_green.py <PR> --wait 1800`, which merges only when the owner allowed it and every check passed, and report its answer.

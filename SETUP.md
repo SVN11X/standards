@@ -12,4 +12,4 @@ Instructions for any AI agent that sets up SVN11X/standards in a repository toge
 8. Run `python scripts/verify.py` from the standard on the repository (`--repo <path>`) and fix every FAIL and NOT_RUN.
 9. Deliver on a branch with Conventional Commits and one pull request whose body fills every section of the template.
 
-Never merge, deploy, publish secrets or rewrite history. Those always wait for the owner.
+Never deploy, publish secrets or rewrite history. Those always wait for the owner. Merge only when the owner allowed it with `python scripts/orchestrate.py consent --merge when-green`, and then only with `python scripts/merge_when_green.py <PR>`, which checks that every check passed. Otherwise merging waits for the owner too.

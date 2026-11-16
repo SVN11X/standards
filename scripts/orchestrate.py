@@ -2052,6 +2052,9 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--data-use", choices=["none", "stores", "trains"],
                    help="what the provider of --free-model or --free-provider does with what it receives, as you read it on its page")
     p.add_argument("--cost-mode", choices=modes, help="what any run on this machine may cost")
+    p.add_argument("--merge", choices=["ask", "when-green"],
+                   help="when-green: an agent may merge a pull request once every check on it passed (scripts/merge_when_green.py). "
+                        "Workflow, deploy and secret changes still wait for the owner")
     p = sub.add_parser("merge-opencode")
     p.add_argument("--target", type=Path, default=Path.home() / ".config" / "opencode")
     p = sub.add_parser("mcp")
@@ -2149,8 +2152,8 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "consent":
         if bool(args.path) != bool(args.cls):
             parser.error("--path and --class go together")
-        if not (args.path or args.free_model or args.free_provider or args.cost_mode):
-            parser.error("give --path with --class, --free-model, --free-provider or --cost-mode")
+        if not (args.path or args.free_model or args.free_provider or args.cost_mode or args.merge):
+            parser.error("give --path with --class, --free-model, --free-provider, --cost-mode or --merge")
         if args.data_use and not (args.free_model or args.free_provider):
             parser.error("--data-use describes a --free-model or a --free-provider")
         unknown = [name for name in args.free_provider if name not in providers.load()]
@@ -2178,6 +2181,10 @@ def main(argv: list[str] | None = None) -> int:
         if args.cost_mode:
             data["cost_mode"] = args.cost_mode
             print(f"cost mode is now {args.cost_mode}")
+        if args.merge:
+            data["autopilot"] = {**(data.get("autopilot") or {}), "merge": args.merge}
+            print("merges: " + ("an agent merges a pull request once every check on it passed" if args.merge == "when-green"
+                                else "every merge waits for the owner"))
         path.write_text(yaml.safe_dump(data, sort_keys=False, allow_unicode=True), encoding="utf-8")
         return 0
     if args.command == "merge-opencode":

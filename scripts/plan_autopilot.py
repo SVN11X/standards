@@ -382,7 +382,17 @@ def gh_repo(path: Path) -> tuple[str, str]:
 
 
 def required_checks(path: Path, name: str, base: str) -> None:
-    """Fail closed: never request auto-merge without verifiable branch protection."""
+    """Fail closed: never request GitHub's own auto-merge without required checks it waits for.
+
+    Classic branch protection needs strict checks. A ruleset (what settings/ruleset-main.json applies) needs a
+    required_status_checks rule with at least one check, as the owner set it."""
+    try:
+        rules = json.loads(checked_run(["gh", "api", f"repos/{name}/rules/branches/{base}"], cwd=path) or "[]")
+    except (Blocked, ValueError):
+        rules = []
+    required = [r for r in rules if isinstance(r, dict) and r.get("type") == "required_status_checks"]
+    if any((r.get("parameters") or {}).get("required_status_checks") for r in required):
+        return
     endpoint = f"repos/{name}/branches/{base}/protection"
     obj = json.loads(checked_run(["gh", "api", endpoint], cwd=path))
     status = obj.get("required_status_checks") or {}
@@ -465,7 +475,9 @@ def publish(plan: dict, repo: Path, *, auto_merge: bool = False, watch: bool = F
     """Push the integration branch, open one pull request and, with `watch`, follow its checks to the end.
 
     A failed check gets up to budgets.max_ci_fix_attempts fixing units, pushed to the same pull request.
-    Auto-merge is only ever GitHub's own: it merges when the required checks pass, and never otherwise.
+    Auto-merge without `watch` is GitHub's own: it merges when the required checks pass. With `watch` the merge happens
+    here, once every check on the head passed, through merge_when_green, which keeps workflow, deploy and secret changes
+    for the owner. Neither ever uses --admin.
     """
     ensure_base(plan, repo)
     worktree, branch, head = integration_ready(plan, repo, auto_merge=auto_merge)
@@ -498,10 +510,11 @@ def publish(plan: dict, repo: Path, *, auto_merge: bool = False, watch: bool = F
     out = {"pr": pr["url"], "head": head, "auto_merge_requested": False, "base_moved": behind,
            "note": "auto-merge is a GitHub request, not a guarantee: required checks/reviews must pass"}
     record_publication(plan, pr=pr["url"], head=head, base_moved=behind)
-    if auto_merge:
+    if auto_merge and behind:
+        raise Blocked(f"PR created at {pr['url']}, but auto-merge is blocked: origin/{base} moved since the plan was made. "
+                      "Make a new plan on the new base")
+    if auto_merge and not watch:
         try:
-            if behind:
-                raise Blocked(f"origin/{base} moved since the plan was made. Make a new plan on the new base")
             required_checks(worktree, name, base)
         except Blocked as error:
             raise Blocked(f"PR created at {pr['url']}, but auto-merge is blocked: {error}") from error
@@ -512,7 +525,23 @@ def publish(plan: dict, repo: Path, *, auto_merge: bool = False, watch: bool = F
         record_publication(plan, auto_merge_requested=True)
     if watch:
         out["ci"] = follow_ci(plan, repo, worktree, branch, name, pr, reviewer=reviewer, fixer=fixer, policy=policy)
+        if auto_merge:
+            if out["ci"].get("state") != "pass":
+                raise Blocked(f"The checks on {pr['url']} ended {out['ci'].get('state')}, not pass, so it was not merged")
+            # Every check on the head passed, so merge that head now, through the same gate a session uses.
+            import merge_when_green
+            try:
+                merged = merge_when_green.merge(str(pr["number"]), name, wait=0, setting="when-green", run=gh_runner(worktree))
+            except merge_when_green.Refused as error:
+                raise Blocked(f"Checks passed on {pr['url']}, but it was not merged: {error}") from error
+            out.update(merged=merged["merged"], auto_merge_requested=True)
+            record_publication(plan, merged=merged["merged"], auto_merge_requested=True)
     return out
+
+
+def gh_runner(cwd: Path):
+    """gh with the cwd of the integration worktree, for merge_when_green."""
+    return lambda args: checked_run(["gh", *args], cwd=cwd, timeout=180)
 
 
 def pr_body(plan: dict) -> str:
@@ -644,7 +673,10 @@ def main(argv=None) -> int:
                 return 0
             execute_plan(path, plan, repo, args.reviewer, args.parallel)
         if args.publish != "none":
-            print(json.dumps(publish(plan, repo, auto_merge=args.publish == "auto-merge", watch=not args.no_watch_ci,
+            import merge_when_green
+            # With the owner's setting when-green, a published pull request is merged once its checks pass.
+            auto = args.publish == "auto-merge" or (args.publish == "pr" and merge_when_green.owner_setting() == "when-green")
+            print(json.dumps(publish(plan, repo, auto_merge=auto, watch=not args.no_watch_ci,
                                      reviewer=args.reviewer), ensure_ascii=False))
         return 0
     except (Blocked, ValueError, OSError) as error:

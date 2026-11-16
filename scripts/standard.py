@@ -1348,7 +1348,9 @@ BUNDLED_SCRIPTS = ("standard.py", "orchestrate.py", "verify.py", "evidence.py", 
                    "execute.py", "workplan.py", "review.py", "scheduler.py", "resources.py", "plan_autopilot.py",
                    "plan_contract.py", "planner.py", "repo_fingerprint.py", "router.py",
                    # Learning, writing and media checks the web-improve and docs-review skills call.
-                   "learning_check.py", "text_check.py", "media.py")
+                   "learning_check.py", "text_check.py", "media.py",
+                   # The checked merge the guard hook points to when the owner allows merges.
+                   "merge_when_green.py")
 
 
 def cmd_package_skills(out_dir: Path) -> None:
@@ -1693,7 +1695,22 @@ def cmd_selftest() -> int:
             print(f"positive case passed: radar ({len(radar)} entries)")
 
         import guard, reinject, secret_scan
+        # The owner's own ~/.standards may allow merges. The check needs a home where they do not, then one where they do.
+        owner_home = os.environ.get("STANDARDS_HOME")
+        os.environ["STANDARDS_HOME"] = str(root / "owner-home")
         asked = guard.decide({"tool_input": {"command": "gh pr merge 1 --rebase"}, "cwd": str(first_repo)})
+        (root / "owner-home").mkdir()
+        write_text(root / "owner-home" / "local.yml", "autopilot:\n  merge: when-green\n")
+        sent = guard.decide({"tool_input": {"command": "gh pr merge 1 --rebase"}, "cwd": str(first_repo)})
+        if owner_home is None:
+            os.environ.pop("STANDARDS_HOME")
+        else:
+            os.environ["STANDARDS_HOME"] = owner_home
+        sent = (sent or {}).get("hookSpecificOutput", {})
+        if sent.get("permissionDecision") != "deny" or "merge_when_green.py" not in sent.get("permissionDecisionReason", ""):
+            failures.append(f"with merges allowed the guard hook must send a merge to merge_when_green.py: {sent}")
+        else:
+            print("positive case passed: guard hook sends merges to the checked merge when the owner allows them")
         allowed = guard.decide({"tool_input": {"command": "git status"}, "cwd": str(first_repo)})
         os.environ["STANDARD_PY"] = str(STANDARD_ROOT / "scripts" / "standard.py")
         (first_repo / "loose_file.py").write_text("x = 1\n", encoding="utf-8")

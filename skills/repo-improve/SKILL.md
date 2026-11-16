@@ -66,7 +66,7 @@ Claude plans and verifies. Hand the green items to another executor and keep ver
 
 The owner can still run `/next-item` in OpenCode by hand, one item at a time. Keep every item green, small and concrete, so a small model can do it. Mark the items that need judgment yellow or red: they need the owner's review and a model that passed the bench class, never Claude as a silent fallback.
 
-For a list of several items with dependencies, write a work plan (`schemas/work-plan.schema.json`) instead and let the owner run it: `python <standard>/scripts/execute.py check PLAN.json`, then `run PLAN.json --reviewer <ollama model>`, and later `status`, `resume`, `report` and `clean`. The loop never pushes or merges. See `docs/007-autonomous-execution.md`. In OpenCode the owner can use `/run-plan`.
+For a list of several items with dependencies, write a work plan (`schemas/work-plan.schema.json`) instead and let the owner run it: `python <standard>/scripts/execute.py check PLAN.json`, then `run PLAN.json --reviewer <ollama model>`, and later `status`, `resume`, `report` and `clean`. The loop itself never pushes or merges. See `docs/007-autonomous-execution.md`. In OpenCode the owner can use `/run-plan`.
 
 Before closing a run, use adversarial-testing at the level the risk needs, and data-preservation when the repository protects data.
 
@@ -77,7 +77,7 @@ When the owner comes back after a hand-off, review the branch with code-review, 
 - Work through the list without pausing between items. Hand each item to the `item-worker` subagent when it is available, so every item starts with a clean context and the main session only keeps the list. After each item: the check passes, the commit is pushed, the pull request is updated, and the item is marked done.
 - If the owner wants to keep working in the same folder, run the autopilot in a separate worktree: `git worktree add ../<repository>-autopilot -b improve/<topic>`.
 - When an item needs the owner (a red change or a decision the list left open), mark it `- [ ] BLOCKED: <question>` and continue with the next one. Do not stop to ask.
-- Never merge, deploy, publish secrets or rewrite history during autopilot. Those always wait for the owner.
+- Never deploy, publish secrets or rewrite history during autopilot. Those always wait for the owner. When the owner allowed merges (`orchestrate.py consent --merge when-green`), merge each pull request with `python <standard>/scripts/merge_when_green.py <PR> --wait 1800` once it is pushed, and keep going: the script merges only after every check passed and refuses workflow, deploy and secret changes. Without that setting, leave the pull request open for the owner.
 - When nothing is pending, close the run in three steps. Reconcile: reread the commits and the pull request, and update `docs/assumptions.md`, `docs/decisions/` and `docs/goals.md` where the work changed them. Retrospective: list what the owner had to correct during the run and propose the matching lines for `preferences.md` or `AGENTS.md`, for the owner to approve. Then delete the autopilot file and give one final summary with every BLOCKED question together.
 - If the owner asks to pause or stop, delete the autopilot file at once.
 

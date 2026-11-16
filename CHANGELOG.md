@@ -4,6 +4,15 @@ All notable changes to this standard are documented here. The format follows [Ke
 
 ## [Unreleased]
 
+## [1.14.0] - 2026-11-16
+
+### Added
+
+- Merges without the owner, when the owner allows them. `python scripts/orchestrate.py consent --merge when-green` writes `autopilot: {merge: when-green}` to `~/.standards/local.yml`. `scripts/merge_when_green.py <PR>` then merges a pull request only when it is open, has no conflict, changes no workflow, deploy or secret file, and every check on its head passed. It names that head with `--match-head-commit` and never uses `--admin`. With `--wait` it follows running checks. Before, Autopilot always stopped for the owner: the guard hook asked on every `gh pr merge`, the skills said never merge, and `--publish auto-merge` asked for classic branch protection with strict checks, which the owner's repositories do not have because they use a ruleset.
+- With that setting the guard hook answers a direct `gh pr merge` with the path of `merge_when_green.py`, so the agent merges through the checks and the owner is not asked. A merge with `--admin` still asks. Without the setting every merge still asks. The router tells the agent the same in its context.
+- `plan_autopilot.py --publish pr` merges once its checks pass when the owner allowed merges, and `--publish auto-merge` with checks followed does the same through `merge_when_green.py`. GitHub's own auto-merge now also accepts a ruleset with required checks.
+- `SETUP.md`, `agents/item-worker.md` and the repo-improve skill say when an agent may merge. Deploys, secrets and history rewrites still wait for the owner.
+
 ## [1.13.0] - 2026-11-16
 
 ### Added
