@@ -71,7 +71,13 @@ def main() -> int:
         messages = inbox(data)
     except Exception:  # noqa: BLE001 (a message never blocks a request)
         messages = None
-    text = "\n\n".join(t for t in (messages, text) if t) or None
+    try:
+        sys.path.insert(0, str(Path(__file__).resolve().parent))
+        import style
+        styled = style.from_prompt(str(data.get("prompt") or ""), str(data.get("session_id") or ""))
+    except Exception:  # noqa: BLE001
+        styled = None
+    text = "\n\n".join(t for t in (styled, messages, text) if t) or None
     if text:
         print(json.dumps({"hookSpecificOutput": {"hookEventName": "UserPromptSubmit", "additionalContext": text}}))
     return 0

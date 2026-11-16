@@ -57,6 +57,11 @@ def main() -> int:
     except ValueError:
         data = {}
     text = context(Path(data.get("cwd") or os.getcwd()))
+    try:
+        import style
+        text = "\n".join(t for t in (text, style.startup_lines(str(data.get("session_id") or ""))) if t) or None
+    except Exception:  # noqa: BLE001 (the rules after compaction must still come back)
+        pass
     if text:
         print(json.dumps({"hookSpecificOutput": {"hookEventName": "SessionStart", "additionalContext": text}}))
     return 0

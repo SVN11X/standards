@@ -95,6 +95,11 @@ def main() -> int:
         text = context(Path(data.get("cwd") or os.getcwd()))
     except Exception:  # noqa: BLE001 (fail open, the session must start)
         text = None
+    try:
+        import style
+        text = "\n\n".join(t for t in (text, style.startup_lines(str(data.get("session_id") or ""))) if t) or None
+    except Exception:  # noqa: BLE001
+        pass
     if text:
         print(json.dumps({"hookSpecificOutput": {"hookEventName": "SessionStart", "additionalContext": text}}))
     return 0
