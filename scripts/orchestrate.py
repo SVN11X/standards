@@ -2055,6 +2055,9 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--merge", choices=["ask", "when-green"],
                    help="when-green: an agent may merge a pull request once every check on it passed (scripts/merge_when_green.py). "
                         "Workflow, deploy and secret changes still wait for the owner")
+    p.add_argument("--route", choices=["session", "coordinator"],
+                   help="coordinator: a work order typed in Claude Code goes to plan_autopilot.py, which plans by score and runs "
+                        "the units in parallel with OpenCode, Ollama or Colibri. session: the Claude session does it")
     p = sub.add_parser("merge-opencode")
     p.add_argument("--target", type=Path, default=Path.home() / ".config" / "opencode")
     p = sub.add_parser("mcp")
@@ -2152,8 +2155,8 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "consent":
         if bool(args.path) != bool(args.cls):
             parser.error("--path and --class go together")
-        if not (args.path or args.free_model or args.free_provider or args.cost_mode or args.merge):
-            parser.error("give --path with --class, --free-model, --free-provider, --cost-mode or --merge")
+        if not (args.path or args.free_model or args.free_provider or args.cost_mode or args.merge or args.route):
+            parser.error("give --path with --class, --free-model, --free-provider, --cost-mode, --merge or --route")
         if args.data_use and not (args.free_model or args.free_provider):
             parser.error("--data-use describes a --free-model or a --free-provider")
         unknown = [name for name in args.free_provider if name not in providers.load()]
@@ -2185,6 +2188,10 @@ def main(argv: list[str] | None = None) -> int:
             data["autopilot"] = {**(data.get("autopilot") or {}), "merge": args.merge}
             print("merges: " + ("an agent merges a pull request once every check on it passed" if args.merge == "when-green"
                                 else "every merge waits for the owner"))
+        if args.route:
+            data["router"] = {**(data.get("router") or {}), "owner": args.route}
+            print("work orders in Claude Code: " + ("the coordinator runs them with plan_autopilot.py" if args.route == "coordinator"
+                                                    else "the session runs them"))
         path.write_text(yaml.safe_dump(data, sort_keys=False, allow_unicode=True), encoding="utf-8")
         return 0
     if args.command == "merge-opencode":

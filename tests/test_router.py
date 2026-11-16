@@ -385,6 +385,25 @@ class TaskTests(Base):
             self.assertEqual(kept["owner"], "session")
 
 
+    def test_a_work_order_the_session_keeps_names_the_agents_and_the_executors(self):
+        text = router.render(self.decide("Corrige el botón"))
+        self.assertIn("item-worker agents at once, each with isolation worktree", text)
+        self.assertIn("route --all --repo .", text)
+        handed = router.render(self.decide("Corrige el botón", limits={**OPEN, "owner": "coordinator"}, session="s2"))
+        self.assertNotIn("item-worker", handed)
+        self.assertNotIn("item-worker", router.render(self.decide("Revisa este PR", session="s3")))
+        self.assertNotIn("item-worker", router.render(self.decide("Corrige el botón", client="opencode", session="s4")))
+
+    def test_consent_hands_work_orders_to_the_coordinator(self):
+        home = Path(os.environ["STANDARDS_HOME"])
+        home.mkdir(parents=True, exist_ok=True)
+        (home / "local.yml").write_text("cost_mode: local-only\n", encoding="utf-8")
+        ran = subprocess.run([sys.executable, str(ROOT / "scripts" / "orchestrate.py"), "consent", "--route", "coordinator"],
+                             capture_output=True, text=True, env=os.environ.copy(), timeout=60)
+        self.assertEqual(ran.returncode, 0, ran.stderr)
+        self.assertEqual(router.owner_limits(self.web)["owner"], "coordinator")
+        self.assertIn("cost_mode: local-only", (home / "local.yml").read_text(encoding="utf-8"))
+
 class PlanRouteTests(Base):
     def test_a_plan_keeps_the_route_of_its_request(self):
         import plan_autopilot

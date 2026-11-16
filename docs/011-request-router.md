@@ -81,14 +81,15 @@ A new session in the same repository is told about a task an old session left, s
 
 The plugin's `UserPromptSubmit` hook runs on every prompt, in about a quarter of a second on a small repository. It adds context only to a work, review, setup or publish request inside a git repository. A question gets nothing. It never blocks a prompt: on any error it prints nothing. The context is a list of facts, at most `routing.max_context_chars` characters (1800).
 
-By default the session does the work with that context (`routing.owner: session`). To hand every work order to the coordinator instead, the owner writes this in `~/.standards/local.yml`:
+By default the session does the work with that context (`routing.owner: session`). The context of a work order then also names the agents and executors the standard ships, because a session left alone does everything itself with its own model: independent parts go to `item-worker` agents at once, each in its own worktree, lookups go to `repo-scout`, and `orchestrate.py route --all` says which parts OpenCode or Ollama take.
 
-```yaml
-router:
-  owner: coordinator
+To hand every work order to the coordinator instead, the owner runs:
+
+```
+python scripts/orchestrate.py consent --route coordinator
 ```
 
-Then the context says the session edits no file and names the `plan_autopilot.py go --detach` command that starts the run. One owner per task keeps the session and the coordinator from editing the same files.
+It writes `router: {owner: coordinator}` to `~/.standards/local.yml`. `consent --route session` turns it off. Then the context says the session edits no file and names the `plan_autopilot.py go --detach` command that starts the run. One owner per task keeps the session and the coordinator from editing the same files.
 
 `plan_autopilot.py` also stores the router's decision in the plan (`route`), so a run shows why its tools were chosen.
 
