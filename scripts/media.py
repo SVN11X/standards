@@ -22,6 +22,7 @@ import hashlib
 import html
 import json
 import re
+import subprocess
 import sys
 import urllib.parse
 import urllib.request
@@ -321,6 +322,47 @@ def summary(report: dict) -> str:
     return "\n".join(lines)
 
 
+def video_check(path: Path, frames_dir: Path | None = None, frames: int = 3, run=subprocess.run) -> dict:
+    """What a finished video really holds, read with ffprobe and ffmpeg, never from the tool that made it.
+
+    It reports the streams, the length, whether the sound is silent, the soft subtitle tracks and a few frames
+    saved for a person or a model to look at. Captions drawn into the picture only show in those frames."""
+    probe = run(["ffprobe", "-v", "error", "-show_entries", "stream=codec_type,codec_name,width,height:format=duration",
+                 "-of", "json", str(path)], capture_output=True, text=True, timeout=60)
+    if probe.returncode != 0:
+        return {"file": str(path), "ok": False, "problems": ["ffprobe cannot read it: " + probe.stderr.strip()[:200]]}
+    info = json.loads(probe.stdout or "{}")
+    streams = info.get("streams") or []
+    kinds = [st.get("codec_type") for st in streams]
+    duration = float((info.get("format") or {}).get("duration") or 0)
+    report = {"file": str(path), "duration_s": round(duration, 2), "video": kinds.count("video"), "audio": kinds.count("audio"),
+              "soft_subtitles": kinds.count("subtitle"), "problems": [], "frames": []}
+    video = next((st for st in streams if st.get("codec_type") == "video"), {})
+    report["size"] = f"{video.get('width')}x{video.get('height')}" if video else None
+    if not report["video"]:
+        report["problems"].append("no video stream")
+    if duration <= 0:
+        report["problems"].append("no length")
+    if report["audio"]:
+        loud = run(["ffmpeg", "-hide_banner", "-i", str(path), "-af", "volumedetect", "-vn", "-f", "null", "-"],
+                   capture_output=True, text=True, timeout=300)
+        peak = re.search(r"max_volume:\s*(-?[\d.]+|-inf) dB", loud.stderr or "")
+        report["audio_max_db"] = None if not peak or peak.group(1) == "-inf" else float(peak.group(1))
+        if report["audio_max_db"] is None or report["audio_max_db"] < -60:
+            report["problems"].append("the sound track is silent")
+    if frames_dir and duration > 0 and report["video"]:
+        frames_dir.mkdir(parents=True, exist_ok=True)
+        for n in range(frames):
+            at = duration * (n + 1) / (frames + 1)
+            target = frames_dir / f"{path.stem}-{n + 1}.png"
+            done = run(["ffmpeg", "-v", "error", "-y", "-ss", f"{at:.2f}", "-i", str(path), "-frames:v", "1", str(target)],
+                       capture_output=True, text=True, timeout=60)
+            if done.returncode == 0 and target.exists():
+                report["frames"].append(str(target))
+    report["ok"] = not report["problems"]
+    return report
+
+
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     sub = parser.add_subparsers(dest="command", required=True)
@@ -342,7 +384,15 @@ def main(argv=None) -> int:
     look.add_argument("root", nargs="?", type=Path, default=Path("."))
     look.add_argument("--credits", type=Path)
     look.add_argument("--json", action="store_true")
+    clip = sub.add_parser("video-check", help="read a finished video with ffprobe and ffmpeg and save frames to look at")
+    clip.add_argument("file", type=Path)
+    clip.add_argument("--frames-dir", type=Path)
+    clip.add_argument("--frames", type=int, default=3)
     args = parser.parse_args(argv)
+    if args.command == "video-check":
+        report = video_check(args.file, args.frames_dir, args.frames)
+        print(json.dumps(report, indent=2, ensure_ascii=False))
+        return 0 if report["ok"] else 1
     if args.command == "search":
         report = search(args.query, args.source, args.limit, [a for a in args.allow.split(",") if a])
         if args.json:

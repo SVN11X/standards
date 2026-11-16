@@ -167,6 +167,11 @@ class ControlCases(Base):
 
 
 class SelectionTests(Base):
+    def test_a_pr_review_in_a_web_repository_stays_a_pr_review(self):
+        reviewed = self.decide("Revisa el PR 12 antes de fusionarlo")
+        self.assertEqual((reviewed["intent"], reviewed["recipe"]), ("review", "pr-review"))
+        self.assertNotEqual(self.decide("Revisa la página de inicio")["recipe"], "pr-review")
+
     def test_the_guide_examples_get_their_recipe_with_the_evidence(self):
         cases = [
             (self.web, "Mejora esta página para que alguien con poco tiempo entienda por qué estudiar el tema", "web-experience", "web"),

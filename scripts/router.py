@@ -301,7 +301,10 @@ def pick_recipe(intent: str, signals: set[str], prompt: str, recipes: list[dict]
             continue
         words = words_in(prompt, recipe.get("words") or [])
         verbs = words_in(prompt, recipe.get("verbs") or [])
-        scored.append((len(hits) * 2 + (len(words) + len(verbs)) * 3, -order, recipe, hits, words + verbs, len(words) * 3))
+        named = words_in(prompt, recipe.get("wins_on") or [])
+        # A request that names the recipe's object (a PR, a diff) beats any signal of the folder.
+        score = len(hits) * 2 + (len(words) + len(verbs)) * 3 + (1000 if named else 0)
+        scored.append((score, -order, recipe, hits, named + words + verbs, len(words) * 3))
     if not scored:
         return None, [], "no recipe matches this request in this folder", 0
     scored.sort(key=lambda item: (item[0], item[1]), reverse=True)

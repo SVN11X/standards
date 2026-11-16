@@ -546,12 +546,12 @@ entries:
     status: assess
     profiles: [web, software, data-ai, hardware, docs, infra]
     kind: skill
-    license: not verified
-    cost: not verified
-    privacy: not verified
+    license: MIT
+    cost: free
+    privacy: local
     expression: []
-    notes: "Optional answer style: clear and with concrete actions. Before trial: compare it with settings/output-style-concise.md and the owner's preferences. Using it says nothing about the person who uses it."
-    evaluated: 2026-11-10
+    notes: "Answer style: next action first, numbered steps, one next action, visible progress, lists of at most 5, no preamble. hooks/style.py adds the same rules in our own words at startup and after a compaction, with \"modo normal\" to turn it off. Using it says nothing about the person who uses it."
+    evaluated: 2026-11-16
   - name: OpenCut
     url: https://github.com/OpenCut-app/OpenCut
     status: assess
@@ -782,4 +782,70 @@ entries:
     privacy: local
     expression: [sober, balanced, expressive]
     notes: Microsoft's app to inspect the UI Automation tree of a window, run the Axe.Windows rules on it, and see the tab order. For a person to find why Tab skips or traps a control. Not run by the standard yet.
+    evaluated: 2026-11-16
+  - name: Interlock
+    url: https://github.com/renzrollon/interlock
+    status: assess
+    profiles: [web, software, data-ai, infra]
+    kind: plugin
+    license: MIT
+    cost: free
+    privacy: local
+    expression: []
+    notes: "Spec driven Claude Code plugin on OpenSpec. Its merge verdict is computed, the worst signal wins and missing evidence counts against the change. scripts/readiness.py takes that rule for docs/specs: a critical requirement no test names blocks even with green CI. Needs Claude Code dynamic workflows and Node 22, not tried in a repository here."
+    evaluated: 2026-11-16
+  - name: Festival
+    url: https://github.com/Obedience-Corp/festival
+    status: assess
+    profiles: [web, software, data-ai, infra]
+    kind: tool
+    license: Apache-2.0
+    cost: free
+    privacy: local
+    expression: []
+    notes: "Fest plans long goals, Camp shares context across sessions and Obey supervises background work. The supervisor, plan reuse and pause file of the standard cover the same needs: a second session joins the running plan and a saved pause survives a restart. Obey was not run here."
+    evaluated: 2026-11-16
+  - name: Murmur
+    url: https://github.com/rennf93/murmur
+    status: assess
+    profiles: [web, software, data-ai, infra]
+    kind: tool
+    license: MIT
+    cost: free
+    privacy: local, a Unix socket and a SQLite file under the user's home
+    expression: []
+    notes: "Message bus between AI CLI sessions. Sent, threaded and replied on Linux on 2026-11-16 with murmur-it from npm. It reads the process table with ps (src/proc.ts) and listens on a Unix socket (src/config.ts), so it does not run on Windows outside WSL. scripts/peerbox.py keeps the same model in one SQLite file for Windows."
+    evaluated: 2026-11-16
+  - name: ProjectArchitect
+    url: https://github.com/Druthulu/ProjectArchitect
+    status: hold
+    profiles: [web, software, data-ai, infra]
+    kind: plugin
+    license: Project Architect License, source available, no redistribution of it or a similar version
+    cost: free
+    privacy: local
+    expression: []
+    notes: "Plan with phases, memory in the repository and fresh contexts per task. Its license forbids shipping it or a substantially similar version, and the standard ships through SVN11X/skills, so nothing is copied. scripts/recall.py gives a new session the decisions and handoffs that fit its request, written independently. The owner may still install the original in a repository."
+    evaluated: 2026-11-16
+  - name: Ponytail
+    url: https://github.com/DietrichGebert/ponytail
+    status: assess
+    profiles: [web, software, data-ai, infra]
+    kind: skill
+    license: MIT
+    cost: free
+    privacy: local
+    expression: []
+    notes: "Reuse before writing, a symbol map, intensity levels, review, audit and a ledger of shortcut comments. scripts/reuse.py ranks existing functions for a task and puts them in the executor packet, and collects shortcut comments with their revisit condition. The skill itself was not installed here."
+    evaluated: 2026-11-16
+  - name: Cinecode
+    url: https://github.com/zakariaf/cinecode
+    status: trial
+    profiles: [web, docs]
+    kind: tool
+    license: MIT
+    cost: free, voices use the Gemini API
+    privacy: local, except voices, whose line text goes to Google Gemini TTS
+    expression: [balanced, expressive]
+    notes: "Storyboard JSON to a painted, animated film with music, effects and captions, rendered by code with Node and ffmpeg. On 2026-11-16 its test film made a 61 s animatic here without voices, captions burned in, music and effects, checked with ffprobe and a frame. render refuses to run while lines have no voice, and the animatic has no soft subtitle track although its log says so."
     evaluated: 2026-11-16

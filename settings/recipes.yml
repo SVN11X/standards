@@ -395,6 +395,22 @@ capabilities:
       cost: free
       leaves_machine: nothing
       detect: none
+  animated-film:
+    purpose: >-
+      make an animated film or explainer by scenes: screenplay, storyboard JSON, reusable characters and sets,
+      animation, music and effects, preview, captions and export. Voices only with a voice provider the owner
+      authorized. Without one, deliver the captioned animatic. Check the result with `media.py video-check`.
+    providers:
+    - id: cinecode
+      kind: cli
+      runs: local
+      radar: Cinecode
+      clients: [claude, opencode, coordinator]
+      writes: true
+      cost: free, voices use the Gemini API
+      leaves_machine: nothing without GEMINI_API_KEY. With it, the text of each voiced line goes to Google Gemini TTS
+      detect:
+        which: [node, ffmpeg]
   media-check:
     purpose: 'read what a media file is: codec, size, length, and the text inside an image'
     providers:
@@ -1353,6 +1369,8 @@ recipes:
     proof: the profile, the restrictions and one command that verifies the repository are recorded
   - id: pr-review
     intents: [review]
+    # Naming the object of the review wins over what the folder shows: a PR in a web repository is still a PR review.
+    wins_on: [pr, prs, pull request, pull requests, merge request, diff, parche, patch, commit, commits]
     profile: null
     capabilities: [code-review, github, unit-test]
     proof: every finding names a line of the diff and the tests of the repository ran
@@ -1497,6 +1515,9 @@ additions:
   - capability: image-attach
     words: [imagen, imágenes, image, images, foto, fotos, photo, ilustración, illustration, icono, icon]
     why: an image needs alt text, a size and a credit
+  - capability: animated-film
+    words: [película, pelicula, cortometraje, corto animado, dibujos animados, storyboard, guion gráfico, escenas, animated film, cartoon, short film]
+    why: the request asks for an animated film made by scenes
   - capability: short-video
     words: [video, vídeo, videos, clip, clips, animación, animation, gif]
     why: the request asks for a clip
