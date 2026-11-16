@@ -67,6 +67,19 @@ def resolve(plan_id: str, blocker_id: str, how: str) -> dict:
     raise KeyError(blocker_id)
 
 
+def resolve_unit(plan_id: str, unit: str, how: str) -> int:
+    """Close the open records of a unit that passed later. Returns how many were closed."""
+    rows = load(plan_id)
+    closed = 0
+    for row in rows:
+        if row.get("unit") == unit and row.get("state") == "open":
+            row.update(state="resolved", resolved_by=how, resolved_at=orchestrate.now())
+            closed += 1
+    if closed:
+        orchestrate.write_json(path_for(plan_id), rows)
+    return closed
+
+
 def why(plan_id: str) -> str:
     """The answer to the owner's question, grouped so the human decisions come last."""
     rows = [r for r in load(plan_id) if r.get("state") == "open"]

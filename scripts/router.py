@@ -89,6 +89,8 @@ SETUP_OBJECT = re.compile(r"\b(repositorio|repo|repository|estándar|estandar|st
 CONTROL_VERB = re.compile(r"^(pausa\w*|pausar|pause|detén|detente|detener|para|parar|stop|cancela\w*|cancel|aborta\w*|abort|"
                           r"reanuda\w*|resume)\b")
 CONTROL_OBJECT = re.compile(r"\b(plan|trabajo|ejecución|ejecucion|todo|autopilot|autopiloto|tarea|tareas|coordinador|run|work|everything)\b")
+WHY_STOPPED = re.compile(r"^(por qué|porque|por que|why)\b.*\b(no puedes|no pudiste|no puede|se detuvo|se paró|se paro|bloquead\w*|"
+                         r"bloqueo\w*|can't you|cannot you|couldn't you|did it stop|is it blocked|blocked)\b")
 STATUS = re.compile(r"\b(estado|status|avance|progreso|progress)\b")
 CONTINUE = re.compile(r"^(también|tambien|además|ademas|y |pero |mejor |en vez|no,|sí,|si,|also|and |but |instead|actually|wait)\b")
 THIRD_PARTY = ("remote",)
@@ -122,6 +124,8 @@ def classify(prompt: str) -> tuple[str, str]:
     control = CONTROL_VERB.match(text)
     if control and (len(words) <= 3 or CONTROL_OBJECT.search(text)):
         return "control", f"asks to '{control.group(0)}' the running work"
+    if WHY_STOPPED.match(text):
+        return "control", "asks why the work stopped"
     if len(words) <= 8 and STATUS.search(text) and re.match(r"^(muéstrame|muestrame|dime|show|cuál|cual|cómo|como|qué|que|what|how|estado|status)\b", text):
         return "control", "asks for the status of the running work"
     if not polite and QUESTION.match(text):
@@ -564,6 +568,9 @@ def render(decision: dict, limit: int = DEFAULTS["max_context_chars"]) -> str:
     if decision["intent"] == "control":
         return ("standards router: control request (" + decision["intent_why"] + "). Do not edit the repository. Find the plan with "
                 "`python <standards>/scripts/execute.py status PLAN.json` and apply `pause`, `unpause` or `cancel --unit <id>`. "
+                "For why a unit stopped, answer from `python <standards>/scripts/blockers.py why <plan_id>`: the exact action, "
+                "the evidence, the work done and what unblocks it. If the cause was your own caution with no rule behind it, "
+                "say so and resume the work. "
                 "A pause or cancel the owner asked for stays after a restart. Answer in the owner's language.")
     if decision["intent"] in ("query", "other"):
         return ""

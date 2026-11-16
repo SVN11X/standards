@@ -49,6 +49,11 @@ class ClassifyTests(unittest.TestCase):
         for prompt in ("Pausa", "cancela el plan", "reanuda", "muéstrame el estado", "¿cuál es el estado?"):
             self.assertEqual(router.classify(prompt)[0], "control", prompt)
 
+    def test_why_it_stopped_is_answered_from_the_blocker_records(self):
+        for prompt in ("¿Por qué no puedes hacerlo?", "¿por qué se detuvo el plan?", "why can't you merge it?"):
+            self.assertEqual(router.classify(prompt)[0], "control", prompt)
+        self.assertEqual(router.classify("¿Por qué se duplica la transcripción?")[0], "query")
+
     def test_continue_is_work_and_a_question_stays_a_query(self):
         self.assertEqual(router.classify("continúa con lo pendiente y avísame cuando termines")[0], "work")
         self.assertEqual(router.classify("¿Qué hace este archivo?")[0], "query")

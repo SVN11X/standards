@@ -25,6 +25,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 sys.path.insert(0, str(ROOT / "hooks"))
 
+import blockers  # noqa: E402
 import orchestrate  # noqa: E402
 import resources  # noqa: E402
 import review as review_mod  # noqa: E402
@@ -153,6 +154,22 @@ def judge(data: dict, reviewer_model: str | None, reviewer) -> tuple[str, str]:
     return "failed", "review has a high finding"
 
 
+def blocker_condition(note: str) -> str:
+    """What would unblock a unit, from the reason the executor gave."""
+    text = note.lower()
+    if "budget" in text:
+        return "a larger budget in the plan, or the owner accepts the unit as not done"
+    if "reviewer" in text or "review" in text:
+        return "a reviewer model that answers and differs from the author"
+    if "timed out after changing" in text:
+        return "someone inspects the kept worktree and keeps or drops its changes"
+    if "colibri" in text:
+        return "Colibri running (python scripts/colibri.py ensure). A Colibri unit never moves to another model"
+    if "no executor" in text or "not a coding agent" in text or "no free model" in text or "slot" in text:
+        return "an executor the router accepts for this task type: install or start it, or check a free model in local.yml"
+    return "the condition in the evidence changes, then resume the plan"
+
+
 def log_choices(log: list[dict]) -> list[dict]:
     return [{"executor": row.get("executor"), "model": row.get("model")} for row in log]
 
@@ -214,6 +231,29 @@ class Executor:
             self.state["units"][uid] = {"status": status, "at": orchestrate.now(), **fields}
             self.save()
         self.event({"event": "state", "unit": uid, "status": status, "model": fields.get("model"), "note": fields.get("note")})
+        if status == "blocked":
+            self.record_blocker(uid, fields)
+        elif status == DONE:
+            blockers.resolve_unit(self.plan["plan_id"], uid, "the unit passed")
+
+    def record_blocker(self, uid: str, fields: dict) -> None:
+        """Save the six facts of a blocked unit, so "why is it stopped?" is answered from disk. It never stops the plan."""
+        note = str(fields.get("note") or "blocked")
+        tried = fields.get("attempt_log") or []
+        done = "; ".join(f"{a.get('executor')}/{a.get('model')}: {a.get('status')} ({a.get('failure_code') or 'no code'})"
+                         for a in tried) or "no model was invoked"
+        dependents = [u for u, unit in self.units.items() if uid in unit.get("depends_on", [])]
+        row = {"action": f"run unit {uid} of plan {self.plan['plan_id']} in {self.repo.name}",
+               "evidence": {"source": f"execute.py state of {uid}", "text": note},
+               "kinds": ["technical-requirement"],
+               "authorization": "the plan run covers this unit. Nothing outside the plan is authorized by it",
+               "work_done": done + (f". Kept {fields['worktree']}" if fields.get("partial") and fields.get("worktree") else ""),
+               "unblock": blocker_condition(note) + (f". Waiting on it: {', '.join(dependents)}" if dependents else ""),
+               "unit": uid}
+        try:
+            blockers.add(self.plan["plan_id"], row)
+        except (ValueError, OSError):
+            pass
 
     def event(self, row: dict) -> None:
         """One line per transition. The dashboard and `status` read this file, so watching a run asks no model."""

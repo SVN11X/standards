@@ -351,6 +351,17 @@ class RecoveryTests(Base):
         run.run()
         self.assertEqual(self.statuses(run), {"a": "blocked", "b": "skipped", "c": "passed"})
         self.assertEqual(run.used["attempts"], 1)
+        answer = execute.blockers.why("plan1")
+        for part in ("run unit a of plan plan1", "no model was invoked", "Waiting on it: b"):
+            self.assertIn(part, answer)
+
+    def test_a_blocker_closes_when_the_unit_passes_after_a_resume(self):
+        work = plan(unit("u1", ["a.txt"]))
+        self.executor(work, FakeAgent(block=["u1"])).run()
+        self.assertIn("run unit u1", execute.blockers.why("plan1"))
+        execute.set_control("plan1")
+        self.executor(work, FakeAgent()).run()
+        self.assertEqual(execute.blockers.why("plan1"), "Nothing is blocked.")
 
     def test_used_budget_survives_a_resume(self):
         work = self.budget_plan(unit("u1", ["a.txt"]), unit("u2", ["b.txt"]), max_total_attempts=2)
