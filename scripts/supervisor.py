@@ -20,6 +20,7 @@ import orchestrate  # noqa: E402
 
 TERMINAL = {"passed", "failed", "blocked", "cancelled", "skipped"}
 TASK_NAME = "StandardsSupervisor"
+MAX_STALLS = 3
 
 
 def alive(pid) -> bool:
@@ -83,13 +84,40 @@ def resume(path: Path, plan: dict, spawn=None) -> dict:
     return (spawn or plan_autopilot.detach)(args, Path(plan["repo"]), plan["plan_id"])
 
 
+def stall_file() -> Path:
+    return orchestrate.home() / "supervisor-stalls.json"
+
+
+def progress_mark(plan_id: str) -> str:
+    """Changes whenever the plan state does, so a resume that did nothing leaves the same mark."""
+    try:
+        return str(execute.state_file(plan_id).stat().st_mtime_ns)
+    except OSError:
+        return ""
+
+
 def tick(spawn=None, is_alive=alive) -> list[dict]:
-    """Resume what needs it. Returns one row per plan acted on."""
+    """Resume what needs it. A plan resumed MAX_STALLS times without any change to its state is left for the owner."""
+    try:
+        stalls = json.loads(stall_file().read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        stalls = {}
     rows = []
     for path, plan in plans():
         why = needs_resume(plan, is_alive)
-        if why and Path(plan["repo"]).is_dir():
-            rows.append({"plan_id": plan["plan_id"], "why": why, **resume(path, plan, spawn)})
+        if not why or not Path(plan["repo"]).is_dir():
+            stalls.pop(plan["plan_id"], None)
+            continue
+        entry = stalls.get(plan["plan_id"]) or {"count": 0, "mark": ""}
+        mark = progress_mark(plan["plan_id"])
+        entry = {"count": entry["count"] + 1 if entry["mark"] == mark else 1, "mark": mark}
+        stalls[plan["plan_id"]] = entry
+        if entry["count"] > MAX_STALLS:
+            rows.append({"plan_id": plan["plan_id"], "why": why, "skipped": f"resumed {MAX_STALLS} times without progress. "
+                         "Read its log, then resume it by hand"})
+            continue
+        rows.append({"plan_id": plan["plan_id"], "why": why, **resume(path, plan, spawn)})
+    orchestrate.write_json(stall_file(), stalls)
     return rows
 
 

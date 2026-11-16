@@ -53,6 +53,13 @@ class SupervisorTests(unittest.TestCase):
         execute.set_control("p", paused=False)
         self.assertEqual(len(self.tick()), 1)
 
+    def test_a_plan_that_never_progresses_is_not_resumed_forever(self):
+        self.plan("loop", {"u1": "running"})
+        rows = [self.tick() for _ in range(supervisor.MAX_STALLS + 2)]
+        self.assertEqual([bool(r[0].get("detached")) for r in rows], [True] * supervisor.MAX_STALLS + [False, False])
+        self.assertIn("without progress", rows[-1][0]["skipped"])
+        self.assertEqual(len(self.spawned), supervisor.MAX_STALLS)
+
     def test_a_plan_whose_units_are_all_blocked_waits_for_the_owner(self):
         self.plan("b", {"u1": "blocked", "u2": "skipped"})
         self.assertEqual(self.tick(), [])
