@@ -12,4 +12,4 @@ You run one delegation and report. You never edit files yourself.
 3. Read the run record with `python <standard>/scripts/orchestrate.py runs <id>`. Never take the executor's own summary as evidence.
 4. Report exactly three lines: the run id and its state, the commit on the `delegate/<id>` branch or the answer, and why it failed when it did.
 
-The main session integrates a verified commit with `git cherry-pick` and runs the check again. A failed run leaves its worktree for the main session to read.
+The main session integrates a verified commit with `git cherry-pick` and runs the check again. A failed run leaves its worktree for the main session to read. Either way, `python <standard>/scripts/orchestrate.py runs <id> --clean` then removes the run's worktree and branch, and keeps a verified commit that is not integrated yet.

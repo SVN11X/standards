@@ -10,6 +10,7 @@ passed. The rules live in hooks, so they hold even when the agent forgets them.
 import json
 import os
 import re
+import shlex
 import subprocess
 import sys
 from pathlib import Path
@@ -76,6 +77,68 @@ def commit_gate(cwd: Path) -> str | None:
     return ("The standard check fails, so this commit is blocked. Fix these first:\n" + "\n".join(errors))
 
 
+# A delegate/<run id> branch is scratch the standard made for one delegation, with the run's record in
+# ~/.standards/runs. Deleting it is cleanup, not the loss of the owner's work, so it does not need the owner.
+OWNED_BRANCH = re.compile(r"\bgit\s+branch\s+-D\s+delegate/(\d{8}-\d{6}-[0-9a-f]{6})(?=\s*(?:$|[;&|>\n]))")
+
+
+def without_owned_deletions(command: str) -> str:
+    runs = Path(os.environ.get("STANDARDS_HOME") or Path.home() / ".standards") / "runs"
+    return OWNED_BRANCH.sub(lambda m: "" if (runs / f"{m.group(1)}.json").is_file() else m.group(0), command)
+
+
+# A recursive deletion inside a temporary folder (the session's scratchpad, the system temp folder, a delegation's
+# worktree) removes nothing of the owner's. Variables set earlier in the same command are resolved, and anything
+# not resolved, a glob, a ".." or a path outside those folders still asks.
+RM_RF = re.compile(r"\brm\s+-[a-z]*(?:r[a-z]*f|f[a-z]*r)[a-z]*\s+([^;&|\n<>]+)", re.IGNORECASE)
+ASSIGN = re.compile(r"""(?:^|[;&|\s])([A-Za-z_]\w*)=(?:"([^"$`]*)"|'([^']*)'|([^\s;&|"'$`]+))""")
+
+
+def plain_path(text: str) -> str:
+    """One spelling for C:\\x, C:/x and /c/x, compared without case."""
+    text = text.replace("\\", "/").rstrip("/")
+    drive = re.match(r"^/([a-zA-Z])(/|$)", text)
+    if drive:
+        text = f"{drive.group(1)}:{text[2:]}"
+    return text.lower()
+
+
+def scratch_roots() -> list[str]:
+    import tempfile
+    standards = Path(os.environ.get("STANDARDS_HOME") or Path.home() / ".standards")
+    roots = [tempfile.gettempdir(), "/tmp", str(standards / "worktrees"),
+             *(os.environ[name] for name in ("TMPDIR", "TEMP", "TMP") if os.environ.get(name))]
+    return [plain_path(root) for root in roots if root]
+
+
+def is_scratch(target: str, roots: list[str]) -> bool:
+    if not target or any(mark in target for mark in ("$", "*", "?", "[", "~", "`")) or ".." in target.replace("\\", "/").split("/"):
+        return False
+    path = plain_path(target)
+    return any(path.startswith(root + "/") for root in roots)
+
+
+def without_scratch_deletions(command: str) -> str:
+    values = {m.group(1): next(g for g in m.groups()[1:] if g is not None) for m in ASSIGN.finditer(command)}
+    values.update({k: v for k, v in os.environ.items() if k in ("TMPDIR", "TEMP", "TMP") and k not in values})
+    roots = scratch_roots()
+
+    def resolve(text: str) -> str:
+        return re.sub(r"\$\{?([A-Za-z_]\w*)\}?", lambda m: values.get(m.group(1), m.group(0)), text)
+
+    def drop(match: re.Match) -> str:
+        text = match.group(1)
+        if match.end() < len(command) and command[match.end()] == ">":
+            text = re.sub(r"\s\d$", "", text)  # the 2 of 2>/dev/null
+        try:
+            targets = shlex.split(resolve(text))
+        except ValueError:
+            return match.group(0)
+        targets = [t for t in targets if not t.startswith("-")]
+        return "" if targets and all(is_scratch(t, roots) for t in targets) else match.group(0)
+    return RM_RF.sub(drop, command)
+
+
 def merge_script() -> Path | None:
     """merge_when_green.py from the standards checkout or from the copy the plugin ships."""
     candidates = [Path(__file__).resolve().parents[1] / "scripts"]
@@ -108,8 +171,9 @@ def decide(data: dict) -> dict | None:
     command = (data.get("tool_input") or {}).get("command") or ""
     if MERGE.search(command):
         return merge_decision(command)
+    checked = without_scratch_deletions(without_owned_deletions(command))
     for pattern, what in ASK:
-        if re.search(pattern, command, re.IGNORECASE):
+        if re.search(pattern, checked, re.IGNORECASE):
             return {"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "ask",
                                            "permissionDecisionReason": f"This is {what}. The owner decides."}}
     if COMMIT.search(command):

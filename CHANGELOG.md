@@ -4,6 +4,15 @@ All notable changes to this standard are documented here. The format follows [Ke
 
 ## [Unreleased]
 
+## [1.16.1] - 2026-11-16
+
+### Fixed
+
+- The guard hook asked the owner to delete `delegate/<run id>`, the scratch branch a delegation makes, when Claude cleaned up after a run on OpenTutor. It no longer asks for a `delegate/` branch whose run record is in `~/.standards/runs`. Any other `git branch -D` still asks.
+- The guard hook asked before `rm -rf` of a folder inside Claude's own scratchpad. A recursive deletion no longer asks when every target is inside a temporary folder: the system temp folder, `/tmp` or a delegation's worktree. Variables set earlier in the same command are resolved. A target outside those folders, an unresolved variable, a glob or a `..` still asks.
+- `orchestrate.py runs <id> --clean` removes the worktree and branch of a finished run. It refuses while the run is going and while a verified commit is not in the current branch, unless `--force`. The run record keeps the commit.
+- `orchestrate.py runs` prints why each run ended, so a failed delegation shows its reason without opening the record.
+
 ## [1.16.0] - 2026-11-16
 
 ### Added
