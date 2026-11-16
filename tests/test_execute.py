@@ -336,6 +336,70 @@ class BudgetTests(Base):
         self.assertEqual(sorted(self.statuses(run).values()), ["blocked", "passed"])
 
 
+class RecoveryTests(Base):
+    def budget_plan(self, *units, **budgets):
+        return {**plan(*units), "budgets": budgets}
+
+    def test_unit_without_a_model_spends_no_attempt_and_independent_units_finish(self):
+        inner = FakeAgent()
+        agent = lambda r, u, d, t: ({"state": "blocked", "note": "no coding agent"}  # noqa: E731
+                                    if d["executor"] not in execute.AGENTS else inner(r, u, d, t))
+        route = lambda u: ({"executor": "none", "reasons": ["no model"], "fallbacks": []} if u["id"] == "a"  # noqa: E731
+                           else {"executor": "opencode", "model": "m", "fallbacks": []})
+        work = self.budget_plan(unit("a", ["a.txt"]), unit("b", ["b.txt"], ["a"]), unit("c", ["c.txt"]), max_total_attempts=1)
+        run = self.executor(work, agent, route=route, parallel=1)
+        run.run()
+        self.assertEqual(self.statuses(run), {"a": "blocked", "b": "skipped", "c": "passed"})
+        self.assertEqual(run.used["attempts"], 1)
+
+    def test_used_budget_survives_a_resume(self):
+        work = self.budget_plan(unit("u1", ["a.txt"]), unit("u2", ["b.txt"]), max_total_attempts=2)
+        first = self.executor(work, FakeAgent(), parallel=1)
+        first.run()
+        self.assertEqual(first.used["attempts"], 2)
+        again = self.executor(work, FakeAgent(), parallel=1)
+        self.assertEqual(again.used["attempts"], 2)
+
+    def test_clean_timeout_asks_the_router_again_and_uses_the_new_model(self):
+        calls, asked = [], []
+
+        def route(u):
+            asked.append(u["id"])
+            return {"executor": "opencode", "model": "slow" if len(asked) == 1 else "healthy", "fallbacks": []}
+
+        def delegate(repo, u, decision, test):
+            calls.append(decision["model"])
+            if decision["model"] == "slow":
+                return {"state": "failed", "executor_result": {"failure_code": "timeout", "seconds": 9}, "changed": [],
+                        "checks": {"executor_exit": "FAIL"}, "executor": "opencode", "model": "slow"}
+            return FakeAgent()(repo, u, decision, test)
+
+        run = self.executor(self.budget_plan(unit("u1", ["a.txt"]), max_attempts_per_unit=2), delegate, route=route)
+        run.run()
+        self.assertEqual(calls, ["slow", "healthy"])
+        self.assertEqual(self.statuses(run), {"u1": "passed"})
+        self.assertEqual([a["failure_code"] for a in run.state["units"]["u1"]["attempt_log"]], ["timeout", None])
+
+    def test_partial_timeout_keeps_the_worktree_and_is_not_reassigned(self):
+        calls = []
+
+        def delegate(repo, u, decision, test):
+            calls.append(decision["model"])
+            return {"state": "failed", "executor_result": {"failure_code": "timeout", "seconds": 9}, "changed": ["a.txt"],
+                    "worktree": "/kept/tree", "branch": "delegate/x", "checks": {"executor_exit": "FAIL"},
+                    "executor": "opencode", "model": decision["model"]}
+
+        route = lambda u: {"executor": "opencode", "model": "a", "fallbacks": [{"model": "b"}]}  # noqa: E731
+        run = self.executor(self.budget_plan(unit("u1", ["a.txt"]), max_attempts_per_unit=3), delegate, route=route)
+        run.run()
+        entry = run.state["units"]["u1"]
+        self.assertEqual(calls, ["a"])
+        self.assertEqual(entry["status"], "blocked")
+        self.assertTrue(entry["partial"])
+        self.assertEqual(entry["worktree"], "/kept/tree")
+        self.assertIn("inspect", entry["note"])
+
+
 def workplan_parts(run, uid):
     unit_ = run.units[uid]
     return [p["id"] for p in execute.workplan.split_unit(unit_, execute.workplan.tracked_files(run.repo), None, CONF)[1]]

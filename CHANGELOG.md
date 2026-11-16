@@ -4,6 +4,17 @@ All notable changes to this standard are documented here. The format follows [Ke
 
 ## [Unreleased]
 
+### Added
+
+- `scripts/blockers.py` saves one record per stopped action with six facts: exact action, evidence with source and text, kind of obstacle, existing approval, work done and unblock condition. A vague record, or an agent precaution without the effect it hides, is refused. `why` answers "why can't you do it?" from the records.
+- The router has a `control` intent. "Pausa", "cancela el plan", "reanuda" and "muéstrame el estado" are recognized and told to use `execute.py` instead of starting edits. "Continúa", "sigue" and "retoma" start work.
+
+### Fixed
+
+- `execute.py` counted an attempt for a unit that never reached a model, so one unit without an executor could use the whole `max_total_attempts` and starve independent units.
+- Attempt and remote-session budgets, and elapsed wall time, are saved in the plan state and survive a resume.
+- After a timeout that left the code intact, the executor asks the router again with the updated health and takes a model it has not tried. A timeout that changed files keeps the worktree, marks the unit `partial` and blocks reassignment until it is inspected. Every attempt is logged with executor, model, duration, worktree, branch, commit, changed files and test result.
+
 ## [1.18.1] - 2026-11-16
 
 ### Fixed

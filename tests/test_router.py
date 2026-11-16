@@ -45,6 +45,17 @@ class Base(unittest.TestCase):
 
 
 class ClassifyTests(unittest.TestCase):
+    def test_spanish_plan_control_is_its_own_intent(self):
+        for prompt in ("Pausa", "cancela el plan", "reanuda", "muéstrame el estado", "¿cuál es el estado?"):
+            self.assertEqual(router.classify(prompt)[0], "control", prompt)
+
+    def test_continue_is_work_and_a_question_stays_a_query(self):
+        self.assertEqual(router.classify("continúa con lo pendiente y avísame cuando termines")[0], "work")
+        self.assertEqual(router.classify("¿Qué hace este archivo?")[0], "query")
+
+    def test_pause_inside_a_work_request_is_not_control(self):
+        self.assertEqual(router.classify("pausa la animación del vídeo")[0], "other")
+
     CASES = [
         ("Corrige esta página", "work"), ("¿Qué cambiarías?", "query"), ("Explícame por qué se duplica", "query"),
         ("Corrige por qué se duplica una transcripción al reanudar", "work"), ("¿Puedes corregir el formulario?", "work"),

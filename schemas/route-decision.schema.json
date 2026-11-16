@@ -53,6 +53,7 @@
         "review",
         "setup",
         "publish",
+        "control",
         "other"
       ]
     },
