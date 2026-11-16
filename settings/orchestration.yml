@@ -191,7 +191,7 @@ planning:
 routing:
   # Who runs a work order typed in Claude Code. session: the session does it with the decision as context.
   # coordinator: the session edits nothing and hands the order to plan_autopilot.py. The owner turns that on
-  # for all folders with `router: {owner: coordinator}` in ~/.standards/local.yml.
+  # for all folders with `python scripts/orchestrate.py consent --route coordinator`.
   owner: session
   # Hours a task without news still counts as the one a follow-up belongs to.
   task_ttl_h: 12

@@ -4,6 +4,14 @@ All notable changes to this standard are documented here. The format follows [Ke
 
 ## [Unreleased]
 
+## [1.15.0] - 2026-11-16
+
+### Added
+
+- The router context of a work order the Claude session keeps now names the agents and executors: independent parts go to `item-worker` agents at once, each with isolation worktree, up to 3, lookups go to `repo-scout`, and `orchestrate.py route --all` says which parts OpenCode or Ollama take. In a session on OpenTutor the owner found that Claude did every task itself, one after another, with one model, and never asked the router, because only the repo-improve skill mentioned the agents and the executors.
+- `item-worker` says to use it proactively and to start several at once for parts that touch different files. Run in its own worktree, it opens its own pull request. The repo-improve skill runs independent items at once, up to `concurrency.max_parallel`.
+- `orchestrate.py consent --route coordinator` hands every work order typed in Claude Code to `plan_autopilot.py`, which plans by score with Haiku, Sonnet or Opus and runs the units in parallel with OpenCode, Ollama or Colibri. Before, the owner had to edit `~/.standards/local.yml` by hand.
+
 ## [1.14.0] - 2026-11-16
 
 ### Added

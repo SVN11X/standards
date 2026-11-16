@@ -555,6 +555,12 @@ def render(decision: dict, limit: int = DEFAULTS["max_context_chars"]) -> str:
         lines.append("Verification: " + (f"`{check['command']}` {place}. " if check["command"] else "")
                      + (f"Done means: {check['proof']}." if check["proof"] else ""))
     lines.append(f"Permission: {decision['permission']}.")
+    if decision["intent"] == "work" and decision["owner"] == "session" and decision["client"] == "claude":
+        # The session does the work, so it should not do it alone: the agents and executors the standard ships are named here.
+        lines.append("Agents: give independent parts to item-worker agents at once, each with isolation worktree, up to 3, "
+                     "and lookups to repo-scout. Before doing a part yourself, "
+                     f"`python \"{HERE / 'orchestrate.py'}\" route --all --repo .` says which parts OpenCode or Ollama take, "
+                     "and `orchestrate.py delegate` runs them.")
     if decision["leaves_machine"]:
         lines.append("Leaves the machine: " + "; ".join(decision["leaves_machine"]) + ".")
     for note in decision["notes"]:
