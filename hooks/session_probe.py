@@ -10,6 +10,7 @@ import json
 import os
 import shutil
 import socket
+import subprocess
 import sys
 from pathlib import Path
 
@@ -54,11 +55,24 @@ def owner_facts(repo: Path) -> tuple[str, int, str]:
             str(data.get("cost_mode") or "not set (default existing-subscription)"))
 
 
+def recover(script: Path | None) -> None:
+    """Start the user's supervisor once, in the background, so a plan whose process died resumes without a command.
+    STANDARDS_NO_SUPERVISOR=1 turns it off. The hook never waits for it."""
+    target = script.with_name("supervisor.py") if script else None
+    if os.environ.get("STANDARDS_NO_SUPERVISOR") or target is None or not target.is_file():
+        return
+    flags = ({"creationflags": subprocess.CREATE_NEW_PROCESS_GROUP | getattr(subprocess, "DETACHED_PROCESS", 0)}
+             if os.name == "nt" else {"start_new_session": True})
+    subprocess.Popen([sys.executable, str(target), "once"], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                     stderr=subprocess.DEVNULL, **flags)
+
+
 def context(cwd: Path) -> str | None:
     root = autopilot.repository_root(cwd)
     if root is None or not (root / ".standard.yml").exists():
         return None
     script = orchestrate_path()
+    recover(script)
     privacy, free, cost = owner_facts(root)
     parts = [f"OpenCode {'found' if shutil.which('opencode') else 'not installed'}",
              f"Ollama {'answering' if ollama_up() else 'off'}",

@@ -6,6 +6,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest import mock
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -531,6 +532,12 @@ class Bench(Base):
 
 
 class Probe(Base):
+    def setUp(self):
+        super().setUp()
+        patcher = mock.patch.object(session_probe, "recover")
+        self.recover = patcher.start()
+        self.addCleanup(patcher.stop)
+
     def test_only_in_standard_repositories(self):
         repo = self.repo()
         self.assertIsNone(session_probe.context(repo))
@@ -538,6 +545,18 @@ class Probe(Base):
         text = session_probe.context(repo)
         self.assertIn("route", text)
         self.assertIn("privacy of this folder", text)
+
+
+class ProbeSupervisor(Base):
+    def test_the_supervisor_starts_once_with_the_session_and_can_be_turned_off(self):
+        script = ROOT / "scripts" / "orchestrate.py"
+        with mock.patch.object(session_probe.subprocess, "Popen") as popen:
+            session_probe.recover(script)
+            self.assertEqual(Path(popen.call_args.args[0][1]).name, "supervisor.py")
+            popen.reset_mock()
+            with mock.patch.dict(os.environ, {"STANDARDS_NO_SUPERVISOR": "1"}):
+                session_probe.recover(script)
+            popen.assert_not_called()
 
 
 class WebSubprofiles(Base):

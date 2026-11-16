@@ -6,8 +6,14 @@ All notable changes to this standard are documented here. The format follows [Ke
 
 ### Added
 
+- `scripts/supervisor.py`: one supervisor per user, held by a lock file. It resumes every started plan that has pending work, no live process and no owner pause. `install` registers it in the Windows Task Scheduler every 5 minutes. The SessionStart hook starts one pass in the background, so opening a repository recovers a plan whose process died. `STANDARDS_NO_SUPERVISOR=1` turns that off. `detach` now writes a pid file.
 - `scripts/blockers.py` saves one record per stopped action with six facts: exact action, evidence with source and text, kind of obstacle, existing approval, work done and unblock condition. A vague record, or an agent precaution without the effect it hides, is refused. `why` answers "why can't you do it?" from the records.
 - The router has a `control` intent. "Pausa", "cancela el plan", "reanuda" and "muéstrame el estado" are recognized and told to use `execute.py` instead of starting edits. "Continúa", "sigue" and "retoma" start work.
+
+### Changed
+
+- A work order goes to the coordinator by default, so the owner no longer types `consent --route coordinator`. `consent --route session` still keeps the session as the owner of the work.
+- `blockers.py` and `supervisor.py` are part of the scripts the skills plugin ships.
 
 ### Fixed
 

@@ -605,6 +605,7 @@ def detach(args: list[str], repo: Path, plan_id: str) -> dict:
     with log.open("ab") as out:
         proc = subprocess.Popen([sys.executable, str(Path(__file__).resolve()), *args], cwd=str(repo),
                                 stdin=subprocess.DEVNULL, stdout=out, stderr=subprocess.STDOUT, **flags)
+    (log.parent / f"{plan_id}.pid").write_text(str(proc.pid), encoding="utf-8")
     return {"detached": True, "pid": proc.pid, "log": str(log), "plan_id": plan_id}
 
 

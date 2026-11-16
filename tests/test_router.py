@@ -466,6 +466,20 @@ class RecipeFileTests(unittest.TestCase):
         self.assertEqual(limits["owner"], "session")
 
 
+class DefaultOwnerTests(Base):
+    def limits(self, local):
+        import orchestrate
+        conf = orchestrate.policy()
+        with mock.patch.object(orchestrate, "local_config", return_value=local), mock.patch.object(orchestrate, "policy", return_value=conf):
+            return router.owner_limits(self.web)
+
+    def test_a_work_order_goes_to_the_coordinator_when_the_owner_set_nothing(self):
+        self.assertEqual(self.limits({})["owner"], "coordinator")
+
+    def test_an_explicit_session_choice_is_kept(self):
+        self.assertEqual(self.limits({"router": {"owner": "session"}})["owner"], "session")
+
+
 class HookTests(Base):
     def hook(self, payload, env=None):
         ran = subprocess.run([sys.executable, str(ROOT / "hooks" / "route_prompt.py")], input=payload if isinstance(payload, str) else json.dumps(payload),

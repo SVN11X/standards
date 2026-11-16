@@ -185,7 +185,9 @@ def owner_limits(root: Path) -> dict:
         mode = orchestrate.cost_mode(conf, local)[0]
         cls = orchestrate.privacy_class(root, conf, local)[0]
         strict = conf["privacy"]["classes"][cls].get("remote_free") == "deny"
-        out.update({**(conf.get("routing") or {}), **(local.get("router") or {})})
+        chosen = {**(conf.get("routing") or {}), **(local.get("router") or {})}
+        # With nothing set the coordinator owns a work order, so the owner never types a switch. An explicit `session` stays.
+        out.update({"owner": "coordinator", **chosen})
         out.update(privacy=cls, cost_mode=mode, local_only=mode == "local-only" or strict,
                    why_local=f"cost mode {mode}" if mode == "local-only" else f"a {cls} folder" if strict else "")
     except Exception:  # noqa: BLE001 (fail closed: keep the task local)
