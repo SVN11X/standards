@@ -549,6 +549,8 @@ class SumEven(unittest.TestCase):
 
 
 if __name__ == "__main__":
+    import console
+    console.safe_output()
     unittest.main()
 '''
 HIDDEN_TESTS = '''import unittest
