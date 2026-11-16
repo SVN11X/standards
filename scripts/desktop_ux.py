@@ -3,12 +3,14 @@
 
 Usage:
   python scripts/desktop_ux.py tk MODULE:FACTORY [--src DIR] [--sizes 1024x700,800x600] [--scale S] [--shots DIR] [--json] [--strict]
-  python scripts/desktop_ux.py uia --title TEXT [--json] [--strict]
+                                [--save RUN.json] [--compare RUN.json]
+  python scripts/desktop_ux.py uia --title TEXT [--json] [--strict] [--save RUN.json] [--compare RUN.json]
   python scripts/desktop_ux.py shot --title TEXT --out FILE.png
   python scripts/desktop_ux.py protocol --app NAME --task "TEXT" [--task "TEXT" ...] [--out DIR]
   python scripts/desktop_ux.py evidence [DIR] [--json]
 
-tk builds a tkinter window in this process: FACTORY(root) must build the interface on the Tk root it gets. It opens
+tk builds a tkinter window in this process: FACTORY(root) must build the interface on the Tk root it gets, and may
+return a Toplevel, or an object with one as .window, to measure that window instead, such as a dialog. It opens
 every tab of every notebook at every size, checks contrast, text size, target size and spacing, text cut by the
 layout, and controls a mouse reaches and the keyboard does not, and can save one screenshot per tab and size.
 uia reads the UI Automation tree of a running window of any technology (Win32, WinForms, WPF, Go, Electron) with
@@ -52,6 +54,11 @@ SOURCES = {
               "https://www.nngroup.com/articles/why-you-only-need-to-test-with-5-users/",
     "heuristics": "Nielsen 1994, ten usability heuristics. https://www.nngroup.com/articles/ten-usability-heuristics/",
     "screen-reader": "The audit cannot hear what a screen reader says. Do the main task once with Narrator (Ctrl+Win+Enter)",
+    "emphasis": "Windows UX guidelines, Fonts: most UI text is plain, without bold or italic. "
+                "https://learn.microsoft.com/windows/win32/uxguide/vis-fonts",
+    "out-of-view": "Nielsen 1994, visibility and recognition rather than recall: an action the person has to scroll to find is "
+                   "an action they may not know exists. https://www.nngroup.com/articles/ten-usability-heuristics/",
+    "shown": "A window that is not on screen cannot be measured. Open it the way the app does and keep its parent shown",
 }
 # The ten statements of the System Usability Scale (Brooke 1996), answered from 1 (strongly disagree) to 5 (strongly agree).
 SUS_EN = [
@@ -245,9 +252,12 @@ def tk_label(widget) -> str:
     return f"{widget.winfo_class()} {widget}" + (f" \"{text[:40]}\"" if text else "")
 
 
-def tk_audit(root, where: str = "") -> list[dict]:
-    """The findings of every mapped widget of one window as it is drawn now."""
+def tk_audit(root, where: str = "", measured: list | None = None) -> list[dict]:
+    """The findings of every mapped widget of one window as it is drawn now. `measured` gets the widgets read."""
     root.update_idletasks()
+    if not root.winfo_viewable():
+        return []
+    view = (root.winfo_rootx(), root.winfo_rooty(), root.winfo_rootx() + root.winfo_width(), root.winfo_rooty() + root.winfo_height())
     scale = root.winfo_fpixels("1i") / 96
     out, targets = [], []
     need_w, need_h, has_w, has_h = root.winfo_reqwidth(), root.winfo_reqheight(), root.winfo_width(), root.winfo_height()
@@ -258,8 +268,11 @@ def tk_audit(root, where: str = "") -> list[dict]:
                            f"its content needs {need_w} by {need_h} px and it has {has_w} by {has_h}: what does not fit is hidden. "
                            f"Its minimum size is {minimum[0]} by {minimum[1]}: raise it or let the content scroll"))
     for widget in tk_widgets(root):
-        if widget is root or not widget.winfo_ismapped():
+        # Another window the app opened is measured on its own, never as part of this one.
+        if widget is root or not widget.winfo_ismapped() or widget.winfo_toplevel() is not root:
             continue
+        if measured is not None:
+            measured.append(widget)
         cls, label = widget.winfo_class(), tk_label(widget)
         x, y, w, h = widget.winfo_rootx(), widget.winfo_rooty(), widget.winfo_width(), widget.winfo_height()
         disabled = tk_disabled(widget)
@@ -273,12 +286,19 @@ def tk_audit(root, where: str = "") -> list[dict]:
                     out.append(finding("contrast", "error", label, f"{ratio}:1 for {fg} on {bg}, needs {need}:1"))
             if points < MIN_POINTS - 0.25:
                 out.append(finding("font", "warning", label, f"{round(points, 1)} pt"))
+            text = str(widget.cget("text")) if cls in TK_ONE_LINE else ""
+            if bold and len(text) > 120:
+                out.append(finding("emphasis", "warning", label, f"{len(text)} characters in bold: the eye finds nothing to start from"))
         if cls in TK_ONE_LINE:
             need_w, need_h = tk_natural(widget)
             if need_w > w + 1 or need_h > h + 1:
                 out.append(finding("clipped", "warning", label, f"its text needs {need_w} by {need_h} px and has {w} by {h}"))
         if cls in TK_TARGETS and not disabled:
             targets.append({"where": label, "rect": (x, y, x + w, y + h)})
+            if y + h > view[3] + 1 or x + w > view[2] + 1:
+                out.append(finding("out-of-view", "warning", label,
+                                   f"{max(y + h - view[3], x + w - view[2])} px beyond the visible part of the window: "
+                                   "the person has to scroll to find it"))
             if str(widget.cget("takefocus")) in ("0", "False", "false"):
                 out.append(finding("keyboard", "error", label, "takefocus is off, so Tab never reaches it"))
         elif cls in TK_PASSIVE:
@@ -334,6 +354,16 @@ def slug(text: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", text.lower()).strip("-") or "window"
 
 
+def audited_window(root, app):
+    """The window to measure: one the factory returns, a Toplevel or an object holding it as .window, else the root.
+    A dialog, a quiz or a notice is a Toplevel the app opens on an action, so the factory opens it and returns it."""
+    import tkinter as tk
+    for candidate in (app, getattr(app, "window", None)):
+        if isinstance(candidate, (tk.Tk, tk.Toplevel)):
+            return candidate
+    return root
+
+
 def run_tk(target: str, src: list[str], sizes: list[tuple[int, int]], scale: float | None, shots: Path | None) -> dict:
     if os.name == "nt":
         try:  # the window and the screenshot then use the same pixels at any Windows scaling
@@ -352,21 +382,22 @@ def run_tk(target: str, src: list[str], sizes: list[tuple[int, int]], scale: flo
     if scale:
         root.tk.call("tk", "scaling", 96 * scale / 72)
     app = factory(root)
-    findings, pictures, notes = [], [], []
+    window = audited_window(root, app)
+    findings, pictures, notes, measured = [], [], [], []
     seen = set()
     for width, height in sizes:
-        root.geometry(f"{width}x{height}")
-        root.update()
-        for state in tk_states(root):
+        window.geometry(f"{width}x{height}")
+        window.update()
+        for state in tk_states(window):
             where = f"{width}x{height}, {state}"
-            for item in tk_audit(root, where):
+            for item in tk_audit(window, where, measured):
                 key = (item["rule"], item["where"], item["detail"])
                 if key not in seen:
                     seen.add(key)
                     findings.append(item)
             if shots:
                 path = shots / f"{width}x{height}-{slug(state)}.png"
-                problem = tk_shot(root, path)
+                problem = tk_shot(window, path)
                 if problem:
                     notes.append(problem)
                 else:
@@ -379,6 +410,8 @@ def run_tk(target: str, src: list[str], sizes: list[tuple[int, int]], scale: flo
             except Exception:  # noqa: BLE001
                 pass
             break
+    if not measured:
+        findings.append(finding("shown", "error", "the window", "no control was on screen, so nothing was measured"))
     from tkinter import ttk
     import platform
     notes.insert(0, f"measured with the ttk theme {ttk.Style(root).theme_use()} at {round(root.winfo_fpixels('1i'))} dpi on "
@@ -494,6 +527,29 @@ def report(kind: str, target: str, findings: list[dict], pictures: list[str], no
     counts = {s: sum(f["severity"] == s for f in findings) for s in order}
     return {"schema": SCHEMA, "kind": kind, "target": target, "counts": counts, "findings": findings, "screenshots": pictures,
             "notes": notes, "heuristics": SOURCES["heuristics"]}
+
+
+def stable(where: str) -> str:
+    """A finding's place without the widget paths tkinter numbers by creation order, which move when code changes."""
+    return re.sub(r"\s\.[^\s\"]*", "", where).strip()
+
+
+def compare(before: dict, after: dict) -> dict:
+    """What a new run fixed, kept and added against a saved one, matched by rule, place and window state."""
+    def key(item: dict) -> tuple:
+        return item["rule"], stable(item["where"]), item.get("at", "")
+    old = {key(f): f for f in before.get("findings", [])}
+    new = {key(f): f for f in after.get("findings", [])}
+    return {"schema": SCHEMA, "kind": "compare", "target": after.get("target"),
+            "fixed": [old[k] for k in old if k not in new], "still": [new[k] for k in new if k in old],
+            "new": [new[k] for k in new if k not in old]}
+
+
+def compare_summary(diff: dict) -> str:
+    lines = [f"{diff['target']}: {len(diff['fixed'])} fixed, {len(diff['still'])} still there, {len(diff['new'])} new"]
+    for label, items in (("NEW", diff["new"]), ("FIXED", diff["fixed"]), ("STILL", diff["still"])):
+        lines += [f"{label:6}{f['severity']:8}{f['rule']:12}{stable(f['where'])} [{f.get('at', '')}]: {f['detail']}" for f in items]
+    return "\n".join(lines)
 
 
 def summary(result: dict) -> str:
@@ -629,11 +685,15 @@ def main(argv=None) -> int:
     p.add_argument("--scale", type=float, help="text scale to try, like Windows display scaling: 1.25 or 1.5")
     p.add_argument("--shots", type=Path, help="folder for one screenshot per size and tab")
     p.add_argument("--json", action="store_true")
-    p.add_argument("--strict", action="store_true", help="exit 1 when there is an error")
+    p.add_argument("--strict", action="store_true", help="exit 1 when there is an error (with --compare, a new one)")
+    p.add_argument("--save", type=Path, help="write this run to a JSON file, to compare a later run with it")
+    p.add_argument("--compare", type=Path, help="a run saved with --save: say what was fixed, what is still there, what is new")
     p = sub.add_parser("uia", help="audit a running window through Windows UI Automation")
     p.add_argument("--title", required=True)
     p.add_argument("--json", action="store_true")
     p.add_argument("--strict", action="store_true")
+    p.add_argument("--save", type=Path)
+    p.add_argument("--compare", type=Path)
     p = sub.add_parser("shot", help="save a screenshot of a running window on Windows")
     p.add_argument("--title", required=True)
     p.add_argument("--out", type=Path, required=True)
@@ -660,9 +720,18 @@ def main(argv=None) -> int:
         print(json.dumps(run_shot(args.title, args.out), indent=2, ensure_ascii=False))
         return 0
     result = run_tk(args.target, args.src, args.sizes, args.scale, args.shots) if args.command == "tk" else run_uia(args.title)
-    print(json.dumps(result, indent=2, ensure_ascii=False) if args.json else summary(result))
+    if args.save:
+        args.save.parent.mkdir(parents=True, exist_ok=True)
+        args.save.write_text(json.dumps(result, indent=2, ensure_ascii=False), encoding="utf-8")
+    if args.compare:
+        diff = compare(json.loads(args.compare.read_text(encoding="utf-8")), result)
+        print(json.dumps(diff, indent=2, ensure_ascii=False) if args.json else compare_summary(diff))
+        failed = any(f["severity"] == "error" for f in diff["new"])
+    else:
+        print(json.dumps(result, indent=2, ensure_ascii=False) if args.json else summary(result))
+        failed = bool(result["counts"]["error"])
     sys.stdout.flush()
-    code = 1 if args.strict and result["counts"]["error"] else 0
+    code = 1 if args.strict and failed else 0
     if args.command == "tk":
         # An app may leave threads behind (a tray icon, a timer). The report is out, so nothing is waited for.
         os._exit(code)

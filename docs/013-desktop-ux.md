@@ -23,6 +23,10 @@ The `desktop-improve` skill works the way the owner asked on 2026-11-16: do the 
 | Every control has a name a screen reader says | no | yes | [WCAG 2.2, 4.1.2](https://www.w3.org/TR/WCAG22/#name-role-value) |
 | Buttons with the same name | no | yes | [WCAG 2.2, 2.4.6](https://www.w3.org/TR/WCAG22/#headings-and-labels) |
 
+A factory may return a Toplevel, or an object holding one as `.window`, so a dialog, quiz or notice the app opens on an action is measured too. Two more rules come from the first review of a real quiz window: an action below the visible part of a scrolled window, which the person has to scroll to find, and a paragraph in bold. A window that was never on screen is an error, never a clean report.
+
+`--save RUN.json` keeps a run and `--compare RUN.json` says what a later run fixed, kept and added. Findings match by rule, control and window state, not by the widget paths tkinter numbers by creation order, so a change that adds a widget does not turn old findings into new ones. With `--strict`, only a new error fails.
+
 The sizes depend on the theme, the fonts and the display. The report names the theme and the dpi it measured with, so a run on Linux is a first signal and a run on Windows is the evidence. No program hears what a screen reader says: do the main task once with Narrator. [Axe.Windows](https://github.com/microsoft/axe-windows) checks many more UI Automation rules, and its CLI `AxeWindowsCLI` is in the `desktop-ux` capability when it is installed.
 
 ## What a person judges
@@ -42,3 +46,5 @@ The [Microsoft Learn MCP server](https://learn.microsoft.com/training/support/mc
 ## First run
 
 On 2026-11-16 on a clone of OpenTutor, in a Linux virtual display with the default ttk theme at 100 dpi. The tool opened its six tabs at two sizes in about two seconds and saved twelve screenshots. It found a minimum window height of 640 px where the content needs 663, so the last setting, "Ventana insistente", is hidden at that height without a scrollbar. It also found five domain checkboxes 21 px tall and too close together, and six pairs of controls 3.8 px apart. Its first version reported most ttk labels as cut by 6 px, because it guessed the padding of the theme. It now reads the size a widget asks for with all its text. Nothing was run on Windows yet.
+
+The same day, on the quiz window of the owner's Windows screenshots, it found the "Siguiente" button 99 px below the visible part of the window and a question of 688 characters in bold. Its first try reported nothing, because the factory hid the parent of the quiz, which is why a window never shown is now an error. A trial fix on a local copy, a fixed footer for the buttons and plain text for the question, compared with the saved run as 3 fixed, 0 still there, 0 new.
