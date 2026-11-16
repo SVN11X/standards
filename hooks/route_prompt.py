@@ -39,15 +39,39 @@ def context(data: dict) -> str | None:
     return router.render(decision, limit) or None
 
 
+def inbox(data: dict) -> str | None:
+    """Register this session on the peerbox and hand it the messages waiting for it. Never blocks a request."""
+    scripts = router_dir()
+    session = str(data.get("session_id") or "")
+    if scripts is None or not session or os.environ.get("STANDARDS_NO_PEERBOX"):
+        return None
+    sys.path.insert(0, str(scripts))
+    import re
+    import peerbox
+    folder = re.sub(r"[^a-z0-9-]+", "-", Path(data.get("cwd") or os.getcwd()).name.lower()).strip("-")[:30] or "repo"
+    name = f"claude-{folder}-{re.sub(r'[^a-z0-9]', '', session.lower())[:6]}"
+    db = peerbox.connect()
+    peerbox.register(db, name, "claude", session)
+    peerbox.group(db, folder if len(folder) > 1 else "repo", [name])
+    text = peerbox.render(peerbox.pull(db, name))
+    return (text + f" Your name on the peerbox: {name}.") if text else None
+
+
 def main() -> int:
     try:
         data = json.load(sys.stdin)
     except ValueError:
         data = {}
+    data = data if isinstance(data, dict) else {}
     try:
-        text = context(data if isinstance(data, dict) else {})
+        text = context(data)
     except Exception:  # noqa: BLE001 (fail open, the request must go through)
         text = None
+    try:
+        messages = inbox(data)
+    except Exception:  # noqa: BLE001 (a message never blocks a request)
+        messages = None
+    text = "\n\n".join(t for t in (messages, text) if t) or None
     if text:
         print(json.dumps({"hookSpecificOutput": {"hookEventName": "UserPromptSubmit", "additionalContext": text}}))
     return 0
