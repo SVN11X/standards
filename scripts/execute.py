@@ -637,4 +637,6 @@ def main(argv=None) -> int:
 
 
 if __name__ == "__main__":
+    import console
+    console.safe_output()
     sys.exit(main())

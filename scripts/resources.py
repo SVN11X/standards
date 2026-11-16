@@ -75,4 +75,6 @@ def local_busy(model: str | None, conf: dict, gpu=None, loaded: list[str] | None
 
 
 if __name__ == "__main__":
+    import console
+    console.safe_output()
     print(json.dumps(snapshot(), indent=2))

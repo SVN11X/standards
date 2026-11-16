@@ -1352,7 +1352,9 @@ BUNDLED_SCRIPTS = ("standard.py", "orchestrate.py", "verify.py", "evidence.py", 
                    # The checked merge the guard hook points to when the owner allows merges.
                    "merge_when_green.py",
                    # The desktop UX measures the desktop-tester agent runs.
-                   "desktop_ux.py")
+                   "desktop_ux.py",
+                   # Every script above prints through it, so a Windows pipe never stops a report half way.
+                   "console.py")
 
 
 def cmd_package_skills(out_dir: Path) -> None:
@@ -1921,4 +1923,6 @@ def main(argv: list[str] | None = None) -> int:
 
 
 if __name__ == "__main__":
+    import console
+    console.safe_output()
     sys.exit(main())

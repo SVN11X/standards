@@ -4,6 +4,12 @@ All notable changes to this standard are documented here. The format follows [Ke
 
 ## [Unreleased]
 
+## [1.18.1] - 2026-11-16
+
+### Fixed
+
+- A script stopped half way through its report on Windows when its output went to a pipe, which is how Claude Code and a PowerShell pipeline read it. The pipe wrote in the ANSI code page, cp1252, which has no check mark, arrow or emoji, so text quoted from OpenCode, a question bank or a run record raised UnicodeEncodeError. The owner's session saw it with `orchestrate.py`. Every script now starts with `console.safe_output()`: a pipe gets UTF-8 and a console replaces what it cannot draw. `tests/test_console.py` shows `orchestrate.py runs` failing before and passing after.
+
 ## [1.18.0] - 2026-11-16
 
 ### Added

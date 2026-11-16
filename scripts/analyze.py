@@ -723,6 +723,8 @@ def main(argv: list[str] | None = None) -> int:
 
 
 if __name__ == "__main__":
+    import console
+    console.safe_output()
     if os.name == "nt":
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     sys.exit(main())
