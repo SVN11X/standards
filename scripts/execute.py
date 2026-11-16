@@ -553,7 +553,8 @@ def report(plan: dict, state: dict) -> dict:
         if entry is None:
             units.append({"id": unit["id"], "status": "not_run", "commit": None, "tests": None, "review": None,
                           "findings": None, "retries": None, "executor": None, "model": None, "note": None,
-                          "channel": None, "seconds": None, "depends_on": plan_deps.get(unit["id"], [])})
+                          "channel": None, "seconds": None, "partial": None, "attempt_log": None,
+                          "depends_on": plan_deps.get(unit["id"], [])})
             continue
         found = entry.get("review")
         checks = entry.get("checks")
@@ -565,6 +566,7 @@ def report(plan: dict, state: dict) -> dict:
                       "retries": max(0, tried - 1) if isinstance(tried, int) else None,
                       "executor": entry.get("executor"), "model": entry.get("model"), "note": entry.get("note"),
                       "channel": entry.get("channel"), "seconds": entry.get("seconds"),
+                      "partial": entry.get("partial"), "attempt_log": entry.get("attempt_log"),
                       "depends_on": plan_deps.get(unit["id"], [])})
     counts: dict[str, int] = {}
     for item in units:

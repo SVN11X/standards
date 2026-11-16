@@ -30,6 +30,8 @@
           "note": {"type": ["string", "null"]},
           "channel": {"type": ["string", "null"]},
           "seconds": {"type": ["number", "null"]},
+          "partial": {"type": ["boolean", "null"]},
+          "attempt_log": {"type": ["array", "null"], "items": {"type": "object"}},
           "depends_on": {"type": "array", "items": {"type": "string"}}
         }
       }

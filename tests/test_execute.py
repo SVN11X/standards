@@ -379,6 +379,8 @@ class RecoveryTests(Base):
         self.assertEqual(calls, ["slow", "healthy"])
         self.assertEqual(self.statuses(run), {"u1": "passed"})
         self.assertEqual([a["failure_code"] for a in run.state["units"]["u1"]["attempt_log"]], ["timeout", None])
+        shown = execute.report(run.plan, run.state)["units"][0]
+        self.assertEqual([a["model"] for a in shown["attempt_log"]], ["slow", "healthy"])
 
     def test_partial_timeout_keeps_the_worktree_and_is_not_reassigned(self):
         calls = []
