@@ -3,6 +3,7 @@ import os
 import sys
 import tempfile
 import unittest
+from unittest import mock
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
@@ -69,6 +70,18 @@ class SupervisorTests(unittest.TestCase):
         supervisor.lock_path().write_text("999999")
         self.assertFalse(supervisor.take_lock(lambda pid: True))
         self.assertTrue(supervisor.take_lock(lambda pid: False))
+
+    def test_a_second_session_joins_a_running_plan_instead_of_starting_another(self):
+        import subprocess
+        import plan_autopilot
+        sleeper = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(30)"])
+        self.addCleanup(sleeper.kill)
+        supervisor.pid_file("same").parent.mkdir(parents=True, exist_ok=True)
+        supervisor.pid_file("same").write_text(str(sleeper.pid))
+        with mock.patch.object(plan_autopilot.subprocess, "Popen") as popen:
+            joined = plan_autopilot.detach(["run", "x"], self.repo, "same")
+        popen.assert_not_called()
+        self.assertEqual(joined["already_running"], sleeper.pid)
 
     def test_install_names_the_windows_task_scheduler(self):
         command = supervisor.install_command()

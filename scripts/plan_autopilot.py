@@ -561,7 +561,16 @@ def pr_body(plan: dict) -> str:
             f"## How to verify\n\nRun `{plan['final_regression'][0]}`. It passed on the integration branch, and every unit "
             "passed its tests and a review by a model other than its author.\n"
             f"Total {metrics.get('total_s')} s, peak of {metrics.get('peak_parallel')} units at once, "
-            f"{metrics.get('collisions')} integration conflicts, {metrics.get('retries')} retries.\n")
+            f"{metrics.get('collisions')} integration conflicts, {metrics.get('retries')} retries.\n"
+            + readiness_section(plan))
+
+
+def readiness_section(plan: dict) -> str:
+    """When the plan implements a spec, the computed verdict goes in the pull request. CI is not known yet here."""
+    if not plan.get("spec"):
+        return ""
+    import readiness
+    return "\n## Readiness\n\n" + readiness.markdown(readiness.assess(Path(plan["repo"]), plan["spec"], "unknown")) + "\n"
 
 
 def follow_ci(plan: dict, repo: Path, worktree: Path, branch: str, name: str, pr: dict, *, reviewer: str | None = None,
@@ -600,6 +609,11 @@ def detach(args: list[str], repo: Path, plan_id: str) -> dict:
     """Start this script as its own process, so the run goes on after the caller (a Claude session, a terminal) ends."""
     log = orchestrate.home() / "autopilot" / f"{plan_id}.log"
     log.parent.mkdir(parents=True, exist_ok=True)
+    import supervisor
+    running = supervisor.read_pid(log.parent / f"{plan_id}.pid")
+    if supervisor.alive(running):
+        # A second session with the same request finds the same plan: it joins the run instead of starting another.
+        return {"detached": False, "already_running": running, "log": str(log), "plan_id": plan_id}
     flags = ({"creationflags": subprocess.CREATE_NEW_PROCESS_GROUP | getattr(subprocess, "DETACHED_PROCESS", 0)}
              if os.name == "nt" else {"start_new_session": True})
     with log.open("ab") as out:
