@@ -18,6 +18,7 @@ All notable changes to this standard are documented here. The format follows [Ke
 
 ### Fixed
 
+- `delegate opencode` without `--model` took the first free model the owner checked even while it was cooling down after a failure. It now skips models in cooldown, as `route` does. The `delegate-runner` agent and the repo-improve skill now pass the model the router chose, and the agent reports the model asked for and the model the run record shows.
 - `execute.py` counted an attempt for a unit that never reached a model, so one unit without an executor could use the whole `max_total_attempts` and starve independent units.
 - Attempt and remote-session budgets, and elapsed wall time, are saved in the plan state and survive a resume.
 - After a timeout that left the code intact, the executor asks the router again with the updated health and takes a model it has not tried. A timeout that changed files keeps the worktree, marks the unit `partial` and blocks reassignment until it is inspected. The execution report shows `attempt_log` and `partial` per unit. Every attempt is logged with executor, model, duration, worktree, branch, commit, changed files and test result.

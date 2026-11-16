@@ -1423,10 +1423,12 @@ def delegate_opencode(repo: Path, task: str, allowed: list[str], test: str | Non
             return run_data
         model = model or f"colibri/{found['models'][0]}"
     if executor == "opencode" and not model:
-        models = checked_free_models(local, conf)
+        # Without --model, take the first checked free model that is not cooling down after a failure, as route() does.
+        cooling = cooling_set()
+        models = [m for m in checked_free_models(local, conf) if ("opencode", m) not in cooling]
         model = models[0] if models else None
         if not model:
-            set_state(run_data, "blocked", "no free model checked by the owner in local.yml")
+            set_state(run_data, "blocked", "no free model checked by the owner in local.yml is out of its cooldown")
             return run_data
     ok, why = gate(executor, model, repo, conf, local, mode, None, catalog)
     if not ok:
