@@ -56,6 +56,7 @@ class ClassifyTests(unittest.TestCase):
 
     def test_continue_is_work_and_a_question_stays_a_query(self):
         self.assertEqual(router.classify("continúa con lo pendiente y avísame cuando termines")[0], "work")
+        self.assertEqual(router.classify("Guarda las sesiones en SQLite")[0], "work")
         self.assertEqual(router.classify("¿Qué hace este archivo?")[0], "query")
 
     def test_pause_inside_a_work_request_is_not_control(self):

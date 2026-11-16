@@ -1365,7 +1365,7 @@ BUNDLED_SCRIPTS = ("standard.py", "orchestrate.py", "verify.py", "evidence.py", 
                    "safe_patch.py", "memory.py", "bench_tasks.py", "analyze.py", "providers.py",
                    # The executor loop, the planner and the router. verify.py and adversarial.py import them.
                    "execute.py", "workplan.py", "review.py", "scheduler.py", "resources.py", "plan_autopilot.py",
-                   "plan_contract.py", "planner.py", "repo_fingerprint.py", "router.py", "blockers.py", "supervisor.py", "reuse.py", "readiness.py", "peerbox.py",
+                   "plan_contract.py", "planner.py", "repo_fingerprint.py", "router.py", "blockers.py", "supervisor.py", "reuse.py", "readiness.py", "peerbox.py", "recall.py",
                    # Learning, writing and media checks the web-improve and docs-review skills call.
                    "learning_check.py", "text_check.py", "media.py",
                    # The checked merge the guard hook points to when the owner allows merges.

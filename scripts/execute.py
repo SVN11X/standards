@@ -567,6 +567,11 @@ class Executor:
         self.state["finished"] = None if result["paused"] else orchestrate.now()
         self.save()
         self.event({"event": "plan-paused" if result["paused"] else "plan-finished", "unit": None, "total_s": result["total_s"]})
+        try:
+            import recall
+            recall.handoff(self.repo, self.plan, self.state)
+        except Exception:  # noqa: BLE001 (a missing handoff never fails the run)
+            pass
         return self.state
 
     def on_schedule(self, row: dict) -> None:

@@ -36,7 +36,16 @@ def context(data: dict) -> str | None:
         return None
     decision = router.decide(prompt, cwd, "claude", session=data.get("session_id"), permission_mode=data.get("permission_mode"))
     limit = int(router.owner_limits(Path(decision["repository"]["root"])).get("max_context_chars", 1800))
-    return router.render(decision, limit) or None
+    text = router.render(decision, limit) or ""
+    if decision["intent"] in ("work", "review", "publish", "setup"):
+        try:
+            import recall
+            found = recall.lines(Path(decision["repository"]["root"]), prompt)
+        except Exception:  # noqa: BLE001 (recall is a hint, the request goes on without it)
+            found = []
+        if found:
+            text += "\nRead before planning (recalled, not the whole history):\n" + "\n".join(found)[:900]
+    return text or None
 
 
 def inbox(data: dict) -> str | None:

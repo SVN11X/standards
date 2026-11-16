@@ -74,7 +74,7 @@ CHANGE = verbs(
     "genera/génera/generar/genere dibuja/dibúja/dibujar/dibuje diseña/diséña/diseñar/diseñe ilustra/ilústra/ilustrar/ilustre "
     "documenta/documénta/documentar/documente redacta/redácta/redactar/redacte graba/grába/grabar/grabe anima/ánima/animar/anime "
     "incluye/inclúye/incluir/incluya adjunta/adjúnta/adjuntar/adjunte sustituye/sustitúye/sustituir/sustituya "
-    "continua/continúa/continuar/continúe sigue/sigue/seguir/siga retoma/retóma/retomar/retome "
+    "guarda/guárda/guardar/guarde continua/continúa/continuar/continúe sigue/sigue/seguir/siga retoma/retóma/retomar/retome "
     "reemplaza/reempláza/reemplazar/reemplace acelera/aceléra/acelerar/acelere reduce/redúce/reducir/reduzca",
     "fix add improve implement create change update refactor remove delete optimi[sz]e rewrite migrate convert make "
     "build write rename move translate finish integrate simplify repair solve clean find search draw design generate "
