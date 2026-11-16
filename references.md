@@ -83,6 +83,12 @@ Sources behind the rules. Prefer the original source. The check verifies these l
 - Hattie and Timperley (2007), the power of feedback: https://doi.org/10.3102/003465430298487
 - ISO 24495-1:2023, plain language: https://www.iso.org/standard/78907.html
 - Nielsen (2000), test with five users: https://www.nngroup.com/articles/why-you-only-need-to-test-with-5-users/
+- Brooke (2013), SUS: a retrospective, Journal of Usability Studies 8(2), on the System Usability Scale of 1996, summarized at: https://en.wikipedia.org/wiki/System_usability_scale
+- WCAG 2.2, contrast (minimum): https://www.w3.org/WAI/WCAG22/Understanding/contrast-minimum.html
+- Microsoft, Windows UX guidelines, fonts: https://learn.microsoft.com/windows/win32/uxguide/vis-fonts
+- Microsoft, Windows UX guidelines, layout: https://learn.microsoft.com/windows/win32/uxguide/vis-layout
+- Microsoft, Windows UX guidelines, touch targets: https://learn.microsoft.com/windows/win32/uxguide/inter-touch
+- Microsoft, Axe.Windows, accessibility rules for Windows apps: https://github.com/microsoft/axe-windows
 
 ## Visual assets
 

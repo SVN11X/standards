@@ -1350,7 +1350,9 @@ BUNDLED_SCRIPTS = ("standard.py", "orchestrate.py", "verify.py", "evidence.py", 
                    # Learning, writing and media checks the web-improve and docs-review skills call.
                    "learning_check.py", "text_check.py", "media.py",
                    # The checked merge the guard hook points to when the owner allows merges.
-                   "merge_when_green.py")
+                   "merge_when_green.py",
+                   # The desktop UX measures the desktop-tester agent runs.
+                   "desktop_ux.py")
 
 
 def cmd_package_skills(out_dir: Path) -> None:

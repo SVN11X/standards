@@ -405,7 +405,10 @@ class TaskTests(Base):
         self.assertIn("web-tester", web)
         self.assertNotIn("content-auditor", web)
         self.assertEqual(router.fitting_agents({"recipe": "learning-app", "signals": []}),
-                         ["content-auditor before and after content changes."])
+                         ["content-auditor before and after content changes.",
+                          "For a window, notice, tray or dialog: the desktop-improve skill, then desktop-tester."])
+        self.assertEqual(router.fitting_agents({"recipe": "windows-app", "signals": [{"id": "tkinter"}]}),
+                         ["For a window, notice, tray or dialog: the desktop-improve skill, then desktop-tester."])
         self.assertEqual(router.fitting_agents({"recipe": "api-service", "signals": [{"id": "python"}]}), [])
 
     def test_consent_hands_work_orders_to_the_coordinator(self):

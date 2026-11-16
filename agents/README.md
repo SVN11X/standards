@@ -12,5 +12,6 @@ Claude Code subagents the plugin ships. Each one starts with a clean context and
 | ci-fixer | Sonnet | fixes a failed check on a pull request, then calls merge_when_green.py | yes |
 | content-auditor | Sonnet | audits question banks, text and images with learning_check, text_check and media | no |
 | web-tester | Sonnet | checks a page in a real browser at 360 and 1280 px | no |
+| desktop-tester | Sonnet | checks a desktop window with desktop_ux.py, screenshots and the usability heuristics | no |
 
 A new agent needs a function no other agent has and a reason, like any rule in this repository. The selftest checks that every agent names itself after its file, uses a known model and lists only known tools.

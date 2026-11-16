@@ -73,10 +73,9 @@ capabilities:
       - {id: context7, kind: mcp, runs: remote, radar: Context7 MCP, mcp: context7, transport: stdio, clients: [claude, opencode],
          credentials: optional account key, writes: false, cost: free plan with a monthly call limit,
          leaves_machine: "library names and the questions asked, sent to Upstash", detect: {mcp: context7}}
-      - {id: microsoft-learn, kind: mcp, runs: remote, maintainer: Microsoft, needs_signal: windows,
-         source: "https://learn.microsoft.com/en-us/training/support/mcp", transport: http, clients: [claude, opencode],
-         writes: false, cost: free, leaves_machine: the questions asked, sent to Microsoft, status: assess,
-         detect: {mcp: microsoft-learn}, evidence: named in the owner's guide of 2026-11-15, not tested}
+      - {id: microsoft-learn, kind: mcp, runs: remote, radar: Microsoft Learn MCP Server, mcp: microsoft-learn, needs_signal: windows,
+         transport: http, clients: [claude, opencode], writes: false, cost: free, leaves_machine: the questions asked, sent to Microsoft,
+         detect: {mcp: microsoft-learn}, evidence: "on 2026-11-16 it returned the Windows UX guidelines behind desktop_ux.py"}
   unit-test:
     purpose: run the tests the project already has
     providers:
@@ -91,6 +90,32 @@ capabilities:
       - {id: pywinauto, kind: library, runs: local, maintainer: the pywinauto project, platforms: [windows],
          source: "https://pywinauto.readthedocs.io/en/latest/", clients: [claude, opencode, coordinator], writes: false, cost: free,
          leaves_machine: nothing, status: assess, detect: {signal: pywinauto}, evidence: named in the owner's guide of 2026-11-15, not tested}
+  desktop-ux:
+    purpose: measure a desktop window against the rules a program can check, at the sizes and tabs people use, with screenshots
+    providers:
+      - {id: desktop-ux-tk, kind: cli, runs: local, maintainer: SVN11X, source: scripts/desktop_ux.py, clients: [claude, opencode, coordinator],
+         writes: false, cost: free, leaves_machine: nothing, status: trial, detect: {signal: tkinter},
+         evidence: "python <standard>/scripts/desktop_ux.py tk MODULE:FACTORY --shots DIR. On OpenTutor in a Linux virtual display it found
+           a minimum window height that hides the last setting and five checkboxes 21 px tall. Not run on Windows yet"}
+      - {id: flaui-mcp, kind: mcp, runs: local, radar: FlaUI-MCP, mcp: flaui, transport: stdio, clients: [claude, opencode],
+         writes: true, cost: free, leaves_machine: nothing, detect: {mcp: flaui},
+         evidence: does the task in the running executable the way a person does, for the desktop-improve skill}
+      - {id: desktop-ux-uia, kind: cli, runs: local, maintainer: SVN11X, source: scripts/desktop_ux.py, clients: [claude, opencode, coordinator],
+         writes: false, cost: free, leaves_machine: nothing, status: assess, detect: {platform: windows},
+         evidence: "python <standard>/scripts/desktop_ux.py uia --title TEXT, for any technology. Needs pywinauto. Not run on Windows yet"}
+      - {id: axe-windows, kind: cli, runs: local, radar: Axe.Windows, clients: [claude, opencode, coordinator], writes: false, cost: free,
+         leaves_machine: nothing, detect: {which: [AxeWindowsCLI]}}
+      - {id: accessibility-insights, kind: app, runs: local, radar: Accessibility Insights for Windows, clients: [claude, opencode, coordinator],
+         writes: false, cost: free, leaves_machine: nothing, detect: {platform: windows},
+         evidence: a person inspects the tab order and the UI Automation tree}
+      - {id: windows-mcp, kind: mcp, runs: local, radar: Windows-MCP, mcp: windows-mcp, transport: stdio, clients: [claude, opencode],
+         writes: true, cost: free, leaves_machine: nothing, detect: {mcp: windows-mcp}}
+  usability-test:
+    purpose: see five people do the main tasks of the app, and score the System Usability Scale
+    providers:
+      - {id: desktop-ux-people, kind: cli, runs: local, maintainer: SVN11X, source: scripts/desktop_ux.py, clients: [claude, opencode, coordinator],
+         writes: true, cost: free, leaves_machine: nothing, status: trial, detect: always,
+         evidence: "desktop_ux.py protocol writes the card and evidence reads it. People do the test, so the owner runs it"}
   data-integrity:
     purpose: prove that no record, id or asset was lost or doubled
     providers:
@@ -1350,9 +1375,10 @@ recipes:
   - id: windows-app
     intents: [work]
     signals_any: [windows, desktop, tauri, dotnet]
-    words: [window, ventana, windows, desktop, escritorio, exe, ejecutable, native, nativa, nativo, focus, foco, tray, win32]
+    words: [window, ventana, windows, desktop, escritorio, exe, ejecutable, native, nativa, nativo, focus, foco, tray, win32, bandeja,
+            aviso, avisos, notificación, notificaciones, notification, dialog, diálogo, popup, emergente, teclado, keyboard]
     profile: software
-    capabilities: [code-navigation, unit-test, native-ui-test]
+    capabilities: [code-navigation, unit-test, native-ui-test, desktop-ux, usability-test]
     proof: the failure is reproduced and fixed in the window of the executable, on Windows
     notes: a browser test does not prove that a native window works
   - id: data-pipeline
@@ -1389,7 +1415,7 @@ recipes:
       lecciones, curso, repaso, repasar, memorizar, recordar, practicar, práctica, flashcards, tarjetas, cuestionario, cuestionarios, learn,
       learning, learner, learners, study, student, exam, question, questions, lesson, lessons, course, flashcard, practice, retention,
       remember, certificación, certification]
-    capabilities: [learning-design, question-quality, writing-check, comprehension-test, ux-review, unit-test]
+    capabilities: [learning-design, question-quality, writing-check, comprehension-test, desktop-ux, usability-test, unit-test]
     proof: every question explains why, practice mixes topics and comes back over days, and five learners finish a session and answer its
       questions from memory
     notes: a learning app outside a web page, such as a desktop tutor. Questions kept in code are reviewed by reading them, because the
