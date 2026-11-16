@@ -1,5 +1,4 @@
 """The supervisor resumes plans whose process is gone and leaves paused, finished and live ones alone."""
-import json
 import os
 import sys
 import tempfile
