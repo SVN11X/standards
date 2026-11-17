@@ -1,5 +1,6 @@
 """The supervisor resumes plans whose process is gone and leaves paused, finished and live ones alone."""
 import os
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -72,21 +73,58 @@ class SupervisorTests(unittest.TestCase):
         self.assertTrue(supervisor.take_lock(lambda pid: False))
 
     def test_a_second_session_joins_a_running_plan_instead_of_starting_another(self):
-        import subprocess
         import plan_autopilot
         sleeper = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(30)"])
         self.addCleanup(sleeper.kill)
         supervisor.pid_file("same").parent.mkdir(parents=True, exist_ok=True)
         supervisor.pid_file("same").write_text(str(sleeper.pid))
-        with mock.patch.object(plan_autopilot.subprocess, "Popen") as popen:
+        # wraps: on Windows alive() itself starts tasklist, so only a start of plan_autopilot.py counts.
+        with mock.patch.object(plan_autopilot.subprocess, "Popen", wraps=subprocess.Popen) as popen:
             joined = plan_autopilot.detach(["run", "x"], self.repo, "same")
-        popen.assert_not_called()
+        script = str(Path(plan_autopilot.__file__).resolve())
+        self.assertEqual([c for c in popen.call_args_list if script in map(str, c.args[0])], [])
         self.assertEqual(joined["already_running"], sleeper.pid)
 
     def test_install_names_the_windows_task_scheduler(self):
         command = supervisor.install_command()
         self.assertEqual(command[:2], ["schtasks", "/Create"])
         self.assertIn(supervisor.TASK_NAME, command)
+
+    def interpreters(self, *names):
+        folder = Path(self.tmp.name) / "py"
+        folder.mkdir(exist_ok=True)
+        for name in names:
+            (folder / name).write_text("", encoding="utf-8")
+        return folder
+
+    def test_the_task_runs_pythonw_so_no_console_opens_every_few_minutes(self):
+        folder = self.interpreters("python.exe", "pythonw.exe")
+        with mock.patch.object(supervisor, "windows", return_value=True), \
+                mock.patch.object(supervisor.sys, "executable", str(folder / "python.exe")):
+            run = supervisor.install_command()[-1]
+        self.assertTrue(run.startswith(f'"{folder / "pythonw.exe"}" '), run)
+
+    def test_without_pythonw_the_task_keeps_the_current_interpreter(self):
+        folder = self.interpreters("python.exe")
+        with mock.patch.object(supervisor, "windows", return_value=True), \
+                mock.patch.object(supervisor.sys, "executable", str(folder / "python.exe")):
+            run = supervisor.install_command()[-1]
+        self.assertTrue(run.startswith(f'"{folder / "python.exe"}" '), run)
+
+    def test_a_resumed_plan_runs_in_a_hidden_console_that_its_tools_share(self):
+        import plan_autopilot
+        folder = self.interpreters("python.exe", "pythonw.exe")
+        started = mock.MagicMock(pid=4321)
+        with mock.patch.object(supervisor, "windows", return_value=True), \
+                mock.patch.object(supervisor, "alive", return_value=False), \
+                mock.patch.object(plan_autopilot.sys, "executable", str(folder / "pythonw.exe")), \
+                mock.patch.object(plan_autopilot.subprocess, "Popen", return_value=started) as popen:
+            result = plan_autopilot.detach(["run", "x"], self.repo, "hidden")
+        self.assertEqual(result["pid"], 4321)
+        self.assertEqual(popen.call_args.args[0][0], str(folder / "python.exe"))
+        flags = popen.call_args.kwargs["creationflags"]
+        self.assertTrue(flags & 0x08000000, "CREATE_NO_WINDOW")
+        self.assertFalse(flags & 0x00000008, "DETACHED_PROCESS")
 
 
 if __name__ == "__main__":

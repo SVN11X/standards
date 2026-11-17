@@ -614,10 +614,18 @@ def detach(args: list[str], repo: Path, plan_id: str) -> dict:
     if supervisor.alive(running):
         # A second session with the same request finds the same plan: it joins the run instead of starting another.
         return {"detached": False, "already_running": running, "log": str(log), "plan_id": plan_id}
-    flags = ({"creationflags": subprocess.CREATE_NEW_PROCESS_GROUP | getattr(subprocess, "DETACHED_PROCESS", 0)}
-             if os.name == "nt" else {"start_new_session": True})
+    python = sys.executable
+    if supervisor.windows():
+        # A hidden console that every git, opencode or test the run starts shares, so none of them opens a window.
+        # DETACHED_PROCESS left the run with no console, and each console program it started opened its own.
+        console_python = Path(python).with_name("python.exe")
+        if Path(python).name.lower() == "pythonw.exe" and console_python.is_file():
+            python = str(console_python)
+        flags = {"creationflags": getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0x200) | supervisor.NO_WINDOW}
+    else:
+        flags = {"start_new_session": True}
     with log.open("ab") as out:
-        proc = subprocess.Popen([sys.executable, str(Path(__file__).resolve()), *args], cwd=str(repo),
+        proc = subprocess.Popen([python, str(Path(__file__).resolve()), *args], cwd=str(repo),
                                 stdin=subprocess.DEVNULL, stdout=out, stderr=subprocess.STDOUT, **flags)
     (log.parent / f"{plan_id}.pid").write_text(str(proc.pid), encoding="utf-8")
     return {"detached": True, "pid": proc.pid, "log": str(log), "plan_id": plan_id}
