@@ -80,15 +80,18 @@ def same_tree(a: str | None, b: str | None) -> bool:
     return a == b or (a is not None and b is not None and os.path.normcase(a) == os.path.normcase(b))
 
 
-def notices(db: sqlite3.Connection, session: str) -> list[str]:
+def notices(db: sqlite3.Connection, session: str, reading: str | None = None) -> list[str]:
+    """Changes by others after this session's last read, before that read is moved to now. A file the session is
+    reading at this moment is marked delivered without a line: it is getting the new content."""
     rows = db.execute(
-        "SELECT c.id, r.path, c.session, c.worktree, c.at FROM changes c JOIN reads r ON r.key = c.key "
+        "SELECT c.id, r.path, c.session, c.worktree, c.at, c.key FROM changes c JOIN reads r ON r.key = c.key "
         "WHERE r.session = ? AND c.session != ? AND c.at > r.at "
         "AND NOT EXISTS (SELECT 1 FROM delivered d WHERE d.session = ? AND d.change_id = c.id) "
         "ORDER BY c.at", (session, session, session)).fetchall()
     latest = {}
     for row in rows:
-        latest[row[1], row[2]] = row
+        if row[5] != reading:
+            latest[row[1], row[2]] = row[:5]
     lines = []
     for _, path, other, worktree, at in latest.values():
         _, mine = file_key(Path(path))
@@ -123,8 +126,8 @@ def handle(event: dict) -> dict | None:
         if tool in WRITE_TOOLS:
             db.execute("INSERT INTO changes(key, path, session, worktree, at) VALUES (?, ?, ?, ?, ?)",
                        (key, str(path), session, root, now))
+        lines = notices(db, session, reading=key if tool in READ_TOOLS else None)
         db.execute("INSERT OR REPLACE INTO reads VALUES (?, ?, ?, ?)", (session, key, str(path), now))
-        lines = notices(db, session)
         db.commit()
     if not lines:
         return None

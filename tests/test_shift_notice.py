@@ -50,6 +50,20 @@ class ShiftNoticeTests(unittest.TestCase):
         self.assertIn("changed under you: session aaaaaaaa", context)
         self.assertEqual(self.call("bbbbbbbb-1", "Read", self.root / "other.txt"), "")
 
+    def test_writing_a_file_that_changed_since_the_read_gets_the_notice(self):
+        f = self.root / "a.txt"
+        self.call("bbbbbbbb-1", "Read", f)
+        self.call("aaaaaaaa-1", "Edit", f)
+        context = json.loads(self.call("bbbbbbbb-1", "Write", f))["hookSpecificOutput"]["additionalContext"]
+        self.assertIn("changed under you: session aaaaaaaa", context)
+
+    def test_reading_the_changed_file_again_needs_no_notice(self):
+        f = self.root / "a.txt"
+        self.call("bbbbbbbb-1", "Read", f)
+        self.call("aaaaaaaa-1", "Edit", f)
+        self.assertEqual(self.call("bbbbbbbb-1", "Read", f), "")
+        self.assertEqual(self.call("bbbbbbbb-1", "Read", self.root / "other.txt"), "")
+
     def test_edit_before_read_is_silent(self):
         f = self.root / "a.txt"
         self.call("aaaaaaaa-1", "Write", f)
