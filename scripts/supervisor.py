@@ -23,11 +23,20 @@ TASK_NAME = "StandardsSupervisor"
 MAX_STALLS = 3
 
 
+NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0x08000000)
+
+
+def windows() -> bool:
+    return os.name == "nt"
+
+
 def alive(pid) -> bool:
     if not isinstance(pid, int) or pid <= 0:
         return False
-    if os.name == "nt":
-        out = subprocess.run(["tasklist", "/FI", f"PID eq {pid}", "/NH"], capture_output=True, text=True, check=False)
+    if windows():
+        # Started from pythonw.exe, which has no console, tasklist would open a window of its own.
+        out = subprocess.run(["tasklist", "/FI", f"PID eq {pid}", "/NH"], capture_output=True, text=True, check=False,
+                             creationflags=NO_WINDOW)
         return str(pid) in out.stdout
     try:
         os.kill(pid, 0)
@@ -135,9 +144,18 @@ def take_lock(is_alive=alive) -> bool:
     return True
 
 
+def windowless_python() -> str:
+    """pythonw.exe next to this interpreter when there is one: python.exe would open a console every few minutes."""
+    if windows():
+        quiet = Path(sys.executable).with_name("pythonw.exe")
+        if quiet.is_file():
+            return str(quiet)
+    return sys.executable
+
+
 def install_command(every_min: int = 5) -> list[str]:
     script = Path(__file__).resolve()
-    run = f'"{sys.executable}" "{script}" once'
+    run = f'"{windowless_python()}" "{script}" once'
     return ["schtasks", "/Create", "/F", "/TN", TASK_NAME, "/SC", "MINUTE", "/MO", str(every_min), "/TR", run]
 
 
@@ -151,6 +169,7 @@ def main(argv=None) -> int:
         if os.name != "nt":
             print("Not Windows. On Windows this runs: " + " ".join(command))
             return 0
+        print("Registering: " + " ".join(command), flush=True)
         return subprocess.run(command, check=False).returncode
     if args.command == "status":
         for path, plan in plans():

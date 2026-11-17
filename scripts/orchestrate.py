@@ -98,13 +98,36 @@ def local_config() -> dict:
     return load_yaml(home() / "local.yml")
 
 
+_WRITE_LOCKS: dict[str, threading.Lock] = {}
+_LOCKS_GUARD = threading.Lock()
+
+
+def _retry_busy(action, attempts: int = 8):
+    """Run action, and on Windows try again with a growing wait while another thread holds the file."""
+    for attempt in range(attempts):
+        try:
+            return action()
+        except PermissionError:
+            if os.name != "nt" or attempt == attempts - 1:
+                raise
+            time.sleep(0.01 * 2 ** attempt)
+
+
 def write_json(path: Path, data) -> None:
     """Write a whole file or nothing. Each writer has its own temp file, so two units that end at the same
-    moment cannot take the temp file from under each other."""
+    moment cannot take the temp file from under each other. On Windows a file another thread holds open cannot
+    be replaced or opened for a moment, so the writers of one file take turns and wait and try again."""
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_name(f"{path.name}.{os.getpid()}.{threading.get_ident()}.tmp")
     tmp.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
-    os.replace(tmp, path)
+    with _LOCKS_GUARD:
+        lock = _WRITE_LOCKS.setdefault(str(path), threading.Lock())
+    with lock:
+        _retry_busy(lambda: os.replace(tmp, path))
+
+
+def read_json(path: Path):
+    return json.loads(_retry_busy(lambda: path.read_text(encoding="utf-8")))
 
 
 def tail(text: str, size: int) -> str:

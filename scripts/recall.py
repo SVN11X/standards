@@ -8,6 +8,7 @@ license forbids redistributing it or a similar version: nothing of it is copied 
 Run: python scripts/recall.py "REQUEST" [--repo .]
 """
 import argparse
+import contextlib
 import re
 import sys
 from pathlib import Path
@@ -51,10 +52,11 @@ def ranked_memories(request: str, repo: str, top: int = 2) -> list[tuple]:
     terms = sorted(w for w in reuse.words(request) if len(w) >= 4)[:8]
     if not terms:
         return []
-    db = memory.connect()
     sql = ("SELECT e.id, e.kind, e.source, e.ref, e.created, e.text FROM entries_fts f JOIN entries e ON e.id = f.rowid "
            "WHERE entries_fts MATCH ? AND e.repo = ? ORDER BY e.id DESC LIMIT ?")
-    return db.execute(sql, (" OR ".join(f'"{t}"' for t in terms), repo, top)).fetchall()
+    # Closed at once: on Windows an open database keeps its folder from being removed.
+    with contextlib.closing(memory.connect()) as db:
+        return db.execute(sql, (" OR ".join(f'"{t}"' for t in terms), repo, top)).fetchall()
 
 
 def lines(root: Path, request: str) -> list[str]:
@@ -78,7 +80,8 @@ def handoff(repo: Path, plan: dict, state: dict) -> int | None:
              if e.get("status") in ("blocked", "failed")]
     text = (f"Plan {plan['plan_id']}: {plan.get('goal', '').splitlines()[0][:160]}. Passed: {', '.join(done) or 'none'}. "
             f"Stopped: {', '.join(stuck) or 'none'}.")
-    return memory.add(memory.connect(), "summary", text, repo=Path(repo).name, ref=f"plan {plan['plan_id']}", source="tool")
+    with contextlib.closing(memory.connect()) as db:
+        return memory.add(db, "summary", text, repo=Path(repo).name, ref=f"plan {plan['plan_id']}", source="tool")
 
 
 def main(argv=None) -> int:
