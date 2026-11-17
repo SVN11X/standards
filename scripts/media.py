@@ -322,11 +322,13 @@ def summary(report: dict) -> str:
     return "\n".join(lines)
 
 
-def video_check(path: Path, frames_dir: Path | None = None, frames: int = 3, run=subprocess.run) -> dict:
+def video_check(path: Path, frames_dir: Path | None = None, frames: int = 3, run=subprocess.run,
+                loudness_target: float = -14.0) -> dict:
     """What a finished video really holds, read with ffprobe and ffmpeg, never from the tool that made it.
 
     It reports the streams, the length, whether the sound is silent, the soft subtitle tracks and a few frames
-    saved for a person or a model to look at. Captions drawn into the picture only show in those frames."""
+    saved for a person or a model to look at. Captions drawn into the picture only show in those frames.
+    It also measures loudness and true peak, near silences and black frames, after the verify command of explainroo."""
     probe = run(["ffprobe", "-v", "error", "-show_entries", "stream=codec_type,codec_name,width,height:format=duration",
                  "-of", "json", str(path)], capture_output=True, text=True, timeout=60)
     if probe.returncode != 0:
@@ -336,7 +338,8 @@ def video_check(path: Path, frames_dir: Path | None = None, frames: int = 3, run
     kinds = [st.get("codec_type") for st in streams]
     duration = float((info.get("format") or {}).get("duration") or 0)
     report = {"file": str(path), "duration_s": round(duration, 2), "video": kinds.count("video"), "audio": kinds.count("audio"),
-              "soft_subtitles": kinds.count("subtitle"), "problems": [], "frames": []}
+              "soft_subtitles": kinds.count("subtitle"), "problems": [], "warnings": [], "frames": [],
+              "silences": [], "black": []}
     video = next((st for st in streams if st.get("codec_type") == "video"), {})
     report["size"] = f"{video.get('width')}x{video.get('height')}" if video else None
     if not report["video"]:
@@ -350,6 +353,32 @@ def video_check(path: Path, frames_dir: Path | None = None, frames: int = 3, run
         report["audio_max_db"] = None if not peak or peak.group(1) == "-inf" else float(peak.group(1))
         if report["audio_max_db"] is None or report["audio_max_db"] < -60:
             report["problems"].append("the sound track is silent")
+        ebu = run(["ffmpeg", "-hide_banner", "-nostats", "-i", str(path), "-filter_complex", "ebur128=peak=true",
+                   "-f", "null", "-"], capture_output=True, text=True, timeout=300)
+        summary = (ebu.stderr or "").rsplit("Summary:", 1)[-1] if "Summary:" in (ebu.stderr or "") else ""
+        lufs = re.search(r"I:\s*(-?[\d.]+) LUFS", summary)
+        true_peak = re.search(r"Peak:\s*(-?[\d.]+|-inf) dBFS", summary)
+        report["loudness_lufs"] = float(lufs.group(1)) if lufs else None
+        report["true_peak_dbtp"] = float(true_peak.group(1)) if true_peak and true_peak.group(1) != "-inf" else None
+        tp = report["true_peak_dbtp"]
+        if tp is not None and tp > 0:
+            report["problems"].append(f"the true peak is {tp} dBTP, above 0, so the sound clips")
+        elif tp is not None and tp > -1:
+            report["warnings"].append(f"the true peak is {tp} dBTP, above the ceiling of -1 dBTP")
+        if report["loudness_lufs"] is not None and abs(report["loudness_lufs"] - loudness_target) > 1.5:
+            report["warnings"].append(f"loudness is {report['loudness_lufs']} LUFS, target is {loudness_target}")
+        quiet = run(["ffmpeg", "-hide_banner", "-nostats", "-i", str(path), "-af", "silencedetect=n=-50dB:d=2.5",
+                     "-vn", "-f", "null", "-"], capture_output=True, text=True, timeout=300)
+        text = quiet.stderr or ""
+        starts = [float(m) for m in re.findall(r"silence_start:\s*([\d.]+)", text)]
+        ends = [float(m) for m in re.findall(r"silence_end:\s*([\d.]+)", text)]
+        report["silences"] = [[round(a, 2), round(ends[i] if i < len(ends) else duration, 2)] for i, a in enumerate(starts)]
+    if report["video"]:
+        dark = run(["ffmpeg", "-hide_banner", "-nostats", "-i", str(path), "-vf", "blackdetect=d=0.4:pix_th=0.08",
+                    "-an", "-f", "null", "-"], capture_output=True, text=True, timeout=300)
+        for a, b in re.findall(r"black_start:\s*([\d.]+)\s+black_end:\s*([\d.]+)", dark.stderr or ""):
+            report["black"].append([round(float(a), 2), round(float(b), 2)])
+            report["warnings"].append(f"black frames from {a} s to {b} s")
     if frames_dir and duration > 0 and report["video"]:
         frames_dir.mkdir(parents=True, exist_ok=True)
         for n in range(frames):
@@ -388,9 +417,10 @@ def main(argv=None) -> int:
     clip.add_argument("file", type=Path)
     clip.add_argument("--frames-dir", type=Path)
     clip.add_argument("--frames", type=int, default=3)
+    clip.add_argument("--loudness-target", type=float, default=-14.0)
     args = parser.parse_args(argv)
     if args.command == "video-check":
-        report = video_check(args.file, args.frames_dir, args.frames)
+        report = video_check(args.file, args.frames_dir, args.frames, loudness_target=args.loudness_target)
         print(json.dumps(report, indent=2, ensure_ascii=False))
         return 0 if report["ok"] else 1
     if args.command == "search":
