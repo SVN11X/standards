@@ -893,3 +893,14 @@ entries:
     expression: []
     notes: "Claude Code plugin with copy buttons on each code block, on each table (as Markdown, as rows for Excel or Google Sheets, or boxed) and at the end of each final answer (as Markdown or as shown). It needs Claude Code's fullscreen mode, tui set to fullscreen in ~/.claude/settings.json, which changes how the terminal looks, and a terminal that reports pointer motion, or its end-of-answer setting. A Claude Code update can move or hide the buttons until the plugin follows. Read from the zip of its main branch (1.5.6) the owner sent on 2026-11-16, not installed here. Before trial: the owner chooses fullscreen mode, then /plugin install copy-buttons --marketplace leonasdev/copy-buttons."
     evaluated: 2026-11-16
+  - name: jcode
+    url: https://github.com/1jehuang/jcode
+    status: assess
+    profiles: [web, software, data-ai, hardware, docs, infra]
+    kind: tool
+    license: MIT
+    cost: free code. The models are paid through the provider the owner signs in to
+    privacy: "Usage telemetry is on by default: provider and model names, feature families, session outcomes and performance, without prompts, code or answers. JCODE_NO_TELEMETRY or /telemetry turns it off. Sharing full transcripts is a separate program, off by default. The prompts and code of a session go to the model provider."
+    expression: []
+    notes: "Coding agent harness in Rust, next to Claude Code and OpenCode, which its authors measured at about 3 MB of RAM per extra headless session. Its swarm tells an agent when another one edits a file it read and lets agents message one another, it monitors the prompt cache from the usage the provider reports, and agentgrep returns matches with their enclosing function. hooks/shift_notice.py, hooks/cache_notice.py and scripts/agentgrep.py follow those three ideas with own code. It signs in to Claude with OAuth: read Anthropic's terms before using a Claude subscription from another harness. Installs with install.sh, or install.ps1 on Windows. Read from a shallow clone of main (ddde657) on 2026-11-16, not installed here. Before trial: one delegated unit through it on this machine, compared with OpenCode in agent-benchmark for time, memory and pass rate."
+    evaluated: 2026-11-16

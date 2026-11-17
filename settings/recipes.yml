@@ -62,6 +62,9 @@ capabilities:
          detect: {which: [rust-analyzer]}, evidence: named in the owner's guide of 2026-11-15, not tested}
       - {id: client-search, kind: built-in, runs: client, maintainer: the AI client, clients: [claude, opencode, coordinator],
          writes: false, cost: free, leaves_machine: nothing, status: adopt, detect: always}
+      - {id: agentgrep, kind: cli, runs: local, maintainer: SVN11X, source: scripts/agentgrep.py, clients: [claude, opencode, coordinator],
+         writes: false, cost: free, leaves_machine: nothing, status: trial, detect: always,
+         evidence: "after jcode's agentgrep: each match under its enclosing definitions, and what was seen collapsed, for small context windows"}
       - {id: serena, kind: mcp, runs: local, radar: Serena MCP, mcp: serena, transport: stdio, clients: [claude, opencode],
          writes: true, cost: free, leaves_machine: nothing, detect: {mcp: serena}}
   library-docs:
