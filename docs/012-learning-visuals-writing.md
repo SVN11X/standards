@@ -42,7 +42,8 @@ The router has five visual capabilities:
 | New images | SVG by hand, charts with Matplotlib, Manim stills, Imagegen Skills, Perchance by hand |
 | Existing images | the search of `media.py` |
 | Attaching | `media.py`, sharp, Pillow |
-| Short clips | HyperFrames, Manim, Motion Canvas, Remotion, OpenCut |
+| Short clips | HyperFrames, Manim, Motion Canvas, Remotion, OpenCut, explainroo in a project that has one |
+| Narrated videos | explainroo, with a voice made on this machine |
 | Media checks | ffprobe, Tesseract, the audit of `media.py` |
 
 Every provider has a radar entry or a source. The ones not tested here are in `assess`.

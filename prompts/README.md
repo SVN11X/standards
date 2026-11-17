@@ -6,3 +6,9 @@ Prompts to paste into an AI tool that does not have the `repo-setup` or `code-re
 - `task.md`: give a task to any AI with the six task fields.
 - `review.md`: ask any AI to review a change against the standard.
 - `global-instructions.md`: text for the global instructions of each tool, so agents know the standard outside a repository.
+
+To paste the requests the standard understands with one key on Windows, write a Promptline pack and import it in Promptline (Settings, Backup and import):
+
+```
+python scripts/promptline_pack.py --out standards-pack.json
+```

@@ -40,6 +40,34 @@ class VideoCheckTests(unittest.TestCase):
         self.assertFalse(report["ok"])
         self.assertIn("the sound track is silent", report["problems"])
 
+    def test_loudness_is_read_and_a_normal_video_has_no_black(self):
+        report = media.video_check(self.make("ok.mp4", "sine=frequency=440:duration=2"))
+        self.assertIsInstance(report["loudness_lufs"], float)
+        self.assertEqual(report["black"], [])
+
+    def test_a_black_start_is_listed_with_a_warning(self):
+        out = self.dir / "black.mp4"
+        subprocess.run(["ffmpeg", "-v", "error", "-y", "-f", "lavfi", "-i", "color=c=black:size=160x90:rate=10:duration=2",
+                        "-f", "lavfi", "-i", "sine=frequency=440:duration=2", "-shortest", "-c:v", "libx264",
+                        "-preset", "ultrafast", "-c:a", "aac", str(out)], check=True)
+        report = media.video_check(out)
+        self.assertEqual(len(report["black"]), 1)
+        self.assertEqual(report["black"][0][0], 0.0)
+        self.assertTrue(any("black frames" in w for w in report["warnings"]))
+
+    def test_a_long_quiet_stretch_is_listed_as_a_silence(self):
+        out = self.dir / "quiet.mp4"
+        subprocess.run(["ffmpeg", "-v", "error", "-y", "-f", "lavfi", "-i", "testsrc=size=160x90:rate=10:duration=4",
+                        "-f", "lavfi", "-i", "anullsrc=r=48000:cl=mono", "-shortest", "-c:v", "libx264",
+                        "-preset", "ultrafast", "-c:a", "aac", str(out)], check=True)
+        report = media.video_check(out)
+        self.assertEqual(report["silences"][0][0], 0.0)
+
+    def test_a_loud_sine_has_a_true_peak_finding(self):
+        report = media.video_check(self.make("loud.mp4", "sine=frequency=440:duration=2,volume=12dB"))
+        found = report["problems"] + report["warnings"]
+        self.assertTrue(any("true peak" in m for m in found), found)
+
 
 if __name__ == "__main__":
     unittest.main()

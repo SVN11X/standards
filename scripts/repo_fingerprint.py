@@ -34,7 +34,7 @@ NODE_PACKAGES = {
     "playwright": "playwright", "@axe-core/playwright": "axe", "axe-core": "axe", "storybook": "storybook",
     "@storybook/react": "storybook", "@tauri-apps/api": "tauri", "@tauri-apps/cli": "tauri", "electron": "electron",
     "wrangler": "cloudflare-worker", "eslint": "eslint", "tailwindcss": "tailwind",
-    "hyperframes": "hyperframes", "remotion": "remotion", "@motion-canvas/core": "motion-canvas", "@mermaid-js/mermaid-cli": "mermaid",
+    "hyperframes": "hyperframes", "explainroo": "explainroo", "remotion": "remotion", "@motion-canvas/core": "motion-canvas", "@mermaid-js/mermaid-cli": "mermaid",
     "mermaid": "mermaid", "sharp": "image-processing", "react-native": "react-native", "expo": "expo", "@lhci/cli": "lighthouse",
     "msw": "msw", "@pact-foundation/pact": "pact", "@redocly/cli": "openapi",
 }
@@ -61,6 +61,8 @@ NAME_SIGNALS = [
     (r"\.(png|jpe?g|webp|avif|gif)$", "images"), (r"\.svg$", "images"), (r"\.(mp4|webm|mov|m4v)$", "video"), (r"\.vtt$", "captions"),
     (r"\.(mmd|mermaid)$", "mermaid"), (r"\.d2$", "d2"), (r"\.drawio$", "drawio"), (r"\.(dot|gv)$", "graphviz"),
     (r"\.excalidraw$", "excalidraw"),
+    # The drawings of an explainroo project, next to its script.md and video.json.
+    (r"(^|/)scenes\.js$", "explainroo"),
     # Kinds of project the owner's guide of 2026-11-15 names.
     (r"(^|/)(openapi|swagger)[^/]*\.(ya?ml|json)$", "openapi"), (r"(^|/)AndroidManifest\.xml$", "android"),
     (r"(^|/)build\.gradle(\.kts)?$", "android"), (r"\.xcodeproj/", "ios"), (r"(^|/)Podfile$", "ios"),
