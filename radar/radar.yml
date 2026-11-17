@@ -849,3 +849,47 @@ entries:
     expression: [balanced, expressive]
     notes: "Storyboard JSON to a painted, animated film with music, effects and captions, rendered by code with Node and ffmpeg. On 2026-11-16 its test film made a 61 s animatic here without voices, captions burned in, music and effects, checked with ffprobe and a frame. render refuses to run while lines have no voice, and the animatic has no soft subtitle track although its log says so."
     evaluated: 2026-11-16
+  - name: explainroo
+    url: https://github.com/vincentsch/explainroo
+    status: assess
+    profiles: [web, docs]
+    kind: tool
+    license: MIT
+    cost: free
+    privacy: "Voice (Kokoro), word timing (Whisper), music and rendering run on this machine with no account or key, and it has no telemetry. The first run downloads about 400 MB of models from Hugging Face. Only commands that name an outside service send data: ElevenLabs or Cartesia voices get the narration text, image and clip send the prompt to OpenRouter, publish posts to YouTube, Buffer or Blotato, and capture loads the page it is given."
+    expression: [balanced, expressive]
+    notes: "A coding agent writes script.md (the words) and scenes.js (drawings that appear on a spoken word), and render makes an MP4 with subtitles, chapters and a cover. record films a real web app with a pointer and zooms for a product demo. check and verify read any video file for layout, loudness, true peak, black frames, silence and misheard words. cut edits a recording by deleting its words. export writes a web player. Run it with npx --yes explainroo@0.6.0, never as a dependency. Needs Node.js 20.11 or newer, ffmpeg and Chrome. Spanish with the free voice also needs espeak-ng, and German has no free voice. Every video carries an explainroo.com watermark unless video.json sets watermark to false. Single maintainer. Next to Cinecode: Cinecode makes films with characters and its voices use Gemini, explainroo makes explainer and demo videos with a free voice made here. Read from the 0.6.0 source the owner sent on 2026-11-16 (tag v0.6.0 exists on GitHub), not run here. Before trial: doctor --language es passes on Windows and one video made in one repository passes verify."
+    evaluated: 2026-11-16
+  - name: PlanExe2
+    url: https://github.com/PlanExeOrg/PlanExe2
+    status: assess
+    profiles: [docs]
+    kind: tool
+    license: MIT
+    cost: free code. A full plan is about 220 to 260 calls on the owner's Claude subscription and takes 65 to 90 minutes
+    privacy: "The plan prompt and the text of every stage go to Anthropic through claude -p, or to the provider opencode is set to. Sections of the high tier search the web. Every stage writes JSON and Markdown files on this machine."
+    expression: []
+    notes: "Turns a 300 to 800 word prompt into a plan report for a real project, such as a business or a public work, not a code change. It leads with the decisions the owner still has to take (options, consequences, owner, decide by month), the choices it made on the owner's behalf to ratify, and the canonical facts every section must use, then a Gantt and an audit trail of what was validated. Python 3.11 standard library only, a DAG of 76 skills that resumes after a stop and keeps hand edits. scripts/arithmetic_check.py is its deterministic arithmetic checker, copied with its MIT notice. Read from the zip of its main branch the owner sent on 2026-11-16, the planner was not run here. Before trial: one plan for a real project of the owner, with the calls it spent measured."
+    evaluated: 2026-11-16
+  - name: Promptline
+    url: https://github.com/bekalpaslan/promptline
+    status: assess
+    profiles: [web, software, data-ai, hardware, docs, infra]
+    kind: app
+    license: MIT
+    cost: free
+    privacy: "Prompts are JSON files on this machine, with no account and no telemetry. At startup and once a day it fetches https://promptline.cc/latest.json to look for an update, which GitHub Pages logs with the IP address. The check can be turned off."
+    expression: []
+    notes: "Windows 10 and 11 tray app. Ctrl+Alt+V opens the saved prompts at the cursor and pastes the chosen one into Claude Code, Codex, Cursor or a browser, with the clipboard where {clipboard} was. A pack is one JSON file that an agent can write. scripts/promptline_pack.py writes a pack with the requests this standard understands. Installers are code signed from 0.2.28 and SmartScreen can still warn on a new release. Ctrl+Alt+V is Introduce Variable in JetBrains IDEs. Read from the zip of its master branch (0.2.30) the owner sent on 2026-11-16, not installed here. Before trial: winget install AlpaslanBek.Promptline, import the pack and paste a control request into Claude Code in the VS Code terminal."
+    evaluated: 2026-11-16
+  - name: copy-buttons
+    url: https://github.com/leonasdev/copy-buttons
+    status: assess
+    profiles: [web, software, data-ai, hardware, docs, infra]
+    kind: plugin
+    license: MIT
+    cost: free
+    privacy: "Runs inside Claude Code on the answer shown on screen. Its hooks make no network request and copy through the terminal with OSC 52."
+    expression: []
+    notes: "Claude Code plugin with copy buttons on each code block, on each table (as Markdown, as rows for Excel or Google Sheets, or boxed) and at the end of each final answer (as Markdown or as shown). It needs Claude Code's fullscreen mode, tui set to fullscreen in ~/.claude/settings.json, which changes how the terminal looks, and a terminal that reports pointer motion, or its end-of-answer setting. A Claude Code update can move or hide the buttons until the plugin follows. Read from the zip of its main branch (1.5.6) the owner sent on 2026-11-16, not installed here. Before trial: the owner chooses fullscreen mode, then /plugin install copy-buttons --marketplace leonasdev/copy-buttons."
+    evaluated: 2026-11-16

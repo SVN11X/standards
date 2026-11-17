@@ -359,10 +359,24 @@ class LearningVisualWritingTests(Base):
             with self.subTest(recipe):
                 self.assertEqual(self.decide(prompt, repo(self.root / recipe, files), session=recipe)["recipe"], recipe)
 
+    def test_a_narrated_video_gets_explainroo_and_an_explainroo_project_keeps_it_for_clips(self):
+        with mock.patch.object(router.shutil, "which", side_effect=lambda name: "npx" if name == "npx" else None):
+            decision = self.decide("Haz un video narrado que explique cómo funciona el DNS")
+        self.assertEqual(self.provider(decision, "narrated-video")["provider"], "explainroo")
+        files = {**WEB, "videos/dns/scenes.js": "export default []\n", "videos/dns/script.md": "# dns\n"}
+        clip = self.decide("Agrega un video corto que explique el DNS", repo(self.root / "exv", files))
+        self.assertEqual(self.provider(clip, "short-video")["provider"], "explainroo")
+
+    def test_a_thesis_gets_its_calculations_checked(self):
+        files = {"main.tex": "\\documentclass{article}\n", "refs.bib": "@book{a, title={A}}\n"}
+        decision = self.decide("Revisa el capítulo 3 de la tesis", repo(self.root / "thesis", files))
+        self.assertEqual(decision["recipe"], "docs-academic")
+        self.assertEqual(self.provider(decision, "calculation-check")["provider"], "arithmetic-check")
+
     def test_the_catalog_names_hyperframes_and_every_provider_says_who_keeps_it(self):
         providers = [p for c in RECIPES["capabilities"].values() for p in c["providers"]]
         ids = {p["id"] for p in providers}
-        for name in ("hyperframes", "manim", "mermaid-cli", "d2", "graphviz", "remotion", "motion-canvas", "media-search",
+        for name in ("explainroo", "planexe2", "arithmetic-check", "hyperframes", "manim", "mermaid-cli", "d2", "graphviz", "remotion", "motion-canvas", "media-search",
                      "learning-check", "text-check", "reader-test", "lighthouse-ci", "vale", "tesseract", "ffprobe"):
             self.assertIn(name, ids)
         for provider in providers:

@@ -395,6 +395,15 @@ capabilities:
       cost: free
       leaves_machine: nothing
       detect: none
+    - id: explainroo
+      kind: cli
+      runs: local
+      radar: explainroo
+      clients: [claude, opencode, coordinator]
+      writes: true
+      cost: free
+      leaves_machine: nothing
+      detect: {signal: explainroo}
   animated-film:
     purpose: >-
       make an animated film or explainer by scenes: screenplay, storyboard JSON, reusable characters and sets,
@@ -411,6 +420,37 @@ capabilities:
       leaves_machine: nothing without GEMINI_API_KEY. With it, the text of each voiced line goes to Google Gemini TTS
       detect:
         which: [node, ffmpeg]
+  narrated-video:
+    purpose: >-
+      make an explainer or product demo video with a voice made on this machine, drawings timed to the spoken
+      words, subtitles, chapters and a cover, then check the file with explainroo verify and `media.py video-check`
+    providers:
+    - id: explainroo
+      kind: cli
+      runs: local
+      radar: explainroo
+      clients: [claude, opencode, coordinator]
+      writes: true
+      cost: free
+      leaves_machine: nothing
+      evidence: read from the 0.6.0 source, not run here. The first run downloads about 400 MB of voice and timing models from Hugging Face
+      detect:
+        which: [npx]
+  project-plan:
+    purpose: >-
+      plan a real project, such as a business or a public work, and list the decisions the owner still has to take,
+      the choices to ratify, the facts every section uses and what was validated
+    providers:
+    - id: planexe2
+      kind: cli
+      runs: remote
+      radar: PlanExe2
+      clients: [claude, coordinator]
+      writes: true
+      cost: about 220 to 260 calls on the owner's Claude subscription, 65 to 90 minutes
+      leaves_machine: the plan prompt and the text of every stage, sent to Anthropic through claude -p. Some sections search the web
+      detect:
+        which: [claude]
   media-check:
     purpose: 'read what a media file is: codec, size, length, and the text inside an image'
     providers:
@@ -522,6 +562,21 @@ capabilities:
       detect:
         which: [markdownlint]
       evidence: named in the owner's guide of 2026-11-15, not tested
+  calculation-check:
+    purpose: re-compute every calculation a document writes out and list the ones whose stated result is wrong
+    providers:
+    - id: arithmetic-check
+      kind: cli
+      runs: local
+      status: trial
+      maintainer: SVN11X
+      source: scripts/arithmetic_check.py
+      clients: [claude, opencode, coordinator]
+      writes: false
+      cost: free
+      leaves_machine: nothing
+      detect: always
+      evidence: PlanExe2's checker, which flagged 4 of 189 statements in its own runs, all real. A decimal comma reads as a thousands separator
   comprehension-test:
     purpose: 'show with real readers that the page helps: they do its task and answer its questions'
     providers:
@@ -1413,8 +1468,8 @@ recipes:
     signals_any: [latex, bibliography]
     words: [thesis, tesis, chapter, capítulo, bibliography, bibliografía, pdf, latex, cite, cita]
     profile: docs
-    capabilities: [docs-review]
-    proof: the document builds and every reference resolves
+    capabilities: [docs-review, calculation-check]
+    proof: the document builds, every reference resolves and the arithmetic check lists no wrong calculation
   - id: learning-site
     intents: [work, review]
     signals_any: [learning-content, web, static-web]
@@ -1518,6 +1573,16 @@ additions:
   - capability: animated-film
     words: [película, pelicula, cortometraje, corto animado, dibujos animados, storyboard, guion gráfico, escenas, animated film, cartoon, short film]
     why: the request asks for an animated film made by scenes
+  - capability: narrated-video
+    words: [narrado, narrada, narración, narrar, voz en off, locución, voice-over, voiceover, narrated, narration, explainer,
+      video explicativo, vídeo explicativo, demo del producto, product demo, screencast, grabación de pantalla]
+    why: the request asks for a video with a voice
+  - capability: calculation-check
+    words: [cálculo, cálculos, cuentas, presupuesto, aritmética, calculation, calculations, arithmetic, budget, sumas, totales]
+    why: the document states calculations that can be re-computed
+  - capability: project-plan
+    words: [plan de negocio, plan de proyecto, plan de empresa, business plan, project plan, estudio de viabilidad, feasibility study]
+    why: the request asks for the plan of a real project, not of a code change
   - capability: short-video
     words: [video, vídeo, videos, clip, clips, animación, animation, gif]
     why: the request asks for a clip

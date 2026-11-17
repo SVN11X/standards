@@ -189,6 +189,12 @@ class NewSignalTests(Base):
         for name in ("hyperframes", "remotion", "motion-canvas", "image-processing", "lighthouse", "manim", "data-validation", "duckdb", "charts"):
             self.assertIn(name, found)
 
+    def test_an_explainroo_project_is_seen_by_its_scenes_or_its_package(self):
+        scenes = {"videos/intro/scenes.js": "export default []\n", "videos/intro/script.md": "# intro\n", "videos/intro/video.json": {"size": "youtube"}}
+        self.assertIn("explainroo", self.signals(fingerprint.fingerprint(repo(self.root / "ex1", scenes))))
+        package = {"package.json": {"devDependencies": {"explainroo": "0.6.0"}}}
+        self.assertIn("explainroo", self.signals(fingerprint.fingerprint(repo(self.root / "ex2", package))))
+
     def test_kinds_of_project_from_the_owners_guide(self):
         files = {"openapi.yaml": "x", "android/app/src/main/AndroidManifest.xml": "x", "game/project.godot": "x",
                  "unity/ProjectSettings/ProjectVersion.txt": "x", "dbt_project.yml": "x", "models/a.sql": "x", "chart/Chart.yaml": "x",
