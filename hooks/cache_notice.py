@@ -4,7 +4,8 @@
 `stop` compares the cache use the provider reported for the last request with the prompt of the request before it.
 When at least 1024 tokens were written again, it prints a systemMessage with the likely reason and appends one line
 to cache-misses.jsonl in STANDARDS_HOME (default ~/.standards). `prompt` warns when the last answer is older than
-the cache lifetime (STANDARDS_CACHE_TTL_MIN minutes, default 5), so the next answer will write the prompt again.
+the cache lifetime, so the next answer will write the prompt again. The lifetime is STANDARDS_CACHE_TTL_MIN minutes
+when set, else one hour when recent answers wrote one hour cache entries, else 5 minutes.
 
 The idea and the miss classes come from the KV cache monitor of jcode (MIT, Jeremy Huang,
 https://github.com/1jehuang/jcode, crates/jcode-base/src/kv_cache_monitor.rs). This is own code.
@@ -23,12 +24,26 @@ TAIL_BYTES = 2 * 1024 * 1024
 DEFAULT_TTL_MIN = 5.0
 
 
-def ttl_minutes() -> float:
+ONE_HOUR_TTL_MIN = 60.0
+
+
+def ttl_minutes() -> float | None:
+    """The lifetime the owner set, or None to read it from the transcript."""
     try:
         value = float(os.environ.get("STANDARDS_CACHE_TTL_MIN", ""))
     except ValueError:
-        return DEFAULT_TTL_MIN
-    return value if value > 0 else DEFAULT_TTL_MIN
+        return None
+    return value if value > 0 else None
+
+
+def effective_ttl(requests: list[dict], ttl: float | None) -> float:
+    """The owner's value, else 60 minutes when recent requests wrote one hour cache entries, else 5.
+
+    Claude Code can ask for a one hour cache, and the usage says so in cache_creation.ephemeral_1h_input_tokens.
+    A fixed 5 minutes would call such a cache cold while it is still warm."""
+    if ttl:
+        return ttl
+    return ONE_HOUR_TTL_MIN if any(r.get("one_hour") for r in requests[-5:]) else DEFAULT_TTL_MIN
 
 
 def read_tail(path: Path) -> list[str]:
@@ -87,7 +102,13 @@ def load_requests(path: Path) -> list[dict]:
             "created": token_count(usage, "cache_creation_input_tokens"),
             "read": token_count(usage, "cache_read_input_tokens"),
             "compacted": compacted,
+            "one_hour": isinstance(usage.get("cache_creation"), dict)
+            and token_count(usage["cache_creation"], "ephemeral_1h_input_tokens") > 0,
         }
+        # Claude Code writes messages of its own, such as a usage limit notice, with the model "<synthetic>" and no
+        # usage. They never reached the provider, so they are not requests.
+        if record["model"] == "<synthetic>" or not (record["input"] or record["created"] or record["read"]):
+            continue
         compacted = False
         request_id = entry.get("requestId")
         if isinstance(request_id, str) and request_id in index:
@@ -132,8 +153,9 @@ def log_path() -> Path:
     return Path(os.environ.get("STANDARDS_HOME") or Path.home() / ".standards") / "cache-misses.jsonl"
 
 
-def stop_message(path: Path, session: str, ttl: float) -> str | None:
-    miss = check_miss(load_requests(path), ttl)
+def stop_message(path: Path, session: str, ttl: float | None) -> str | None:
+    requests = load_requests(path)
+    miss = check_miss(requests, effective_ttl(requests, ttl))
     if miss is None:
         return None
     row = {
@@ -153,13 +175,13 @@ def stop_message(path: Path, session: str, ttl: float) -> str | None:
     return f"Prompt cache miss: {miss['missed']:,} tokens written again, likely because {miss['reason']}."
 
 
-def prompt_message(path: Path, ttl: float, now: datetime | None = None) -> str | None:
+def prompt_message(path: Path, ttl: float | None, now: datetime | None = None) -> str | None:
     requests = load_requests(path)
     if len(requests) < 2:
         return None
     last = requests[-1]
     idle = ((now or datetime.now(timezone.utc)) - last["at"]).total_seconds() / 60
-    if idle <= ttl:
+    if idle <= effective_ttl(requests, ttl):
         return None
     return (
         f"The prompt cache is likely cold: {int(idle)} minutes since the last answer, "

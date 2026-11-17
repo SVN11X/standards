@@ -1,3 +1,4 @@
+import io
 import json
 import os
 import sys
@@ -5,6 +6,7 @@ import tempfile
 import unittest
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "hooks"))
 import cache_notice  # noqa: E402
@@ -56,6 +58,22 @@ class CacheNoticeTest(unittest.TestCase):
         second = assistant(1, 50010, request="b")
         self.assertIsNone(self.stop([first, second]))
         self.assertFalse((self.home / "cache-misses.jsonl").exists())
+
+    def test_a_synthetic_message_of_the_client_is_not_a_request(self):
+        # Found on a real transcript: a usage limit notice, model "<synthetic>" with no usage, read as a model change.
+        first = assistant(0, 0, created=50000, request="a")
+        notice = assistant(1, 0, model="<synthetic>", request="n", inp=0)
+        second = assistant(2, 50010, request="b")
+        self.assertIsNone(self.stop([first, notice, second]))
+        self.assertIsNone(self.stop([first, second, notice]))
+
+    def test_a_one_hour_cache_is_not_called_cold_after_ten_minutes(self):
+        hour = [assistant(0, 0, 48000, request="a"), assistant(1, 48010, request="b")]
+        hour[0]["message"]["usage"]["cache_creation"] = {"ephemeral_1h_input_tokens": 48000, "ephemeral_5m_input_tokens": 0}
+        later = BASE + timedelta(minutes=11)
+        self.assertIsNone(cache_notice.prompt_message(self.transcript(hour), None, now=later))
+        five = [assistant(0, 0, 48000, request="a"), assistant(1, 48010, request="b")]
+        self.assertIn("likely cold", cache_notice.prompt_message(self.transcript(five), None, now=later))
 
     def test_model_changed(self):
         text = self.stop([assistant(0, 0, 48000, request="a"), assistant(1, 0, 48000, model="m2", request="b")])
@@ -109,7 +127,10 @@ class CacheNoticeTest(unittest.TestCase):
         entries = [assistant(0, 0, 48000, request="a"), assistant(1, 0, 48000, model="m2", request="b")]
         text = self.stop(entries, raw=["{not json", "[1, 2]", ""])
         self.assertIn("the model changed", text)
-        self.assertEqual(cache_notice.main(["cache_notice.py", "stop"]), 0)
+        # main reads the hook input from stdin: give it one, or the test waits on an open terminal.
+        missing = json.dumps({"session_id": "s1", "transcript_path": str(self.home / "missing.jsonl")})
+        with mock.patch.object(cache_notice.sys, "stdin", io.StringIO(missing)):
+            self.assertEqual(cache_notice.main(["cache_notice.py", "stop"]), 0)
 
 
 if __name__ == "__main__":
