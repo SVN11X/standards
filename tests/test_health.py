@@ -85,7 +85,7 @@ class HealthTests(unittest.TestCase):
             try:
                 for step in range(100):
                     orchestrate.write_json(path, {"writer": n, "step": step, "pad": "x" * 2000})
-                    orchestrate.json.loads(path.read_text(encoding="utf-8"))
+                    orchestrate.read_json(path)
             except Exception as error:
                 errors.append(error)
 

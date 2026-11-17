@@ -93,12 +93,13 @@ class FileTests(unittest.TestCase):
 
     def test_markdown_html_and_json_are_read_without_code_or_markup(self):
         (self.root / "a.md").write_text("---\ntitle: x\n---\n# Title\n\n```py\nprint('NOT TEXT')\n```\n\n" + PLAIN_EN
-                                        + " See [the guide](https://example.org).\n")
+                                        + " See [the guide](https://example.org).\n", encoding="utf-8")
         (self.root / "b.html").write_text("<html><script>var NOTTEXT=1</script><h1>Hola</h1><p>" + PLAIN_ES + "</p>"
-                                          "<a href='/x'>aquí</a></html>")
-        (self.root / "c.json").write_text(json.dumps({"lessons": [{"id": "l1", "body": "## Concepto\n\n" + PLAIN_ES, "url": "https://x.org/a"}]}))
+                                          "<a href='/x'>aquí</a></html>", encoding="utf-8")
+        (self.root / "c.json").write_text(json.dumps({"lessons": [{"id": "l1", "body": "## Concepto\n\n" + PLAIN_ES, "url": "https://x.org/a"}]}),
+                                          encoding="utf-8")
         (self.root / "node_modules").mkdir()
-        (self.root / "node_modules" / "d.md").write_text(PLAIN_EN)
+        (self.root / "node_modules" / "d.md").write_text(PLAIN_EN, encoding="utf-8")
         report = tc.check([self.root])
         files = {Path(f["file"]).name: f for f in report["files"]}
         self.assertEqual(set(files), {"a.md", "b.html", "c.json"})
