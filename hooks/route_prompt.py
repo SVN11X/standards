@@ -36,7 +36,34 @@ def context(data: dict) -> str | None:
         return None
     decision = router.decide(prompt, cwd, "claude", session=data.get("session_id"), permission_mode=data.get("permission_mode"))
     limit = int(router.owner_limits(Path(decision["repository"]["root"])).get("max_context_chars", 1800))
-    return router.render(decision, limit) or None
+    text = router.render(decision, limit) or ""
+    if decision["intent"] in ("work", "review", "publish", "setup"):
+        try:
+            import recall
+            found = recall.lines(Path(decision["repository"]["root"]), prompt)
+        except Exception:  # noqa: BLE001 (recall is a hint, the request goes on without it)
+            found = []
+        if found:
+            text += "\nRead before planning (recalled, not the whole history):\n" + "\n".join(found)[:900]
+    return text or None
+
+
+def inbox(data: dict) -> str | None:
+    """Register this session on the peerbox and hand it the messages waiting for it. Never blocks a request."""
+    scripts = router_dir()
+    session = str(data.get("session_id") or "")
+    if scripts is None or not session or os.environ.get("STANDARDS_NO_PEERBOX"):
+        return None
+    sys.path.insert(0, str(scripts))
+    import re
+    import peerbox
+    folder = re.sub(r"[^a-z0-9-]+", "-", Path(data.get("cwd") or os.getcwd()).name.lower()).strip("-")[:30] or "repo"
+    name = f"claude-{folder}-{re.sub(r'[^a-z0-9]', '', session.lower())[:6]}"
+    db = peerbox.connect()
+    peerbox.register(db, name, "claude", session)
+    peerbox.group(db, folder if len(folder) > 1 else "repo", [name])
+    text = peerbox.render(peerbox.pull(db, name))
+    return (text + f" Your name on the peerbox: {name}.") if text else None
 
 
 def main() -> int:
@@ -44,10 +71,22 @@ def main() -> int:
         data = json.load(sys.stdin)
     except ValueError:
         data = {}
+    data = data if isinstance(data, dict) else {}
     try:
-        text = context(data if isinstance(data, dict) else {})
+        text = context(data)
     except Exception:  # noqa: BLE001 (fail open, the request must go through)
         text = None
+    try:
+        messages = inbox(data)
+    except Exception:  # noqa: BLE001 (a message never blocks a request)
+        messages = None
+    try:
+        sys.path.insert(0, str(Path(__file__).resolve().parent))
+        import style
+        styled = style.from_prompt(str(data.get("prompt") or ""), str(data.get("session_id") or ""))
+    except Exception:  # noqa: BLE001
+        styled = None
+    text = "\n\n".join(t for t in (styled, messages, text) if t) or None
     if text:
         print(json.dumps({"hookSpecificOutput": {"hookEventName": "UserPromptSubmit", "additionalContext": text}}))
     return 0

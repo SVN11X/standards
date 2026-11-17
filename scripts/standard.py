@@ -881,6 +881,24 @@ def check_how_it_works(repo: Path, report: Report) -> None:
         report.warn(rel, "Still marked as a draft. The owner confirms it by removing the Status line.")
 
 
+def check_decisions(repo: Path, report: Report) -> None:
+    """A decision record says who accepted it only once it is accepted. The template used to say both at once."""
+    folder = repo / "docs" / "decisions"
+    for path in sorted(folder.glob("[0-9][0-9][0-9][0-9]-*.md")) if folder.is_dir() else []:
+        if path.name.startswith("0000-"):
+            continue
+        text = path.read_text(encoding="utf-8")
+        status = re.search(r"^-\s*Status:\s*(\w+)", text, re.I | re.M)
+        by = re.search(r"^-\s*Accepted by:[ \t]*(.*)$", text, re.I | re.M)
+        named = bool(by and by.group(1).strip() and by.group(1).strip().lower() not in ("pending", "none", "-"))
+        where = path.relative_to(repo).as_posix()
+        state = status.group(1).lower() if status else ""
+        if state == "proposed" and named:
+            report.error(where, "Status is proposed but Accepted by names someone. Write 'Accepted by: pending' or find the real acceptance.")
+        elif state == "accepted" and not named:
+            report.error(where, "Status is accepted but Accepted by is empty. Name who accepted it and where.")
+
+
 def check_plan(repo: Path, report: Report) -> None:
     path = repo / "docs" / "improvement-plan.md"
     if not path.exists():
@@ -932,6 +950,7 @@ def run_check(repo: Path, pull_request: bool = False) -> Report:
         check_content(repo, files, report)
         check_github(config, report)
         check_plan(repo, report)
+        check_decisions(repo, report)
         check_how_it_works(repo, report)
     if pull_request:
         check_pull_request(report)
@@ -1346,7 +1365,7 @@ BUNDLED_SCRIPTS = ("standard.py", "orchestrate.py", "verify.py", "evidence.py", 
                    "safe_patch.py", "memory.py", "bench_tasks.py", "analyze.py", "providers.py",
                    # The executor loop, the planner and the router. verify.py and adversarial.py import them.
                    "execute.py", "workplan.py", "review.py", "scheduler.py", "resources.py", "plan_autopilot.py",
-                   "plan_contract.py", "planner.py", "repo_fingerprint.py", "router.py",
+                   "plan_contract.py", "planner.py", "repo_fingerprint.py", "router.py", "blockers.py", "supervisor.py", "reuse.py", "readiness.py", "peerbox.py", "recall.py",
                    # Learning, writing and media checks the web-improve and docs-review skills call.
                    "learning_check.py", "text_check.py", "media.py",
                    # The checked merge the guard hook points to when the owner allows merges.

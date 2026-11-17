@@ -35,7 +35,7 @@ import repo_fingerprint  # noqa: E402
 
 SCHEMA = "standards/route-decision/v1"
 CLIENTS = ("claude", "opencode", "coordinator")
-INTENTS = ("work", "query", "review", "setup", "publish", "other")
+INTENTS = ("work", "query", "review", "setup", "publish", "control", "other")
 DEFAULTS = {"owner": "session", "task_ttl_h": 12, "max_context_chars": 2400}
 # Words that open a question. A request that starts with one asks for an answer, whatever verb follows.
 QUESTION = re.compile(r"^(qué|que|por qué|porque|cómo|como|cuál|cual|cuáles|cuándo|dónde|quién|what|why|how|which|when|where|who|"
@@ -74,6 +74,7 @@ CHANGE = verbs(
     "genera/génera/generar/genere dibuja/dibúja/dibujar/dibuje diseña/diséña/diseñar/diseñe ilustra/ilústra/ilustrar/ilustre "
     "documenta/documénta/documentar/documente redacta/redácta/redactar/redacte graba/grába/grabar/grabe anima/ánima/animar/anime "
     "incluye/inclúye/incluir/incluya adjunta/adjúnta/adjuntar/adjunte sustituye/sustitúye/sustituir/sustituya "
+    "guarda/guárda/guardar/guarde continua/continúa/continuar/continúe sigue/sigue/seguir/siga retoma/retóma/retomar/retome "
     "reemplaza/reempláza/reemplazar/reemplace acelera/aceléra/acelerar/acelere reduce/redúce/reducir/reduzca",
     "fix add improve implement create change update refactor remove delete optimi[sz]e rewrite migrate convert make "
     "build write rename move translate finish integrate simplify repair solve clean find search draw design generate "
@@ -85,6 +86,12 @@ SETUP = verbs("incorpora/incorpóra/incorporar/incorpore adopta/adópta/adoptar/
               "reorganiza/reorganíza/reorganizar/reorganice estructura/estructúra/estructurar/estructure "
               "inicializa/inicialíza/inicializar/inicialice", r"onboard setup set\sup scaffold")
 SETUP_OBJECT = re.compile(r"\b(repositorio|repo|repository|estándar|estandar|standard|proyecto|project|carpetas|folders)\b")
+CONTROL_VERB = re.compile(r"^(pausa\w*|pausar|pause|detén|detente|detener|para|parar|stop|cancela\w*|cancel|aborta\w*|abort|"
+                          r"reanuda\w*|resume)\b")
+CONTROL_OBJECT = re.compile(r"\b(plan|trabajo|ejecución|ejecucion|todo|autopilot|autopiloto|tarea|tareas|coordinador|run|work|everything)\b")
+WHY_STOPPED = re.compile(r"^(por qué|porque|por que|why)\b.*\b(no puedes|no pudiste|no puede|se detuvo|se paró|se paro|bloquead\w*|"
+                         r"bloqueo\w*|can't you|cannot you|couldn't you|did it stop|is it blocked|blocked)\b")
+STATUS = re.compile(r"\b(estado|status|avance|progreso|progress)\b")
 CONTINUE = re.compile(r"^(también|tambien|además|ademas|y |pero |mejor |en vez|no,|sí,|si,|also|and |but |instead|actually|wait)\b")
 THIRD_PARTY = ("remote",)
 
@@ -113,6 +120,14 @@ def classify(prompt: str) -> tuple[str, str]:
         if not found:
             break
         text, polite = text[found.end():], True
+    words = text.rstrip(".!?").split()
+    control = CONTROL_VERB.match(text)
+    if control and (len(words) <= 3 or CONTROL_OBJECT.search(text)):
+        return "control", f"asks to '{control.group(0)}' the running work"
+    if WHY_STOPPED.match(text):
+        return "control", "asks why the work stopped"
+    if len(words) <= 8 and STATUS.search(text) and re.match(r"^(muéstrame|muestrame|dime|show|cuál|cual|cómo|como|qué|que|what|how|estado|status)\b", text):
+        return "control", "asks for the status of the running work"
     if not polite and QUESTION.match(text):
         return "query", f"starts with the question word '{QUESTION.match(text).group(1)}'"
     if ASK.match(text):
@@ -174,7 +189,9 @@ def owner_limits(root: Path) -> dict:
         mode = orchestrate.cost_mode(conf, local)[0]
         cls = orchestrate.privacy_class(root, conf, local)[0]
         strict = conf["privacy"]["classes"][cls].get("remote_free") == "deny"
-        out.update({**(conf.get("routing") or {}), **(local.get("router") or {})})
+        chosen = {**(conf.get("routing") or {}), **(local.get("router") or {})}
+        # With nothing set the coordinator owns a work order, so the owner never types a switch. An explicit `session` stays.
+        out.update({"owner": "coordinator", **chosen})
         out.update(privacy=cls, cost_mode=mode, local_only=mode == "local-only" or strict,
                    why_local=f"cost mode {mode}" if mode == "local-only" else f"a {cls} folder" if strict else "")
     except Exception:  # noqa: BLE001 (fail closed: keep the task local)
@@ -284,7 +301,10 @@ def pick_recipe(intent: str, signals: set[str], prompt: str, recipes: list[dict]
             continue
         words = words_in(prompt, recipe.get("words") or [])
         verbs = words_in(prompt, recipe.get("verbs") or [])
-        scored.append((len(hits) * 2 + (len(words) + len(verbs)) * 3, -order, recipe, hits, words + verbs, len(words) * 3))
+        named = words_in(prompt, recipe.get("wins_on") or [])
+        # A request that names the recipe's object (a PR, a diff) beats any signal of the folder.
+        score = len(hits) * 2 + (len(words) + len(verbs)) * 3 + (1000 if named else 0)
+        scored.append((score, -order, recipe, hits, named + words + verbs, len(words) * 3))
     if not scored:
         return None, [], "no recipe matches this request in this folder", 0
     scored.sort(key=lambda item: (item[0], item[1]), reverse=True)
@@ -500,7 +520,8 @@ def decide(prompt: str, cwd: Path, client: str = "claude", session: str | None =
     permission = {"work": "edits inside the repository. Pushing, merging and deploying follow the owner's rules",
                   "setup": "edits inside the repository. Moving or deleting files needs the owner's yes to the plan first",
                   "publish": "pushing, merging or deploying: the owner's configured permission decides, and the client may ask",
-                  "review": "reads only", "query": "reads only", "other": "nothing asked"}[intent]
+                  "review": "reads only", "query": "reads only", "other": "nothing asked",
+                  "control": "changes only the plan control files: pause, resume, cancel or status"}[intent]
     merges = merge_setting()
     if merges == "when-green" and intent in ("work", "publish", "setup"):
         permission = (permission.replace("Pushing, merging and deploying follow the owner's rules",
@@ -547,6 +568,13 @@ def render(decision: dict, limit: int = DEFAULTS["max_context_chars"]) -> str:
     if task["state"] == "updated":
         return (f"standards router: follow-up of task {task['key']} in {decision['repository']['name']} "
                 f"(\"{task['prompt'][:120]}\"). The task keeps its folder, recipe and verification.")
+    if decision["intent"] == "control":
+        return ("standards router: control request (" + decision["intent_why"] + "). Do not edit the repository. Find the plan with "
+                "`python <standards>/scripts/execute.py status PLAN.json` and apply `pause`, `unpause` or `cancel --unit <id>`. "
+                "For why a unit stopped, answer from `python <standards>/scripts/blockers.py why <plan_id>`: the exact action, "
+                "the evidence, the work done and what unblocks it. If the cause was your own caution with no rule behind it, "
+                "say so and resume the work. "
+                "A pause or cancel the owner asked for stays after a restart. Answer in the owner's language.")
     if decision["intent"] in ("query", "other"):
         return ""
     repo = decision["repository"]

@@ -25,6 +25,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 sys.path.insert(0, str(ROOT / "hooks"))
 
+import blockers  # noqa: E402
 import orchestrate  # noqa: E402
 import resources  # noqa: E402
 import review as review_mod  # noqa: E402
@@ -153,6 +154,35 @@ def judge(data: dict, reviewer_model: str | None, reviewer) -> tuple[str, str]:
     return "failed", "review has a high finding"
 
 
+def blocker_condition(note: str) -> str:
+    """What would unblock a unit, from the reason the executor gave."""
+    text = note.lower()
+    if "budget" in text:
+        return "a larger budget in the plan, or the owner accepts the unit as not done"
+    if "reviewer" in text or "review" in text:
+        return "a reviewer model that answers and differs from the author"
+    if "timed out after changing" in text:
+        return "someone inspects the kept worktree and keeps or drops its changes"
+    if "colibri" in text:
+        return "Colibri running (python scripts/colibri.py ensure). A Colibri unit never moves to another model"
+    if "no executor" in text or "not a coding agent" in text or "no free model" in text or "slot" in text:
+        return "an executor the router accepts for this task type: install or start it, or check a free model in local.yml"
+    return "the condition in the evidence changes, then resume the plan"
+
+
+def log_choices(log: list[dict]) -> list[dict]:
+    return [{"executor": row.get("executor"), "model": row.get("model")} for row in log]
+
+
+def attempt_row(choice: dict, data: dict, status: str) -> dict:
+    """What a resumed run and the owner need to know about one try: who, how long, where the work is and why it ended."""
+    result = data.get("executor_result") or {}
+    return {"id": data.get("id"), "executor": choice.get("executor"), "model": choice.get("model"), "status": status,
+            "failure_code": result.get("failure_code"), "seconds": result.get("seconds"), "worktree": data.get("worktree"),
+            "branch": data.get("branch"), "commit": data.get("commit"), "changed": data.get("changed"),
+            "tests": (data.get("checks") or {}).get("tests"), "at": orchestrate.now()}
+
+
 class Executor:
     """Runs a plan. `delegate(repo, unit, decision, test)` and `route(unit)` are injected so tests need no model."""
 
@@ -186,11 +216,14 @@ class Executor:
         self.budgets = plan.get("budgets") or {}
         self.attempts = max(1, self.budgets.get("max_attempts_per_unit", 1))
         self.propose, self.clock, self.started = propose, clock, clock()
-        self.used = {"attempts": 0, "remote": 0}
+        saved = self.state.get("budget_used") or {}
+        self.used = {"attempts": saved.get("attempts", 0), "remote": saved.get("remote", 0)}
+        self.elapsed_before = saved.get("elapsed_s", 0.0)
         self.depth: dict[str, int] = {}
         self.split_parents: set[str] = set()
 
     def save(self) -> None:
+        self.state["budget_used"] = {**self.used, "elapsed_s": round(self.elapsed_before + self.clock() - self.started, 2)}
         orchestrate.write_json(state_file(self.plan["plan_id"]), self.state)
 
     def mark(self, uid: str, status: str, **fields) -> None:
@@ -198,6 +231,29 @@ class Executor:
             self.state["units"][uid] = {"status": status, "at": orchestrate.now(), **fields}
             self.save()
         self.event({"event": "state", "unit": uid, "status": status, "model": fields.get("model"), "note": fields.get("note")})
+        if status == "blocked":
+            self.record_blocker(uid, fields)
+        elif status == DONE:
+            blockers.resolve_unit(self.plan["plan_id"], uid, "the unit passed")
+
+    def record_blocker(self, uid: str, fields: dict) -> None:
+        """Save the six facts of a blocked unit, so "why is it stopped?" is answered from disk. It never stops the plan."""
+        note = str(fields.get("note") or "blocked")
+        tried = fields.get("attempt_log") or []
+        done = "; ".join(f"{a.get('executor')}/{a.get('model')}: {a.get('status')} ({a.get('failure_code') or 'no code'})"
+                         for a in tried) or "no model was invoked"
+        dependents = [u for u, unit in self.units.items() if uid in unit.get("depends_on", [])]
+        row = {"action": f"run unit {uid} of plan {self.plan['plan_id']} in {self.repo.name}",
+               "evidence": {"source": f"execute.py state of {uid}", "text": note},
+               "kinds": ["technical-requirement"],
+               "authorization": "the plan run covers this unit. Nothing outside the plan is authorized by it",
+               "work_done": done + (f". Kept {fields['worktree']}" if fields.get("partial") and fields.get("worktree") else ""),
+               "unblock": blocker_condition(note) + (f". Waiting on it: {', '.join(dependents)}" if dependents else ""),
+               "unit": uid}
+        try:
+            blockers.add(self.plan["plan_id"], row)
+        except (ValueError, OSError):
+            pass
 
     def event(self, row: dict) -> None:
         """One line per transition. The dashboard and `status` read this file, so watching a run asks no model."""
@@ -293,7 +349,7 @@ class Executor:
         """Count one attempt against the plan budgets. Returns the budget that refuses it, or None."""
         budgets = self.budgets
         with self.lock:
-            if "max_wall_s" in budgets and self.clock() - self.started >= budgets["max_wall_s"]:
+            if "max_wall_s" in budgets and self.elapsed_before + self.clock() - self.started >= budgets["max_wall_s"]:
                 return "max_wall_s"
             if "max_total_attempts" in budgets and self.used["attempts"] >= budgets["max_total_attempts"]:
                 return "max_total_attempts"
@@ -401,14 +457,22 @@ class Executor:
         status, note, data = "blocked", "no executor", {}
         tried = 0
         pool = None
-        for choice in choices[:self.attempts]:
-            refused = self.reserve(choice)
+        partial = None
+        log = list((self.state["units"].get(uid) or {}).get("attempt_log") or [])
+        seen = {(c.get("executor"), c.get("model")) for c in log_choices(log)}
+        index = 0
+        while index < len(choices) and tried < self.attempts:
+            choice = choices[index]
+            index += 1
+            runs = choice.get("executor") in AGENTS
+            # A selection that never reaches a model costs no attempt, so a unit with no executor cannot starve the rest.
+            refused = self.reserve(choice) if runs else None
             if refused:
                 status, note = "blocked", f"budget {refused} reached"
                 if refused == "max_remote_sessions":
                     continue
                 break
-            pool = self.pool_of(choice) if choice.get("executor") in AGENTS else None
+            pool = self.pool_of(choice) if runs else None
             if pool and info["pools"] != [pool]:
                 # A retry on another kind of resource waits for a slot there. It never runs on the old slot.
                 self.pools.give(info["pools"])
@@ -418,17 +482,32 @@ class Executor:
                     status, note = "blocked", busy or f"no {pool} slot became free in {self.stall_s}s"
                     continue
                 info["pools"] = [pool]
-            tried += 1
+            tried += runs
+            seen.add((choice.get("executor"), choice.get("model")))
             status, note, data = self.attempt(unit, choice, test)
             info["failure_code"] = (data.get("executor_result") or {}).get("failure_code")
+            if runs:
+                log.append(attempt_row(choice, data, status))
             if status in (DONE, "blocked") or choice.get("executor") == "colibri":
                 break
+            if info["failure_code"] == "timeout":
+                if data.get("changed") or data.get("commit"):
+                    # Partial work or an unknown state: keep the worktree and let the owner or a reviewer inspect it first.
+                    partial = {"worktree": data.get("worktree"), "branch": data.get("branch"), "changed": data.get("changed")}
+                    status, note = "blocked", (f"timed out after changing {len(data.get('changed') or [])} file(s). "
+                                               f"Kept {data.get('worktree')} to inspect before any reassignment")
+                    break
+                # The attempt left the code intact: ask the router again, now that the failure is in the health data.
+                self.decisions.pop(uid, None)
+                fresh = [c for c in self.choices(self.route(unit)) if (c.get("executor"), c.get("model")) not in seen]
+                if fresh:
+                    choices, index = fresh, 0
         if self.stops[uid].is_set():
             status, note = "cancelled", "cancelled by the owner. Its worktree and branch are kept"
         fields = dict(executor=data.get("executor"), model=data.get("model"), channel=pool,
                       commit=data.get("commit"), branch=data.get("branch"), worktree=data.get("worktree"),
                       review=data.get("review"), checks=data.get("checks"), attempts=tried,
-                      failure_code=info.get("failure_code"),
+                      attempt_log=log, partial=True if partial else None, failure_code=info.get("failure_code"),
                       agent_s=(data.get("executor_result") or {}).get("seconds"),
                       tests_s=(data.get("test_result") or {}).get("seconds"),
                       tests_waited_s=(data.get("test_result") or {}).get("waited_s"))
@@ -488,6 +567,11 @@ class Executor:
         self.state["finished"] = None if result["paused"] else orchestrate.now()
         self.save()
         self.event({"event": "plan-paused" if result["paused"] else "plan-finished", "unit": None, "total_s": result["total_s"]})
+        try:
+            import recall
+            recall.handoff(self.repo, self.plan, self.state)
+        except Exception:  # noqa: BLE001 (a missing handoff never fails the run)
+            pass
         return self.state
 
     def on_schedule(self, row: dict) -> None:
@@ -514,7 +598,8 @@ def report(plan: dict, state: dict) -> dict:
         if entry is None:
             units.append({"id": unit["id"], "status": "not_run", "commit": None, "tests": None, "review": None,
                           "findings": None, "retries": None, "executor": None, "model": None, "note": None,
-                          "channel": None, "seconds": None, "depends_on": plan_deps.get(unit["id"], [])})
+                          "channel": None, "seconds": None, "partial": None, "attempt_log": None,
+                          "depends_on": plan_deps.get(unit["id"], [])})
             continue
         found = entry.get("review")
         checks = entry.get("checks")
@@ -526,6 +611,7 @@ def report(plan: dict, state: dict) -> dict:
                       "retries": max(0, tried - 1) if isinstance(tried, int) else None,
                       "executor": entry.get("executor"), "model": entry.get("model"), "note": entry.get("note"),
                       "channel": entry.get("channel"), "seconds": entry.get("seconds"),
+                      "partial": entry.get("partial"), "attempt_log": entry.get("attempt_log"),
                       "depends_on": plan_deps.get(unit["id"], [])})
     counts: dict[str, int] = {}
     for item in units:

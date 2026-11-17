@@ -182,6 +182,28 @@ class HealthTests(unittest.TestCase):
         self.assertEqual(out["executor_result"]["failure_code"], "rate_limit")
         self.assertEqual(orchestrate.load_health()["opencode|opencode/a-free"]["code"], "rate_limit")
 
+    def test_opencode_delegate_without_a_model_skips_one_that_is_cooling_down(self):
+        import subprocess
+        repo = self.tmp / "repo2"
+        repo.mkdir()
+        for args in (["init", "-q"], ["-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "--allow-empty", "-m", "i"]):
+            subprocess.run(["git", "-C", str(repo), *args], check=True)
+        local = {**self.local, "folders": [{"path": str(repo), "class": "personal-public"}]}
+        orchestrate.record_health("opencode", "opencode/a-free", "rate_limit", self.conf)
+        used = []
+        real = orchestrate.run
+
+        def pick(cmd, *a, **k):
+            if cmd and cmd[0] == "fake":
+                used.append(cmd[1])
+                return {"exit": 1, "seconds": 0, "timeout": False, "stdout": "", "stderr": "failed"}
+            return real(cmd, *a, **k)
+
+        with mock.patch.object(orchestrate, "run", side_effect=pick):
+            orchestrate.delegate_opencode(repo, "task", ["*"], None, conf=self.conf, local=local,
+                                          command=["fake", "{model}"], catalog={})
+        self.assertEqual(used, ["opencode/b-free"])
+
 
 if __name__ == "__main__":
     unittest.main()

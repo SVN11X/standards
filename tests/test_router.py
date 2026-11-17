@@ -45,6 +45,23 @@ class Base(unittest.TestCase):
 
 
 class ClassifyTests(unittest.TestCase):
+    def test_spanish_plan_control_is_its_own_intent(self):
+        for prompt in ("Pausa", "cancela el plan", "reanuda", "muéstrame el estado", "¿cuál es el estado?"):
+            self.assertEqual(router.classify(prompt)[0], "control", prompt)
+
+    def test_why_it_stopped_is_answered_from_the_blocker_records(self):
+        for prompt in ("¿Por qué no puedes hacerlo?", "¿por qué se detuvo el plan?", "why can't you merge it?"):
+            self.assertEqual(router.classify(prompt)[0], "control", prompt)
+        self.assertEqual(router.classify("¿Por qué se duplica la transcripción?")[0], "query")
+
+    def test_continue_is_work_and_a_question_stays_a_query(self):
+        self.assertEqual(router.classify("continúa con lo pendiente y avísame cuando termines")[0], "work")
+        self.assertEqual(router.classify("Guarda las sesiones en SQLite")[0], "work")
+        self.assertEqual(router.classify("¿Qué hace este archivo?")[0], "query")
+
+    def test_pause_inside_a_work_request_is_not_control(self):
+        self.assertEqual(router.classify("pausa la animación del vídeo")[0], "other")
+
     CASES = [
         ("Corrige esta página", "work"), ("¿Qué cambiarías?", "query"), ("Explícame por qué se duplica", "query"),
         ("Corrige por qué se duplica una transcripción al reanudar", "work"), ("¿Puedes corregir el formulario?", "work"),
@@ -150,6 +167,11 @@ class ControlCases(Base):
 
 
 class SelectionTests(Base):
+    def test_a_pr_review_in_a_web_repository_stays_a_pr_review(self):
+        reviewed = self.decide("Revisa el PR 12 antes de fusionarlo")
+        self.assertEqual((reviewed["intent"], reviewed["recipe"]), ("review", "pr-review"))
+        self.assertNotEqual(self.decide("Revisa la página de inicio")["recipe"], "pr-review")
+
     def test_the_guide_examples_get_their_recipe_with_the_evidence(self):
         cases = [
             (self.web, "Mejora esta página para que alguien con poco tiempo entienda por qué estudiar el tema", "web-experience", "web"),
@@ -453,6 +475,20 @@ class RecipeFileTests(unittest.TestCase):
             limits = router.owner_limits(ROOT)
         self.assertTrue(limits["local_only"])
         self.assertEqual(limits["owner"], "session")
+
+
+class DefaultOwnerTests(Base):
+    def limits(self, local):
+        import orchestrate
+        conf = orchestrate.policy()
+        with mock.patch.object(orchestrate, "local_config", return_value=local), mock.patch.object(orchestrate, "policy", return_value=conf):
+            return router.owner_limits(self.web)
+
+    def test_a_work_order_goes_to_the_coordinator_when_the_owner_set_nothing(self):
+        self.assertEqual(self.limits({})["owner"], "coordinator")
+
+    def test_an_explicit_session_choice_is_kept(self):
+        self.assertEqual(self.limits({"router": {"owner": "session"}})["owner"], "session")
 
 
 class HookTests(Base):

@@ -4,6 +4,34 @@ All notable changes to this standard are documented here. The format follows [Ke
 
 ## [Unreleased]
 
+### Added
+
+- Animated films by scenes, after Cinecode (MIT): the `animated-film` capability, added when a request says película, cortometraje, storyboard or animated film. Cinecode's test film made a 61 s captioned animatic here without voices. Voices need a voice provider the owner authorized, and the router says what would leave the machine. `media.py video-check` reads a finished video from the file itself: streams, length, silent sound, soft subtitle tracks and frames saved to look at. It found that the animatic has no soft subtitle track although Cinecode's log says it muxed one: its captions are drawn into the picture.
+- The radar lists Interlock, Festival, Murmur, ProjectArchitect, Ponytail and Cinecode with what was verified, and i-have-adhd with its MIT license.
+- `scripts/recall.py`, after the idea of ProjectArchitect, whose license forbids redistributing it, so nothing of it is copied: a work, review or publish request gets at most two decision records and two memory entries that share words with it, each with its status and where it came from. A finished or paused plan stores a handoff in the local memory: what passed, what stopped and why. A new session starts from that, not from the whole history. "Guarda" is now a work verb.
+- The direct answer style, after i-have-adhd (MIT), in `hooks/style.py`: the result or next action first, numbered steps, one next action, visible progress, at most 5 items in a list, no preamble or closing offers. The SessionStart hooks add it at startup and after a compaction. "Explícame" or "en detalle" gets a full answer that turn. "Modo normal" turns it off for the session and the choice survives a compaction. `style: off` in `~/.standards/local.yml` turns it off everywhere. It never reshapes JSON or other output a tool reads.
+- `scripts/peerbox.py`, after Murmur (MIT): messages between sessions on one machine, with named peers, groups, threads, replies and a state per recipient (queued, delivered, acknowledged). It keeps everything in one SQLite file, so it works on Windows, where Murmur cannot run: Murmur reads the process table with `ps` and listens on a Unix socket. The prompt hook registers each Claude Code session, adds it to the group of its folder and hands it its waiting messages as data from another session. OpenCode and scripts use the command line. An acknowledgement proves delivery, never that a change was made. `STANDARDS_NO_PEERBOX=1` turns it off.
+- `scripts/reuse.py`, after Ponytail (MIT): `similar` ranks the existing functions and classes that share words with a task, `map` prints one line per definition, and `debt` collects `shortcut:` comments with their `revisit when` condition. The packet an executor receives now lists the code to reuse first, so OpenCode sees `slugify` before writing a second one.
+- `scripts/readiness.py`, after Interlock (MIT): links a spec's requirements, its linked decisions, its open tasks and the tests that name each requirement into READY, NEEDS_DECISION or BLOCKED. The worst signal wins, and a critical requirement no test names blocks the change even with green CI. A plan with a `spec` puts the verdict in its pull request. The specs template now gives requirements an id and a `critical` mark.
+- A second session with the same request joins a plan that is already running instead of starting a second executor.
+- `scripts/supervisor.py`: one supervisor per user, held by a lock file. It resumes every started plan that has pending work, no live process and no owner pause. `install` registers it in the Windows Task Scheduler every 5 minutes. The SessionStart hook starts one pass in the background, so opening a repository recovers a plan whose process died. `STANDARDS_NO_SUPERVISOR=1` turns that off. A plan resumed 3 times without any change to its state is left for the owner, so a plan that always fails at start cannot loop. `detach` now writes a pid file.
+- `scripts/blockers.py` saves one record per stopped action with six facts: exact action, evidence with source and text, kind of obstacle, existing approval, work done and unblock condition. A vague record, or an agent precaution without the effect it hides, is refused. `why` answers "why can't you do it?" from the records. `execute.py` writes a record for every blocked unit, with the attempts made and the units waiting on it, and closes it when the unit passes after a resume. "¿Por qué no puedes hacerlo?" now reaches these records through the router's `control` intent.
+- The router has a `control` intent. "Pausa", "cancela el plan", "reanuda" and "muéstrame el estado" are recognized and told to use `execute.py` instead of starting edits. "Continúa", "sigue" and "retoma" start work.
+
+### Changed
+
+- The standard check flags a decision record with `Status: proposed` that names who accepted it, and an `accepted` one that does not. The decision template used to carry `Accepted by: owner` on a proposed record, so an AI tool could leave that false claim behind. It now says `pending`. OpenTutor decision 0001 had this mistake.
+- A work order goes to the coordinator by default, so the owner no longer types `consent --route coordinator`. `consent --route session` still keeps the session as the owner of the work.
+- `blockers.py` and `supervisor.py` are part of the scripts the skills plugin ships.
+
+### Fixed
+
+- "Revisa el PR 12" in a web repository picked the learning-site recipe, because the folder's web signals outweighed a review recipe with no words. A recipe can now name the object it reviews in `wins_on`, and naming it beats any signal of the folder.
+- `delegate opencode` without `--model` took the first free model the owner checked even while it was cooling down after a failure. It now skips models in cooldown, as `route` does. The `delegate-runner` agent and the repo-improve skill now pass the model the router chose, and the agent reports the model asked for and the model the run record shows.
+- `execute.py` counted an attempt for a unit that never reached a model, so one unit without an executor could use the whole `max_total_attempts` and starve independent units.
+- Attempt and remote-session budgets, and elapsed wall time, are saved in the plan state and survive a resume.
+- After a timeout that left the code intact, the executor asks the router again with the updated health and takes a model it has not tried. A timeout that changed files keeps the worktree, marks the unit `partial` and blocks reassignment until it is inspected. The execution report shows `attempt_log` and `partial` per unit. Every attempt is logged with executor, model, duration, worktree, branch, commit, changed files and test result.
+
 ## [1.18.1] - 2026-11-16
 
 ### Fixed

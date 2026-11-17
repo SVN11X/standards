@@ -3,7 +3,7 @@
 - Status: proposed
 - Date: YYYY-MM-DD
 - Proposed by: owner or the AI tool that proposed it
-- Accepted by: owner
+- Accepted by: pending. Write who accepted it and where when the status becomes accepted
 
 ## Context
 

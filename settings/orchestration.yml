@@ -189,10 +189,10 @@ planning:
 # The router of scripts/router.py. It reads a request, the folder and settings/recipes.yml and says which
 # recipe and tools fit. In Claude Code the UserPromptSubmit hook adds that decision to a work request.
 routing:
-  # Who runs a work order typed in Claude Code. session: the session does it with the decision as context.
-  # coordinator: the session edits nothing and hands the order to plan_autopilot.py. The owner turns that on
-  # for all folders with `python scripts/orchestrate.py consent --route coordinator`.
-  owner: session
+  # Who runs a work order typed in Claude Code. coordinator (the default): the session edits nothing and hands the
+  # order to plan_autopilot.py, so the owner types no switch. session: the session does it with the decision as
+  # context. The owner keeps that with `python scripts/orchestrate.py consent --route session`.
+  owner: coordinator
   # Hours a task without news still counts as the one a follow-up belongs to.
   task_ttl_h: 12
   # Characters of context the hook may add to one request.
