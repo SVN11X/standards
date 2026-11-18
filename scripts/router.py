@@ -44,6 +44,7 @@ ASK = re.compile(r"^(explica\w*|explíca\w*|explain|describe\w*|cuéntame|dime|t
                  r"analiza\w*|analy[sz]e|compara\w*|compare|lista\w*|list)\b")
 POLITE = re.compile(r"^(por favor,?|please,?|puedes|podrías|podrias|can you|could you|necesito que|quiero que|i need you to|"
                     r"i want you to|ahora|now|ok,?|vale,?|bien,?)\s+")
+RESUME = re.compile(r"^(continúa|continua|continuar|continúe|continue|sigue|seguir|siga|retoma|retóma|retomar|retome|keep going)\b")
 CLITICS = "(lo|la|los|las|le|les|me|nos)?"
 
 
@@ -150,6 +151,19 @@ def classify(prompt: str) -> tuple[str, str]:
     if text.endswith("?"):
         return "query", "ends with a question mark"
     return "other", "no order, question or review was recognized"
+
+
+def resumes(prompt: str) -> bool:
+    """True when the request asks to go on with work already started: continúa, sigue or retoma. A question is not one."""
+    text = first_sentence(prompt)
+    if not text or prompt.strip().startswith("¿") or text.endswith("?"):
+        return False
+    while True:
+        found = POLITE.match(text)
+        if not found:
+            break
+        text = text[found.end():]
+    return bool(RESUME.match(text))
 
 
 def load_yaml(path: Path) -> dict:

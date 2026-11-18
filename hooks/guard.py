@@ -185,6 +185,8 @@ def decide(data: dict) -> dict | None:
 
 
 def main() -> int:
+    if hasattr(sys.stdin, "reconfigure"):  # Claude Code sends UTF-8, a Windows pipe would read it as cp1252
+        sys.stdin.reconfigure(encoding="utf-8")
     try:
         data = json.load(sys.stdin)
     except ValueError:

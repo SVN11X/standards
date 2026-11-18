@@ -540,6 +540,34 @@ class HookTests(Base):
         self.assertIn("route_prompt.py", entry["hooks"][0]["command"])
         self.assertLessEqual(entry["hooks"][0]["timeout"], 30)
 
+    def test_an_accented_prompt_sent_as_utf8_bytes_is_read_as_sent(self):
+        payload = json.dumps({"prompt": "Diseña de nuevo la portada", "cwd": str(self.web), "session_id": "h8"}, ensure_ascii=False)
+        ran = subprocess.run([sys.executable, str(ROOT / "hooks" / "route_prompt.py")], input=payload.encode("utf-8"),
+                             capture_output=True, timeout=60, env={**os.environ, "STANDARDS_NO_SUPERVISOR": "1"})
+        added = json.loads(ran.stdout.decode("utf-8"))["hookSpecificOutput"]["additionalContext"]
+        self.assertIn("work request", added)
+        self.assertIn("diseña", added)
+
+    def test_resume_words_are_recognized_and_a_question_is_not(self):
+        for prompt in ("Continúa con lo pendiente", "sigue", "Por favor retoma el plan", "continue"):
+            self.assertTrue(router.resumes(prompt), prompt)
+        for prompt in ("¿Sigue abierto el PR 3?", "Corrige el título", "seguimos mañana", ""):
+            self.assertFalse(router.resumes(prompt), prompt)
+
+    def test_a_resume_request_starts_one_supervisor_pass(self):
+        sys.path.insert(0, str(ROOT / "hooks"))
+        import route_prompt
+        import session_probe
+        with mock.patch.object(session_probe, "recover") as recover:
+            text = route_prompt.resume_plans({"prompt": "Continúa con lo pendiente", "cwd": str(self.web)})
+            self.assertEqual(recover.call_count, 1)
+            self.assertIn("supervisor pass", text)
+            with mock.patch.dict(os.environ, {"STANDARDS_NO_SUPERVISOR": "1"}):
+                self.assertIsNone(route_prompt.resume_plans({"prompt": "Continúa con lo pendiente", "cwd": str(self.web)}))
+            self.assertEqual(recover.call_count, 1)
+            self.assertIsNone(route_prompt.resume_plans({"prompt": "Corrige el título", "cwd": str(self.web)}))
+            self.assertEqual(recover.call_count, 1)
+
 
 if __name__ == "__main__":
     unittest.main()

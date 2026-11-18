@@ -4,8 +4,9 @@
 It asks the router (scripts/router.py) for a decision: the repository and folder, the recipe, the provider of
 each capability on this machine, how the result is verified, what leaves the machine and which permission
 the request needs. A question gets no context, so asking stays as fast as before. The hook reads files and
-writes one small task record under ~/.standards. It never edits the repository, never starts a tool and
-never blocks a request: on any error it prints nothing.
+writes one small task record under ~/.standards. It never edits the repository and never blocks a request:
+on any error it prints nothing. It starts one thing, a supervisor pass in the background when the owner says
+continúa, sigue or retoma, and that pass only resumes plans already started.
 """
 import json
 import os
@@ -66,7 +67,28 @@ def inbox(data: dict) -> str | None:
     return (text + f" Your name on the peerbox: {name}.") if text else None
 
 
+def resume_plans(data: dict) -> str | None:
+    """Start one supervisor pass in the background when the owner asks to go on with started work. Never blocks a request."""
+    prompt = str(data.get("prompt") or "")
+    scripts = router_dir()
+    if scripts is None or not prompt.strip() or os.environ.get("STANDARDS_NO_SUPERVISOR"):
+        return None
+    sys.path.insert(0, str(scripts))
+    import router
+    if not router.resumes(prompt):
+        return None
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    import session_probe
+    session_probe.recover(scripts / "orchestrate.py")
+    return ("A supervisor pass started in the background. It resumes every started plan that has pending work, "
+            "no live process and no owner pause, so do not start a second executor for those plans. "
+            "Anything new in this message still goes through the session. "
+            "`python <standards>/scripts/execute.py status PLAN.json` shows each plan.")
+
+
 def main() -> int:
+    if hasattr(sys.stdin, "reconfigure"):  # Claude Code sends UTF-8, a Windows pipe would read it as cp1252
+        sys.stdin.reconfigure(encoding="utf-8")
     try:
         data = json.load(sys.stdin)
     except ValueError:
@@ -81,12 +103,16 @@ def main() -> int:
     except Exception:  # noqa: BLE001 (a message never blocks a request)
         messages = None
     try:
+        resumed = resume_plans(data)
+    except Exception:  # noqa: BLE001 (the supervisor never blocks a request)
+        resumed = None
+    try:
         sys.path.insert(0, str(Path(__file__).resolve().parent))
         import style
         styled = style.from_prompt(str(data.get("prompt") or ""), str(data.get("session_id") or ""))
     except Exception:  # noqa: BLE001
         styled = None
-    text = "\n\n".join(t for t in (styled, messages, text) if t) or None
+    text = "\n\n".join(t for t in (styled, messages, resumed, text) if t) or None
     if text:
         print(json.dumps({"hookSpecificOutput": {"hookEventName": "UserPromptSubmit", "additionalContext": text}}))
     return 0
