@@ -399,7 +399,8 @@ def doctor(full: bool = False, conf: dict | None = None) -> dict:
             "colibri": detect_colibri(conf.get("executors", {}).get("colibri", {}))}
     opencode = shutil.which("opencode")
     caps["opencode"] = {"path": opencode, "version": version_of(["opencode", "--version"]) if opencode else None}
-    if opencode and full:
+    if opencode:
+        # The router needs the list too: a free model OpenCode withdrew fails every delegation with Model unavailable.
         listed = run(["opencode", "models"], timeout=60, env=child_env())
         caps["opencode"]["models"] = [line.strip() for line in listed["stdout"].splitlines() if "/" in line]
     if os.name == "nt":
@@ -1180,10 +1181,14 @@ def eligible(candidate, task, repo, input_chars, conf, local, caps, measured=Non
         models = [*checked_free_models(local, conf), *[m for m in local_proven if m not in checked_free_models(local, conf)]]
         if not models:
             return False, "no free model checked by the owner in the last days (local.yml free_models)", None
+        offered = (caps.get("opencode") or {}).get("models")
         pool, refused = [], []
         for model in models:
             if cooled("opencode", model):
                 refused.append((model, cooled("opencode", model)))
+                continue
+            if offered is not None and not any(name.split("/")[-1] == model.split("/")[-1] for name in offered):
+                refused.append((model, f"`opencode models` does not list {model} any more"))
                 continue
             ok, why = gate("opencode", model, repo, conf, local, mode, caps, catalog)
             (pool if ok else refused).append((model, why))

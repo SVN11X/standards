@@ -102,6 +102,17 @@ class Route(Base):
         decision = orchestrate.route("edit-small", self.tmp, local=self.local(), caps=self.caps)
         self.assertEqual((decision["executor"], decision["model"]), ("opencode", "opencode/glm-5.3-flash-free"))
 
+    def test_a_model_opencode_no_longer_lists_is_not_routed(self):
+        local = self.local()
+        local["free_models"].append({"id": "opencode/deepseek-v4.1-flash-free", "checked": dt.date.today().isoformat()})
+        caps = {**self.caps, "opencode": {"path": "/bin/opencode", "models": ["opencode/deepseek-v4.1-flash-free"]}}
+        decision = orchestrate.route("edit-small", self.tmp, local=local, caps=caps)
+        self.assertEqual(decision["model"], "opencode/deepseek-v4.1-flash-free")
+        caps["opencode"]["models"] = ["opencode/glm-5.3-flash"]
+        decision = orchestrate.route("edit-small", self.tmp, local=local, caps=caps)
+        self.assertNotEqual(decision["executor"], "opencode")
+        self.assertIn("does not list opencode/glm-5.3-flash-free any more", json.dumps(decision))
+
     def test_bench_history_picks_the_model(self):
         local = self.local()
         local["free_models"].append({"id": "opencode/deepseek-v4.1-flash-free", "checked": dt.date.today().isoformat()})
