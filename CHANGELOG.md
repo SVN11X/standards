@@ -4,6 +4,8 @@ All notable changes to this standard are documented here. The format follows [Ke
 
 ## [Unreleased]
 
+## [1.19.0] - 2026-11-17
+
 ### Added
 
 - Three ideas of jcode (MIT), the coding agent harness the owner sent on 2026-11-16, as own code. `hooks/shift_notice.py` tells a Claude Code session when another session on this machine changed a file it read, in the same working tree or in another worktree of the repository, where both changes will meet at integration. `hooks/cache_notice.py` reads the cache use the provider reports in the local transcript, names the likely reason of a prompt cache miss (idle past the cache lifetime, a new UTC day, a model change, a compaction) and warns before a prompt that starts on a cold cache. `scripts/agentgrep.py` shows each match under its enclosing class and function and collapses what was already shown, for delegates with small context windows. jcode itself is in the radar at assess: its usage telemetry is on by default.
@@ -26,6 +28,7 @@ All notable changes to this standard are documented here. The format follows [Ke
 
 ### Changed
 
+- The radar entry of Festival says what Obey's documentation shows and why the supervisor stays: Obey ships as a binary without a stated license, uses the same Task Scheduler on Windows and opens network listeners by default.
 - The standard check flags a decision record with `Status: proposed` that names who accepted it, and an `accepted` one that does not. The decision template used to carry `Accepted by: owner` on a proposed record, so an AI tool could leave that false claim behind. It now says `pending`. OpenTutor decision 0001 had this mistake.
 - A work order goes to the coordinator by default, so the owner no longer types `consent --route coordinator`. `consent --route session` still keeps the session as the owner of the work.
 - `blockers.py` and `supervisor.py` are part of the scripts the skills plugin ships.

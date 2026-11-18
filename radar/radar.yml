@@ -803,8 +803,8 @@ entries:
     cost: free
     privacy: local
     expression: []
-    notes: "Fest plans long goals, Camp shares context across sessions and Obey supervises background work. The supervisor, plan reuse and pause file of the standard cover the same needs: a second session joins the running plan and a saved pause survives a restart. Obey was not run here."
-    evaluated: 2026-11-16
+    notes: "Fest plans long goals, Camp shares context across sessions and Obey supervises background work. The supervisor, plan reuse and pause file of the standard cover the same needs: a second session joins the running plan and a saved pause survives a restart. Obey was read from its documentation on 2026-11-17 and not run. It ships only as a binary from Obedience-Corp/obey-releases, whose license is not stated, and its source is private. On Windows its service uses the Task Scheduler, the same mechanism as scripts/supervisor.py. Its daemon opens LAN and Tailscale listeners and connects to a hub unless told not to, a network surface the supervisor does not have. The supervisor stays."
+    evaluated: 2026-11-17
   - name: Murmur
     url: https://github.com/rennf93/murmur
     status: assess
