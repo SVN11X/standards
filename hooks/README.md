@@ -11,3 +11,10 @@ Claude Code hooks published with the skills plugin. Hooks are scripts that Claud
 - `cache_notice.py` (before a prompt and when the agent stops): from the usage the provider reports in the local transcript, says when a prompt starts on a cold cache and names the likely reason of a cache miss. The cache lifetime comes from the transcript, one hour when recent answers wrote one hour entries, else 5 minutes, unless `STANDARDS_CACHE_TTL_MIN` sets it. Claude Code's own `<synthetic>` messages, such as a usage limit notice, are not counted as requests. After the KV cache monitor of jcode.
 - `notify.py` (when Claude Code needs the owner): plays a short sound.
 - `autopilot.py` (when the agent is about to stop): while `standard-autopilot` exists in the git folder (`git rev-parse --git-path standard-autopilot`, also in linked worktrees), keeps the session working through `docs/improvement-plan.md`. Delete the file to turn autopilot off.
+
+## Known limits
+
+- In Claude Desktop with Claude Code 2.1.326, a session that another session opens (the app's `start_session`) loads the plugin's skills but runs none of its hooks. There is no startup context and no router context, neither on its first message nor on messages from other sessions. Seen on 2026-11-18. That session left no task record in `~/.standards/router/tasks`, while `claude -p` in the same folder ran `session_probe.py` and `route_prompt.py`.
+- Whether the tool hooks (`guard.py`, `secret_scan.py`, `shift_notice.py`) run there was not checked.
+- A session the owner opens and types in runs the hooks.
+- So a session that opens another one puts what the hooks would add into the brief: the router decision from `python scripts/router.py route "REQUEST" --cwd DIR`, and the rules of `AGENTS.md` that matter for the task.
