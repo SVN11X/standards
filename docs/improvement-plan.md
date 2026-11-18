@@ -38,7 +38,7 @@ Progress of the free routing, model analyzer and web design work of November 202
 - [x] Adversarial scenarios. New cases in `adversarial.py` for planner types, claude calls, overlap, budget stops and invented review lines
 - [x] Report. `schemas/execution-report.schema.json` and the `report` command, one consolidated report per plan
 - [x] Docs and agent texts. `docs/007`, `docs/005`, `docs/006`, `skills/repo-improve/SKILL.md` and a new `run-plan` OpenCode command
-- [ ] BLOCKED: run the three new bench classes `refactor-module`, `review-diff` and `decompose` against real models. Their graders are tested with fakes only. It needs the GPU and the owner's time slot. The pilot plan part is done
+- [x] Run the three new bench classes `refactor-module`, `review-diff` and `decompose` against real models. On 2026-11-18, 3 runs per model: `refactor-module` passed with `deepseek-v4.1-flash-free` and `mimo-v2.6-flash-free`, `review-diff` with both `gpt-oss` 20B, `decompose` with `qwen2.5-coder:7b` and both `gpt-oss` 20B. A `fix-multi` run of the two free models also passed, so `edit-large` and `refactor` route to OpenCode again. Report in `~/.standards/reports/model-analysis-20261118-1030.md`
 - [x] Fix: a timeout kills the whole process tree of the executor, so a stuck OpenCode no longer hangs the run
 - [x] Fix: a command run in a folder gets PWD set to that folder, so OpenCode launched from a Bash session works in its own worktree
 - [x] Executor loop calls `split_unit` when a unit is too large, instead of only failing it

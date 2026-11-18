@@ -12,6 +12,7 @@ All notable changes to this standard are documented here. The format follows [Ke
 ### Changed
 
 - `settings/models.yml`: the ten local candidates now carry license, size and context read on 2026-11-18 from `ollama show`, the Ollama registry and the tags pages. `qwen2.5-coder:3b` is under the Qwen Research License, for research and evaluation only. The OpenCode models page lists `glm-5.3-flash-free` as deprecated and a new free `hy4-flash-free`.
+- The three new bench classes ran against real models on this machine. `refactor` and `edit-large` now route to `opencode/deepseek-v4.1-flash-free` instead of being blocked. Only `web-visual-review` stays blocked, until the owner's design pairs exist.
 - `opencode run --file` is confirmed to send an image when the model declares image input. `docs/006-model-analyzer.md` says so and keeps the limit that the analyzer has no OpenCode vision run yet.
 
 ## [1.21.0] - 2026-11-18
