@@ -55,6 +55,11 @@ def group(db, name: str, members: list[str]) -> None:
     db.commit()
 
 
+def groups(db) -> list[str]:
+    """The groups on this machine, by name."""
+    return [r["grp"] for r in db.execute("select distinct grp from members order by grp")]
+
+
 def recipients(db, targets: list[str], sender: str) -> list[str]:
     """`@team` is a group. A bare name is a peer. Overlapping groups give each peer one delivery. The sender is left out."""
     out = []

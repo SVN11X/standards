@@ -4,6 +4,15 @@ All notable changes to this standard are documented here. The format follows [Ke
 
 ## [Unreleased]
 
+### Added
+
+- A request to send a message to another session, such as "Manda un mensaje a la otra sesión de OpenTutor", is its own `message` intent. The prompt hook gives the session the `peerbox.py send` command, its own peerbox name and the groups on this machine, and the session edits nothing. Before, the request was `other` and got no context, so Murmur's messaging never started from a normal request.
+- The `merge-readiness` capability, provided by `scripts/readiness.py` after Interlock. An addition in `settings/recipes.yml` can name the `intents` it applies to.
+
+### Fixed
+
+- "¿Está listo el PR 42 para fusionar?" was a plain question, so the readiness check never ran. A question whether a pull request, change or branch is ready to merge is now a review with `merge-readiness`. Found by the owner's acceptance test of the seven tools on 2026-11-17.
+
 ## [1.20.1] - 2026-11-17
 
 ### Fixed

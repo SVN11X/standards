@@ -35,7 +35,7 @@ import repo_fingerprint  # noqa: E402
 
 SCHEMA = "standards/route-decision/v1"
 CLIENTS = ("claude", "opencode", "coordinator")
-INTENTS = ("work", "query", "review", "setup", "publish", "control", "other")
+INTENTS = ("work", "query", "review", "setup", "publish", "control", "message", "other")
 DEFAULTS = {"owner": "session", "task_ttl_h": 12, "max_context_chars": 2400}
 # Words that open a question. A request that starts with one asks for an answer, whatever verb follows.
 QUESTION = re.compile(r"^(qué|que|por qué|porque|cómo|como|cuál|cual|cuáles|cuándo|dónde|quién|what|why|how|which|when|where|who|"
@@ -93,6 +93,15 @@ CONTROL_OBJECT = re.compile(r"\b(plan|trabajo|ejecución|ejecucion|todo|autopilo
 WHY_STOPPED = re.compile(r"^(por qué|porque|por que|why)\b.*\b(no puedes|no pudiste|no puede|se detuvo|se paró|se paro|bloquead\w*|"
                          r"bloqueo\w*|can't you|cannot you|couldn't you|did it stop|is it blocked|blocked)\b")
 STATUS = re.compile(r"\b(estado|status|avance|progreso|progress)\b")
+READY = re.compile(r"\b(listo|lista|listos|listas|preparado|preparada|ready|mergeable|se puede fusionar|puedo fusionar|"
+                   r"podemos fusionar|can i merge|can we merge|safe to merge)\b")
+CHANGE_OBJECT = re.compile(r"\b(pr|prs|pull request|merge request|cambio|cambios|change|rama|branch)\b")
+# A verb of speech is a message by itself. A verb of sending needs the word message, so "manda esta tarea a OpenCode"
+# stays a work order.
+SPEECH_VERB = re.compile(r"^(avisa|avísale|avisale|dile|díselo|escríbele|escribele|pregúntale|preguntale|tell(?! me\b)|notify|ping)\b")
+SEND_VERB = re.compile(r"^(manda|mándale|mandale|mandar|envía|envia|envíale|enviale|enviar|send|message)\b")
+MESSAGE_NOUN = re.compile(r"\b(mensaje|mensajes|message|messages|aviso|nota|note)\b")
+SESSION_OBJECT = re.compile(r"\b(sesión|sesion|sesiones|session|sessions|peer|peers|peerbox|opencode|agente|agentes|agent|agents)\b")
 CONTINUE = re.compile(r"^(también|tambien|además|ademas|y |pero |mejor |en vez|no,|sí,|si,|also|and |but |instead|actually|wait)\b")
 THIRD_PARTY = ("remote",)
 
@@ -129,6 +138,10 @@ def classify(prompt: str) -> tuple[str, str]:
         return "control", "asks why the work stopped"
     if len(words) <= 8 and STATUS.search(text) and re.match(r"^(muéstrame|muestrame|dime|show|cuál|cual|cómo|como|qué|que|what|how|estado|status)\b", text):
         return "control", "asks for the status of the running work"
+    if SESSION_OBJECT.search(text) and (SPEECH_VERB.match(text) or (SEND_VERB.match(text) and MESSAGE_NOUN.search(text))):
+        return "message", "asks to send a message to another session"
+    if READY.search(text) and CHANGE_OBJECT.search(text):
+        return "review", "asks whether a change is ready to merge"
     if not polite and QUESTION.match(text):
         return "query", f"starts with the question word '{QUESTION.match(text).group(1)}'"
     if ASK.match(text):
@@ -521,6 +534,8 @@ def decide(prompt: str, cwd: Path, client: str = "claude", session: str | None =
     names = list((recipe or {}).get("capabilities") or [])
     notes = [recipe["notes"]] if recipe and recipe.get("notes") else []
     for extra in recipes.get("additions") or []:
+        if extra.get("intents") and intent not in extra["intents"]:
+            continue
         hit = words_in(prompt, extra.get("words") or [])
         if recipe and hit and extra["capability"] not in names:
             names.append(extra["capability"])
@@ -535,7 +550,8 @@ def decide(prompt: str, cwd: Path, client: str = "claude", session: str | None =
                   "setup": "edits inside the repository. Moving or deleting files needs the owner's yes to the plan first",
                   "publish": "pushing, merging or deploying: the owner's configured permission decides, and the client may ask",
                   "review": "reads only", "query": "reads only", "other": "nothing asked",
-                  "control": "changes only the plan control files: pause, resume, cancel or status"}[intent]
+                  "control": "changes only the plan control files: pause, resume, cancel or status",
+                  "message": "sends one message to another session on this machine through the peerbox. It edits nothing"}[intent]
     merges = merge_setting()
     if merges == "when-green" and intent in ("work", "publish", "setup"):
         permission = (permission.replace("Pushing, merging and deploying follow the owner's rules",
@@ -589,6 +605,12 @@ def render(decision: dict, limit: int = DEFAULTS["max_context_chars"]) -> str:
                 "the evidence, the work done and what unblocks it. If the cause was your own caution with no rule behind it, "
                 "say so and resume the work. "
                 "A pause or cancel the owner asked for stays after a restart. Answer in the owner's language.")
+    if decision["intent"] == "message":
+        return ("standards router: message request (" + decision["intent_why"] + "). Do not edit the repository. Send it with "
+                f"`python \"{HERE / 'peerbox.py'}\" --as <your peerbox name> send <peer or @group> \"<text>\"`. "
+                "A group is the folder name of the sessions in it, such as @opentutor. Add --task <key> when it is about a task. "
+                "`peerbox.py --as <name> status <id>` shows whether it was delivered or acknowledged. "
+                "An acknowledgement proves delivery, never that a change was made. Answer in the owner's language.")
     if decision["intent"] in ("query", "other"):
         return ""
     repo = decision["repository"]
@@ -671,6 +693,7 @@ def check(recipes: dict | None = None) -> list[str]:
     for extra in recipes.get("additions") or []:
         if extra.get("capability") not in capabilities:
             problems.append(f"addition: unknown capability {extra.get('capability')}")
+        problems += [f"addition {extra.get('capability')}: unknown intent {i}" for i in extra.get("intents") or [] if i not in INTENTS]
     for name, capability in capabilities.items():
         for provider in capability.get("providers") or []:
             where = f"{name}/{provider.get('id')}"

@@ -23,7 +23,9 @@ It answers the gap `docs/010-multiagent-autopilot.md` left open: the orchestrato
 | --- | --- | --- | --- |
 | work | A change verb in the first words, also after "please" or "can you" | "Corrige esta página", "Can you add a dark mode?" | One task opens |
 | query | A question word first, or "explain", "describe" | "¿Qué cambiarías?", "Explícame por qué se duplica" | No task and no context: the answer is an explanation |
-| review | "revisa", "review", "audit" with no change verb | "Revisa este PR" | One task opens, read only |
+| review | "revisa", "review", "audit" with no change verb, or a question whether a PR, change or branch is ready to merge | "Revisa este PR", "¿Está listo el PR 42 para fusionar?" | One task opens, read only. A readiness question adds `merge-readiness`, which runs `readiness.py` |
+| control | "pausa", "cancela", "reanuda", the status of the work, or why it stopped | "Pausa el plan", "¿Por qué no puedes hacerlo?" | The plan control files only, through `execute.py` and `blockers.py` |
+| message | "manda", "dile", "avisa", "send" with a session, an agent or OpenCode | "Manda un mensaje a la otra sesión de OpenTutor" | No edit. The context gives the `peerbox.py send` command, the session's peerbox name and the groups on this machine |
 | setup | "incorpora", "adopta", "set up" with "repository" | "Incorpora este repositorio al estándar" | One task opens |
 | publish | "sube", "publica", "push", "deploy" with no change verb | "Sube los cambios" | The owner's configured permission decides |
 | other | Nothing above | "gracias", "The build fails on CI" | Nothing, or a follow-up of the open task |
