@@ -529,6 +529,13 @@ class DefaultOwnerTests(Base):
 
 
 class HookTests(Base):
+    # What a session started by another one receives: reminders, the background, the task and the notes folder.
+    WRAPPED = ("<system-reminder>\nLinked sessions now ...\n</system-reminder>\n\n"
+               "Background (from the session that started this one):\n"
+               "The owner of this repository types the request above ...\n\n"
+               "Task:\nContinúa con todo lo autorizado, resuelve los bloqueos técnicos\n\n"
+               "Shared notes folder for this group of sessions (outside the repo; read siblings' notes there): C:\\notes")
+
     def hook(self, payload, env=None):
         ran = subprocess.run([sys.executable, str(ROOT / "hooks" / "route_prompt.py")], input=payload if isinstance(payload, str) else json.dumps(payload),
                              capture_output=True, text=True, timeout=60, env={**os.environ, **(env or {})})
@@ -584,6 +591,19 @@ class HookTests(Base):
             self.assertTrue(router.resumes(prompt), prompt)
         for prompt in ("¿Sigue abierto el PR 3?", "Corrige el título", "seguimos mañana", ""):
             self.assertFalse(router.resumes(prompt), prompt)
+
+    def test_the_hook_routes_only_the_owners_words(self):
+        sys.path.insert(0, str(ROOT / "hooks"))
+        import route_prompt
+        self.assertEqual(route_prompt.own_words(self.WRAPPED), "Continúa con todo lo autorizado, resuelve los bloqueos técnicos")
+        self.assertEqual(route_prompt.own_words("<system-reminder>\nx\n</system-reminder>\n\nCorrige el título"), "Corrige el título")
+        self.assertEqual(route_prompt.own_words("Corrige el título"), "Corrige el título")
+
+    def test_a_wrapped_request_still_gets_the_work_context(self):
+        code, out = self.hook({"prompt": self.WRAPPED, "cwd": str(self.web), "session_id": "h9"},
+                              env={"STANDARDS_NO_SUPERVISOR": "1"})
+        self.assertEqual(code, 0)
+        self.assertIn("work request", json.loads(out)["hookSpecificOutput"]["additionalContext"])
 
     def test_a_resume_request_starts_one_supervisor_pass(self):
         sys.path.insert(0, str(ROOT / "hooks"))

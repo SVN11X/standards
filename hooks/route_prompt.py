@@ -5,7 +5,8 @@ It asks the router (scripts/router.py) for a decision: the repository and folder
 each capability on this machine, how the result is verified, what leaves the machine and which permission
 the request needs. A question gets no context, so asking stays as fast as before. The hook reads files and
 writes one small task record under ~/.standards. It never edits the repository and never blocks a request:
-on any error it prints nothing. It starts one thing, a supervisor pass in the background when the owner says
+on any error it prints nothing. It routes the owner's words, without the reminders and the wrapper a client
+adds around the prompt. It starts one thing, a supervisor pass in the background when the owner says
 continúa, sigue or retoma, and that pass only resumes plans already started.
 """
 import json
@@ -22,6 +23,22 @@ def router_dir() -> Path | None:
     if root:
         candidates.append(Path(root) / "skills" / "repo-setup" / "standard" / "scripts")
     return next((path for path in candidates if (path / "router.py").is_file()), None)
+
+
+def own_words(prompt: str) -> str:
+    """The owner's own words, without the reminders and the wrapper a client adds around the prompt."""
+    text = re.sub(r"<system-reminder>.*?</system-reminder>", "", prompt, flags=re.DOTALL)
+    lines = text.splitlines()
+    background = next((i for i, line in enumerate(lines)
+                       if line.strip().startswith("Background (from the session that started this one):")), None)
+    if background is not None:
+        task = next((i for i, line in enumerate(lines) if i > background and line.strip() == "Task:"), None)
+        if task is not None:
+            text = "\n".join(lines[task + 1:])
+    paragraphs = re.split(r"\n\s*\n", text)
+    if paragraphs and paragraphs[-1].strip().startswith("Shared notes folder for this group of sessions"):
+        text = "\n\n".join(paragraphs[:-1])
+    return text.strip()
 
 
 def context(data: dict) -> str | None:
@@ -119,6 +136,10 @@ def main() -> int:
     except ValueError:
         data = {}
     data = data if isinstance(data, dict) else {}
+    try:
+        data["prompt"] = own_words(str(data.get("prompt") or ""))
+    except Exception:  # noqa: BLE001 (fail open, the request must go through)
+        pass
     try:
         text = context(data)
     except Exception:  # noqa: BLE001 (fail open, the request must go through)
