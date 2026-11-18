@@ -4,6 +4,8 @@ All notable changes to this standard are documented here. The format follows [Ke
 
 ## [Unreleased]
 
+## [1.22.0] - 2026-11-18
+
 ### Added
 
 - A generated `AGENTS.md` asks the agent to close a long run with one report: what works without a command, the version each client loads, real and simulated checks, the models used, links to the changes, and for each item left to the owner the exact action, its source, what is prepared and what happens once it is done. The owner's final acceptance test on 2026-11-18 found the summary missing half of it.
