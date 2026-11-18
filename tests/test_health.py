@@ -226,6 +226,31 @@ class HealthTests(unittest.TestCase):
                                           caps={"opencode": {"models": ["opencode/b-free"]}})
         self.assertEqual(used, ["opencode/b-free"])
 
+    def test_opencode_delegate_without_a_model_skips_one_the_gate_refuses(self):
+        import subprocess
+        repo = self.tmp / "repo4"
+        repo.mkdir()
+        for args in (["init", "-q"], ["-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "--allow-empty", "-m", "i"]):
+            subprocess.run(["git", "-C", str(repo), *args], check=True)
+        # The model that may train comes first, as in the owner's local.yml of 2026-11-18. A private folder refuses it.
+        local = {"folders": [{"path": str(repo), "class": "personal-private", "allow_remote_free": True}],
+                 "free_models": [{"id": "opencode/t-free", "checked": TODAY, "data_use": "trains"},
+                                 {"id": "opencode/n-free", "checked": TODAY, "data_use": "none"}]}
+        used = []
+        real = orchestrate.run
+
+        def pick(cmd, *a, **k):
+            if cmd and cmd[0] == "fake":
+                used.append(cmd[1])
+                return {"exit": 1, "seconds": 0, "timeout": False, "stdout": "", "stderr": "failed"}
+            return real(cmd, *a, **k)
+
+        with mock.patch.object(orchestrate, "run", side_effect=pick):
+            out = orchestrate.delegate_opencode(repo, "task", ["*"], None, conf=self.conf, local=local,
+                                                command=["fake", "{model}"], catalog={}, caps={})
+        self.assertNotEqual(out["state"], "blocked", out.get("reason"))
+        self.assertEqual(used, ["opencode/n-free"])
+
 
 if __name__ == "__main__":
     unittest.main()
