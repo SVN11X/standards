@@ -316,9 +316,12 @@ def words_in(text: str, words: list[str]) -> list[str]:
     return [w for w in words or [] if f" {w} " in low]
 
 
-def pick_recipe(intent: str, signals: set[str], prompt: str, recipes: list[dict]) -> tuple[dict | None, list[dict], str, int]:
+def pick_recipe(intent: str, signals: set[str], prompt: str, recipes: list[dict],
+                profile: str | None = None) -> tuple[dict | None, list[dict], str, int]:
     """(recipe, the others that matched, why, subject score). The subject score counts only the words that
-    name what the request is about, so it can tell two folders apart."""
+    name what the request is about, so it can tell two folders apart. Once the profile is known, a recipe of
+    another profile is skipped when the request names none of its words or wins_on. A verb such as "fix" names
+    no kind of project."""
     scored = []
     for order, recipe in enumerate(recipes):
         if intent not in recipe.get("intents", []):
@@ -329,6 +332,8 @@ def pick_recipe(intent: str, signals: set[str], prompt: str, recipes: list[dict]
         words = words_in(prompt, recipe.get("words") or [])
         verbs = words_in(prompt, recipe.get("verbs") or [])
         named = words_in(prompt, recipe.get("wins_on") or [])
+        if profile and recipe.get("profile") and recipe["profile"] != profile and not (words + named):
+            continue
         # A request that names the recipe's object (a PR, a diff) beats any signal of the folder.
         score = len(hits) * 2 + (len(words) + len(verbs)) * 3 + (1000 if named else 0)
         scored.append((score, -order, recipe, hits, named + words + verbs, len(words) * 3))
@@ -345,7 +350,8 @@ def find_focus(fp: dict, cwd: Path, prompt: str, intent: str, recipes: list[dict
     """(folder, why, candidates). The folder the request is about, or the folders it could be about.
 
     Order: the folder the session is in, the folder the request names, the only project that could take the
-    request, the project whose subject words the request uses. Anything else is a question, never a guess."""
+    request, the project whose subject words the request uses. Anything else is a question, never a guess.
+    In the standard's own repository the root is the project, so a request that names no part stays there."""
     root = Path(fp["root"])
     try:
         inside = cwd.resolve().relative_to(root.resolve()).as_posix()
@@ -360,6 +366,8 @@ def find_focus(fp: dict, cwd: Path, prompt: str, intent: str, recipes: list[dict
              or re.search(r"(?<![\w/-])" + re.escape(s["path"].rsplit("/", 1)[-1].lower()) + r"(?![\w-])", low)]
     if len(named) == 1:
         return named[0], "the request names this folder", []
+    if not named and (fp.get("standard") or {}).get("own_source"):
+        return ".", "the standard's own repository, and the request names none of its parts", []
     fits = []
     for sub in subs:
         if named and sub["path"] not in named:
@@ -522,13 +530,15 @@ def decide(prompt: str, cwd: Path, client: str = "claude", session: str | None =
     folder, folder_why, candidates = find_focus(fp, Path(cwd), prompt, intent, recipes.get("recipes") or [])
     signal_rows, commands, where = scope_signals(fp, folder)
     signals = {s["id"] for s in signal_rows}
-    recipe, alternatives, recipe_why, _ = pick_recipe(intent, signals, prompt, recipes.get("recipes") or [])
+    standard = fp.get("standard") or {}
+    recipe, alternatives, recipe_why, _ = pick_recipe(intent, signals, prompt, recipes.get("recipes") or [],
+                                                      profile=standard.get("profile"))
     questions = []
     if candidates and intent in ("work", "review", "publish"):
         questions.append("Which folder is this about: " + ", ".join(candidates) + "?")
-    standard = fp.get("standard") or {}
     profile = standard.get("profile") or (recipe or {}).get("profile")
-    profile_why = ("declared in .standard.yml" if standard.get("profile") else
+    profile_why = ("the standard's own repository, which follows the software profile" if standard.get("own_source") else
+                   "declared in .standard.yml" if standard.get("profile") else
                    f"the recipe {recipe['id']} suggests it. The repository has no .standard.yml" if recipe and recipe.get("profile")
                    else "not declared and no recipe names one")
     names = list((recipe or {}).get("capabilities") or [])
@@ -562,7 +572,7 @@ def decide(prompt: str, cwd: Path, client: str = "claude", session: str | None =
                        "<PR> --wait 1800`, never with gh pr merge")
     if intent == "work" and PUBLISH.search(first_sentence(prompt)):
         permission += ". The request also asks to publish: that part waits for the owner's configured permission"
-    if not fp["standard"]["present"] and intent in ("work", "setup"):
+    if not fp["standard"]["present"] and intent in ("work", "setup") and not standard.get("own_source"):
         notes.append("no .standard.yml in the repository: its rules are unknown, so check the README and local rules first")
     owner = limits.get("owner", "session") if intent == "work" and client == "claude" and not questions else "session"
     handoff = None

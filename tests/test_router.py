@@ -219,6 +219,18 @@ class SelectionTests(Base):
         self.assertTrue(any("no .standard.yml" in note for note in decision["notes"]))
         self.assertIn("The repository has no .standard.yml", decision["profile_why"])
 
+    def test_the_standards_own_repository_is_not_treated_as_a_website(self):
+        files = {"base/base.yml": "version: 1.0.0\n", "profiles/web.yml": "id: web\n",
+                 "scripts/check.py": "print('ok')\n", "ui/index.html": "<h1>x</h1>\n"}
+        standard = repo(self.root / "standard", files)
+        decision = self.decide("Continúa con todo lo autorizado", standard)
+        self.assertEqual((decision["profile"], decision["recipe"]), ("software", "general-code"))
+        self.assertEqual(decision["profile_why"], "the standard's own repository, which follows the software profile")
+        self.assertFalse(any("no .standard.yml" in note for note in decision["notes"]))
+        # A fix verb names no kind of project, so it does not bring the web recipe back.
+        fixed = self.decide("Corrige el error del router", standard)
+        self.assertEqual((fixed["profile"], fixed["recipe"]), ("software", "general-code"))
+
     def test_a_native_window_is_never_proven_by_a_browser(self):
         decision = self.decide("Corrige el foco de la ventana al cerrar", repo(self.root / "go", GO))
         self.assertNotIn("browser-test", [c["capability"] for c in decision["capabilities"]])

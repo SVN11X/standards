@@ -4,6 +4,12 @@ All notable changes to this standard are documented here. The format follows [Ke
 
 ## [Unreleased]
 
+### Fixed
+
+- A session that another session started got no router context. The desktop app puts `<system-reminder>` blocks and a "Background" and "Task:" wrapper around the prompt, so "Continúa con todo lo autorizado" was `other` and started no supervisor pass. The prompt hook now routes only the owner's words. Found by the owner's final acceptance test on 2026-11-18.
+- In the standard's own repository the startup hook said nothing, and the router called it a website because it has no `.standard.yml` and a small HTML gallery, so "Continúa" got the `web-experience` recipe and a phone proof. The standard's own source now counts as a software repository for both hooks, and a known profile beats the folder's signals when the request names nothing of a recipe.
+- `orchestrate.py delegate opencode` without `--model` still took the first free model checked by the owner, so it sent every task to the retired `glm-5.3-flash-free` and failed in 3 seconds with "Unexpected server error", while `route` already chose `deepseek-v4.1-flash-free`. Delegation now skips a model that `opencode models` no longer lists, by the same rule as `route`.
+
 ## [1.21.1] - 2026-11-18
 
 ### Fixed

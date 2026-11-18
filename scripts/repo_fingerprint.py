@@ -78,7 +78,7 @@ WINDOWS_CODE = re.compile(r"golang\.org/x/sys/windows|syscall\.NewLazyDLL|ctypes
 # A tkinter interface, which desktop_ux.py can measure from inside its own process.
 TKINTER_CODE = re.compile(r"\bimport tkinter\b|\bfrom tkinter import|\bimport customtkinter\b")
 # Part of the cache key, so a saved fingerprint from an older detector is not reused.
-DETECTOR = "2"
+DETECTOR = "3"
 MANIFESTS = re.compile(r"(^|/)(package\.json|pyproject\.toml|go\.mod|Cargo\.toml|requirements[^/]*\.txt|\.standard\.yml|"
                        r"pnpm-workspace\.yaml|platformio\.ini|wrangler\.(toml|jsonc?))$")
 PROJECT_FILES = re.compile(r"(^|/)(package\.json|pyproject\.toml|go\.mod|Cargo\.toml)$")
@@ -132,7 +132,10 @@ def read_standard(root: Path) -> dict:
     """The owner's declaration in .standard.yml. Declared values count before anything the files suggest."""
     path = root / ".standard.yml"
     if not path.is_file():
-        return {"present": False, "profile": None, "experience": None, "privacy": None, "parts": []}
+        if (root / "base" / "base.yml").is_file() and (root / "profiles").is_dir():
+            return {"present": False, "profile": "software", "experience": None, "privacy": None, "parts": [],
+                    "own_source": True}
+        return {"present": False, "profile": None, "experience": None, "privacy": None, "parts": [], "own_source": False}
     text = read(root, ".standard.yml")
     try:
         import yaml
@@ -142,7 +145,7 @@ def read_standard(root: Path) -> dict:
     options = data.get("options") if isinstance(data.get("options"), dict) else {}
     parts = data.get("parts") if isinstance(data.get("parts"), list) else []
     return {"present": True, "profile": data.get("profile"), "experience": options.get("experience"),
-            "privacy": data.get("privacy"),
+            "privacy": data.get("privacy"), "own_source": False,
             "parts": [{"path": str(p.get("path")), "profile": p.get("profile")} for p in parts if isinstance(p, dict)]}
 
 
