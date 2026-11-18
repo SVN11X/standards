@@ -17,6 +17,7 @@ Instructions for any AI agent working in this repository. People read it too.
 3. Unless it is green, first reply with an Understanding block and wait: Goal (one sentence, in your words), Plan, Out of scope, Assumptions, Questions.
 4. Work in small commits. Before you finish, run the check (README.md, section Standard) and fix every error.
 5. Fill every section of the pull request template. Move assumptions that survive review to docs/assumptions.md and decisions to docs/decisions/.
+6. When a long run ends, such as the autopilot or a request to continue everything, close with one report: what now works without a command, the version each client loads, which checks ran for real and which were simulated, the models that did each part, and links to the changes. For each item left to the owner, give the exact action, the rule or source that requires it, what is already prepared and what happens once it is done.
 
 ## Traffic light
 - Green, decide and record: reversible, inside Where, consistent with docs/goals.md. Note it under Assumptions in the pull request.
