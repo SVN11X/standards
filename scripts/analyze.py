@@ -156,7 +156,7 @@ def opencode_coverage(conf: dict, local: dict, caps: dict, catalog: dict, mode: 
         else:
             ok, why, code = orchestrate.explain("opencode", name, folder, conf, consent, mode, caps, catalog)
             if ok:
-                cannot = (["vision: capability not evaluated, sending an image through OpenCode is not confirmed"]
+                cannot = (["vision: capability not evaluated, the analyzer has no OpenCode vision run yet"]
                           if "vision" in (entry.get("capabilities") or []) else [])
                 record.update(status="eligible", why=use, tasks=list(bench_tasks.AGENT_TASKS), cannot=cannot, data=use)
             else:

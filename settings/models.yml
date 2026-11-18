@@ -21,39 +21,45 @@ noted_from: the owner's notes of 2026-11-10
 
 models:
   # Local models in Ollama. Sizes and capabilities are read from the installed model, not from this file.
+  # The fields below were read on 2026-11-18 from `ollama show`, the registry manifest and license file of each tag,
+  # and its tags page on ollama.com.
   - {id: "qwen3.5:4b", executor: ollama, provider: ollama-local, source: "https://ollama.com/library/qwen3.5", cost: local,
-     data: {stores: "no", trains: "no"}, capabilities: [], try_first: [classify, extract, vision],
-     evidence: candidate, checked: null, license: null, size_gb: null, context: null,
-     notes: "Baseline. Ran fully on a 6 GB GPU with a 4096 context. A guide says it accepts images, confirm it with the model's own information."}
+     data: {stores: "no", trains: "no"}, capabilities: [vision, tools], try_first: [classify, extract, vision],
+     evidence: declared, checked: 2026-11-18, license: Apache-2.0, size_gb: 3.3, context: 256K,
+     notes: "Baseline. Ran fully on a 6 GB GPU with a 4096 context. `ollama show` reports vision and tools."}
   - {id: "qwen2.5:7b", executor: ollama, provider: ollama-local, source: "https://ollama.com/library/qwen2.5", cost: local,
-     data: {stores: "no", trains: "no"}, capabilities: [], try_first: [],
-     evidence: candidate, checked: null, license: null, size_gb: null, context: null, notes: "Comparison."}
+     data: {stores: "no", trains: "no"}, capabilities: [tools], try_first: [],
+     evidence: declared, checked: 2026-11-18, license: Apache-2.0, size_gb: 4.7, context: 32K, notes: "Comparison."}
   - {id: "qwen3.5:9b", executor: ollama, provider: ollama-local, source: "https://ollama.com/library/qwen3.5", cost: local,
-     data: {stores: "no", trains: "no"}, capabilities: [], try_first: [],
-     evidence: candidate, checked: null, license: null, size_gb: null, context: null,
+     data: {stores: "no", trains: "no"}, capabilities: [vision, tools], try_first: [],
+     evidence: declared, checked: 2026-11-18, license: Apache-2.0, size_gb: 6.6, context: 256K,
      notes: "Split between GPU and CPU on a 6 GB card. Compare it under a time limit per task."}
   - {id: "qwen3-embedding:0.6b", executor: ollama, provider: ollama-local, source: "https://ollama.com/library/qwen3-embedding", cost: local,
      data: {stores: "no", trains: "no"}, capabilities: [embedding], try_first: [],
-     evidence: candidate, checked: null, license: null, size_gb: null, context: null, notes: "Search only, never chat."}
+     evidence: declared, checked: 2026-11-18, license: Apache-2.0, size_gb: 0.6, context: 32K,
+     notes: "Search only, never chat. The Ollama package has no license file, the license is from the Hugging Face model card."}
   - {id: "qwen2.5-coder:3b", executor: ollama, provider: ollama-local, source: "https://ollama.com/library/qwen2.5-coder", cost: local,
      data: {stores: "no", trains: "no"}, capabilities: [code], try_first: [fix-bug],
-     evidence: candidate, checked: null, license: null, size_gb: null, context: null, notes: "Code."}
+     evidence: declared, checked: 2026-11-18, license: Qwen-Research, size_gb: 1.9, context: 32K,
+     notes: "Code. The Qwen Research License allows research and evaluation only, commercial use needs a license from Alibaba Cloud."}
   - {id: "granite4.1:3b", executor: ollama, provider: ollama-local, source: "https://ollama.com/library/granite4.1", cost: local,
      data: {stores: "no", trains: "no"}, capabilities: [tools], try_first: [classify, extract, tool-call],
-     evidence: candidate, checked: null, license: null, size_gb: null, context: null,
-     notes: "Tool use. A guide says Apache 2.0, confirm the license on the model page."}
+     evidence: declared, checked: 2026-11-18, license: Apache-2.0, size_gb: 2.1, context: 128K,
+     notes: "Tool use."}
   - {id: "phi4-mini", executor: ollama, provider: ollama-local, source: "https://ollama.com/library/phi4-mini", cost: local,
      data: {stores: "no", trains: "no"}, capabilities: [], try_first: [],
-     evidence: candidate, checked: null, license: null, size_gb: null, context: null, notes: "General use."}
+     evidence: declared, checked: 2026-11-18, license: MIT, size_gb: 2.5, context: 128K, notes: "General use."}
   - {id: "gemma4:e2b-it-qat", executor: ollama, provider: ollama-local, source: "https://ollama.com/library/gemma4", cost: local,
      data: {stores: "no", trains: "no"}, capabilities: [vision], try_first: [vision],
-     evidence: candidate, checked: null, license: null, size_gb: null, context: null, notes: "Vision, to review screenshots."}
+     evidence: declared, checked: 2026-11-18, license: Apache-2.0, size_gb: 4.3, context: 128K,
+     notes: "Vision, to review screenshots. The tag takes text and image input."}
   - {id: "functiongemma:270m", executor: ollama, provider: ollama-local, source: "https://ollama.com/library/functiongemma", cost: local,
      data: {stores: "no", trains: "no"}, capabilities: [], try_first: [classify],
-     evidence: candidate, checked: null, license: null, size_gb: null, context: null, notes: "Classification with fixed options."}
+     evidence: declared, checked: 2026-11-18, license: Gemma-Terms, size_gb: 0.3, context: 32K,
+     notes: "Classification with fixed options."}
   - {id: "llama3-groq-tool-use:8b", executor: ollama, provider: ollama-local, source: "https://ollama.com/library/llama3-groq-tool-use", cost: local,
      data: {stores: "no", trains: "no"}, capabilities: [tools], try_first: [tool-call],
-     evidence: candidate, checked: null, license: null, size_gb: null, context: null,
+     evidence: declared, checked: 2026-11-18, license: Llama-3-Community, size_gb: 4.7, context: 8K,
      notes: "Tool use. By size it can split with the CPU on a 6 GB card."}
 
   # Free models served by OpenCode. All were listed as free for a limited time and usable only from OpenCode.
@@ -61,10 +67,16 @@ models:
   # The id is the last part of the name that `opencode models` prints.
   - {id: glm-5.3-flash-free, executor: opencode, provider: opencode-zen, source: "https://opencode.ai/docs/console/models/", cost: free-promo,
      data: {stores: "no", trains: "no"}, capabilities: [], try_first: [fix-bug],
-     evidence: declared, checked: 2026-11-10, requests_per_day: null, review_by: null, notes: "Fixed the synthetic bug once, 3 of 3 tests."}
+     evidence: declared, checked: 2026-11-18, requests_per_day: null, review_by: null,
+     notes: "Fixed the synthetic bug once, 3 of 3 tests. The models page lists it as deprecated on 2026-11-18."}
   - {id: deepseek-v4.1-flash-free, executor: opencode, provider: opencode-zen, source: "https://opencode.ai/docs/console/models/", cost: free-promo,
      data: {stores: "no", trains: "no"}, capabilities: [], try_first: [fix-bug],
-     evidence: declared, checked: 2026-11-10, requests_per_day: null, review_by: null, notes: "Fixed the synthetic bug once, 3 of 3 tests."}
+     evidence: declared, checked: 2026-11-18, requests_per_day: null, review_by: null,
+     notes: "Fixed the synthetic bug once, 3 of 3 tests. Zero retention and no training, per the models page."}
+  - {id: hy4-flash-free, executor: opencode, provider: opencode-zen, source: "https://opencode.ai/docs/console/models/", cost: free-promo,
+     data: {stores: "no", trains: "no"}, capabilities: [], try_first: [fix-bug],
+     evidence: declared, checked: 2026-11-18, requests_per_day: null, review_by: null,
+     notes: "Listed on 2026-11-18 as free for a limited time, zero retention and no training. Not measured."}
   - {id: mimo-v2.6-flash-free, executor: opencode, provider: opencode-zen, source: "https://opencode.ai/docs/console/models/", cost: free-promo,
      data: {stores: "unknown", trains: "yes"}, capabilities: [], try_first: [],
      evidence: declared, checked: 2026-11-10, requests_per_day: null, review_by: null,
@@ -100,7 +112,7 @@ models:
   - {id: nemotron-3.5-super-vl-free, executor: opencode, provider: opencode-zen, source: "https://opencode.ai/docs/console/models/", cost: free-promo,
      data: {stores: "yes", trains: "yes"}, capabilities: [vision], try_first: [vision],
      evidence: declared, checked: 2026-11-10, requests_per_day: null, review_by: null,
-     notes: "Trial use, logged to improve products. Accepts images, but the analyzer cannot send one through OpenCode yet."}
+     notes: "Trial use, logged to improve products. Accepts images. OpenCode sends one, but the analyzer has no OpenCode vision run yet."}
   - {id: jev-1.13-free, executor: opencode, provider: opencode-zen, source: "https://opencode.ai/docs/console/models/", cost: free-promo,
      data: {stores: "unknown", trains: "unknown"}, capabilities: [], try_first: [],
      evidence: declared, checked: 2026-11-10, requests_per_day: null, review_by: null, notes: "No data policy published. Blocked until it is known."}

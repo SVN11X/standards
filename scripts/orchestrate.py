@@ -399,7 +399,8 @@ def doctor(full: bool = False, conf: dict | None = None) -> dict:
             "colibri": detect_colibri(conf.get("executors", {}).get("colibri", {}))}
     opencode = shutil.which("opencode")
     caps["opencode"] = {"path": opencode, "version": version_of(["opencode", "--version"]) if opencode else None}
-    if opencode and full:
+    if opencode:
+        # The router needs the list too: a free model OpenCode withdrew fails every delegation with Model unavailable.
         listed = run(["opencode", "models"], timeout=60, env=child_env())
         caps["opencode"]["models"] = [line.strip() for line in listed["stdout"].splitlines() if "/" in line]
     if os.name == "nt":
@@ -1180,10 +1181,14 @@ def eligible(candidate, task, repo, input_chars, conf, local, caps, measured=Non
         models = [*checked_free_models(local, conf), *[m for m in local_proven if m not in checked_free_models(local, conf)]]
         if not models:
             return False, "no free model checked by the owner in the last days (local.yml free_models)", None
+        offered = (caps.get("opencode") or {}).get("models")
         pool, refused = [], []
         for model in models:
             if cooled("opencode", model):
                 refused.append((model, cooled("opencode", model)))
+                continue
+            if offered is not None and not any(name.split("/")[-1] == model.split("/")[-1] for name in offered):
+                refused.append((model, f"`opencode models` does not list {model} any more"))
                 continue
             ok, why = gate("opencode", model, repo, conf, local, mode, caps, catalog)
             (pool if ok else refused).append((model, why))
@@ -1577,11 +1582,32 @@ def delegate_opencode(repo: Path, task: str, allowed: list[str], test: str | Non
     return run_data
 
 
+THINK_LEVELS: dict[str, list | None] = {}
+
+
+def think_option(model: str | None, conf: dict):
+    """The think option for one model. A model that only has levels, such as gpt-oss, ignores false and spends the
+    whole reply budget thinking, so it gets its lowest level instead."""
+    oconf = conf["executors"]["ollama"]
+    wanted = oconf.get("think", False)
+    if wanted is not False or not model:
+        return wanted
+    if model not in THINK_LEVELS:
+        url = oconf.get("url", "http://127.0.0.1:11434").rstrip("/")
+        try:
+            values = (http_json(f"{url}/api/show", {"model": model}, timeout=5).get("thinking") or {}).get("values")
+        except (OSError, ValueError, AttributeError, urllib.error.URLError):
+            values = None
+        THINK_LEVELS[model] = values if isinstance(values, list) and values else None
+    values = THINK_LEVELS[model]
+    return values[0] if values and False not in values and "false" not in values else wanted
+
+
 def ollama_chat(payload: dict, conf: dict) -> dict:
     """One call to the local Ollama chat API. A model that rejects the think option is asked again without it."""
     oconf = conf["executors"]["ollama"]
     url = oconf.get("url", "http://127.0.0.1:11434").rstrip("/") + "/api/chat"
-    payload = {"stream": False, "think": oconf.get("think", False), **payload}
+    payload = {"stream": False, "think": think_option(payload.get("model"), conf), **payload}
     payload.setdefault("options", {"num_ctx": oconf.get("num_ctx", 4096), "num_predict": oconf.get("num_predict", 400)})
     if oconf.get("keep_alive"):
         payload.setdefault("keep_alive", oconf["keep_alive"])
@@ -1756,7 +1782,8 @@ def bench_chat(task: str, executor: str, model: str | None, conf: dict | None = 
         if time_limit_s and time.monotonic() - started > time_limit_s:
             raise bench_tasks.OutOfTime()
         try:
-            reply = ollama_chat({"model": model, **payload}, conf)
+            options = {"num_ctx": oconf.get("num_ctx", 4096), "num_predict": bench_tasks.reply_tokens(task, oconf.get("num_predict", 400))}
+            reply = ollama_chat({"model": model, "options": options, **payload}, conf)
         except (OSError, ValueError, urllib.error.URLError) as error:
             seen["failures"] += 1
             seen["error"] = str(error)[:200]
@@ -1864,7 +1891,8 @@ def bench_api(task: str, model: str | None, row: dict, conf: dict, local: dict |
         seen["last"] = time.monotonic()
         seen["requests"] += 1
         try:
-            reply = providers.chat(pconf, name, messages, tools, want_json, max_tokens=conf["executors"]["ollama"].get("num_predict", 400),
+            reply = providers.chat(pconf, name, messages, tools, want_json,
+                                   max_tokens=bench_tasks.reply_tokens(task, conf["executors"]["ollama"].get("num_predict", 400)),
                                    timeout=conf["limits"]["ollama_timeout_s"])
         except providers.ProviderError as error:
             if error.kind == "unsupported":

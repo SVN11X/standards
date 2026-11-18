@@ -7,6 +7,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
@@ -182,6 +183,26 @@ class Analyzer(unittest.TestCase):
         fakes.Ollama.loaded.append("bad:1b")
         analyze.unload_other_models("good:1b", self.conf)
         self.assertEqual(fakes.Ollama.loaded, [])
+
+    def test_a_long_bench_class_gets_its_reply_budget(self):
+        real, sent = orchestrate.ollama_chat, []
+        with mock.patch.object(orchestrate, "ollama_chat", side_effect=lambda payload, conf: (sent.append(payload), real(payload, conf))[1]):
+            orchestrate.bench_chat("decompose", "ollama", "good:1b", conf=self.conf, caps=self.caps["ollama"], local=self.local,
+                                   catalog=CATALOG)
+        self.assertTrue(sent)
+        self.assertEqual({p["options"]["num_predict"] for p in sent}, {1500})
+
+    def test_a_model_with_only_thinking_levels_gets_the_lowest(self):
+        shows = {"lv:1b": {"thinking": {"values": ["low", "medium", "high"]}}, "tf:1b": {"thinking": {"values": [False, True]}},
+                 "none:1b": {}}
+        orchestrate.THINK_LEVELS.clear()
+        try:
+            with mock.patch.object(orchestrate, "http_json", side_effect=lambda url, payload=None, timeout=0: shows[payload["model"]]):
+                self.assertEqual(orchestrate.think_option("lv:1b", self.conf), "low")
+                self.assertIs(orchestrate.think_option("tf:1b", self.conf), False)
+                self.assertIs(orchestrate.think_option("none:1b", self.conf), False)
+        finally:
+            orchestrate.THINK_LEVELS.clear()
 
     def test_a_model_that_answers_as_another_fails(self):
         row = orchestrate.bench_chat("classify", "ollama", "swap:1b", conf=self.conf, caps=self.caps["ollama"], local=self.local,

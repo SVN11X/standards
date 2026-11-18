@@ -186,7 +186,7 @@ No gateway or agent board is integrated. Two candidates are in the radar at `ass
 ## Limits
 
 - No adapter was tested against its real service. Until you run one with your key, its state is "pending a real test".
-- Sending an image through `opencode run` is not confirmed, so a vision model served only through OpenCode is not evaluated on `vision` or `design-judge`.
+- `opencode run --file` sends an image only to a model whose OpenCode settings declare `modalities.input` with `image`. Any other model gets a text saying it cannot read the file. Checked on 2026-11-18 with OpenCode 1.19.5 and a local stub that recorded the request. The analyzer has no OpenCode vision run yet, so a vision model served only through OpenCode is not evaluated on `vision` or `design-judge`.
 - The reply of a provider may name the model with or without a suffix. A name that only adds or drops a suffix counts as the same model, another name fails the run. The first real run shows whether a provider needs a stricter rule.
 - The memory check of a local model uses the file size with a fixed overhead. It is a rough fit, not a measurement.
 - Planning and visual direction have no bench class and are planner work: the owner asks Claude directly. Deep review has the `review-diff` class, but no task type routes to it yet.

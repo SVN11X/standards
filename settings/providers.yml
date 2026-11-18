@@ -14,10 +14,11 @@
 # data: what the provider does with what it receives, as in settings/models.yml.
 # gateway: marks a router that forwards to other providers. allow lists the provider/model pairs it may use. Nothing is sent
 #   without it, fusion, caching and billing are always sent off, and orchestrate.py counts the address as remote.
-# confirmed: what a search of the provider's own site stated on the `checked` date. No page was opened directly and
-#   no endpoint was called from the session that wrote this file. Nothing here was tested against the service.
+# confirmed: what the provider's own pages state. A search wrote it on 2026-11-10. On the `checked` date every source
+#   page was opened and compared, and claims a page contradicts or does not state were corrected or made stricter.
+#   No endpoint was called. Nothing here was tested against the service.
 version: 1
-checked: 2026-11-10
+checked: 2026-11-18
 
 providers:
   openrouter:
@@ -39,8 +40,9 @@ providers:
       - https://openrouter.ai/docs/api/api-reference/models/list-all-models-and-their-properties
       - https://openrouter.ai/docs/api/api-reference/api-keys/get-current-api-key
       - https://openrouter.ai/docs/guides/privacy/provider-logging
+      - https://openrouter.ai/docs/guides/routing/provider-selection
     confirmed: "Models list with a pricing object where 0 means free. Free model ids end in :free. GET /key reports free_model_daily_requests. 50 requests a day and 20 a minute on an account without purchased credits. 402 on a negative balance, 429 on a limit. Images as image_url with a URL or base64."
-    notes: "The limits are for the whole account, not per key or model. Some free models log and train by design: with data_collection deny those requests fail instead of being sent. The openrouter/free router picks a model at random, so it is not listed as a model."
+    notes: "The free daily quota is for the whole account, not per key. Other rate limits can differ per model. Some free models log and train by design: with data_collection deny those requests fail instead of being sent. The openrouter/free router picks a model at random, so it is not listed as a model."
   groq:
     name: Groq
     status: adapter
@@ -51,14 +53,14 @@ providers:
     free_rule: plan
     preflight: owner
     features: [chat, json, tools, vision]
-    data: {stores: "yes", trains: "no"}
+    data: {stores: "yes", trains: "unknown"}
     limits: {requests_per_day: null, requests_per_minute: null}
     sources:
       - https://console.groq.com/docs/openai
       - https://console.groq.com/docs/rate-limits
       - https://console.groq.com/docs/your-data
-    confirmed: "OpenAI-compatible base URL and GET /models. A Free plan at 0 dollars. Limits per organization, reported in x-ratelimit headers and retry-after. Inputs and outputs are not used for training. Logs may be kept up to 30 days unless zero data retention is turned on."
-    notes: "The free plan numbers were not found. The account's own limits page has them. A key from an organization on a paid plan is billed, so the owner confirms the plan."
+    confirmed: "OpenAI-compatible base URL and GET /models. A Free plan at 0 dollars. Limits per organization, reported in x-ratelimit headers and retry-after. Logs may be kept up to 30 days unless zero data retention is turned on."
+    notes: "The data page says nothing about training on inputs, so trains stays unknown. The free plan numbers were not found. The account's own limits page has them. A key from an organization on a paid plan is billed, so the owner confirms the plan."
   mistral:
     name: Mistral
     status: adapter
@@ -160,15 +162,15 @@ providers:
     cost: unknown
     sources:
       - https://opencode.ai/docs/zen
-    confirmed: "A models list at opencode.ai/zen/v1/models. Free models are for use from OpenCode and answer 403 to another client."
+    confirmed: "A models list at opencode.ai/inference/v1/models. Free models are for use from OpenCode and answer 403 to another client."
     notes: "The free Zen models stay under the opencode executor in settings/models.yml. A free model that was withdrawn leaves the list, and choosing it fails with Model unavailable."
   ollama-cloud:
     name: Ollama cloud models
     status: no-adapter
-    cost: unknown
+    cost: paid
     sources:
       - https://ollama.com/pricing
-    confirmed: "Cloud models are billed per token. The free plan includes a small monthly amount for some starter models."
+    confirmed: "Cloud models are billed per token. The 0 dollar tier is pay as you go, and included monthly usage comes only with a paid plan."
     notes: "A cloud tag in the local Ollama runs on Ollama's servers. It is listed as remote and never tested, because nothing here can tell a starter model from a billed one."
   antigravity-cli:
     name: Antigravity CLI

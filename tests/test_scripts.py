@@ -102,6 +102,17 @@ class Route(Base):
         decision = orchestrate.route("edit-small", self.tmp, local=self.local(), caps=self.caps)
         self.assertEqual((decision["executor"], decision["model"]), ("opencode", "opencode/glm-5.3-flash-free"))
 
+    def test_a_model_opencode_no_longer_lists_is_not_routed(self):
+        local = self.local()
+        local["free_models"].append({"id": "opencode/deepseek-v4.1-flash-free", "checked": dt.date.today().isoformat()})
+        caps = {**self.caps, "opencode": {"path": "/bin/opencode", "models": ["opencode/deepseek-v4.1-flash-free"]}}
+        decision = orchestrate.route("edit-small", self.tmp, local=local, caps=caps)
+        self.assertEqual(decision["model"], "opencode/deepseek-v4.1-flash-free")
+        caps["opencode"]["models"] = ["opencode/glm-5.3-flash"]
+        decision = orchestrate.route("edit-small", self.tmp, local=local, caps=caps)
+        self.assertNotEqual(decision["executor"], "opencode")
+        self.assertIn("does not list opencode/glm-5.3-flash-free any more", json.dumps(decision))
+
     def test_bench_history_picks_the_model(self):
         local = self.local()
         local["free_models"].append({"id": "opencode/deepseek-v4.1-flash-free", "checked": dt.date.today().isoformat()})
@@ -405,7 +416,10 @@ class CostAndData(Base):
     def test_embedding_and_capabilities(self):
         oconf = dict(orchestrate.policy()["executors"]["ollama"], prefer=["qwen3-embedding:0.6b", "qwen3.5:4b"])
         self.assertEqual(orchestrate.pick_ollama_model(oconf, self.ollama)[0], "qwen3.5:4b")
-        self.assertIsNone(orchestrate.pick_ollama_model(oconf, self.ollama, needs=["vision"])[0])
+        nothing = {"models": []}
+        self.assertIsNone(orchestrate.pick_ollama_model(oconf, self.ollama, needs=["vision"], catalog=nothing)[0])
+        stated = {"models": [{"id": "qwen3.5:4b", "executor": "ollama", "capabilities": ["vision"]}]}
+        self.assertEqual(orchestrate.pick_ollama_model(oconf, self.ollama, needs=["vision"], catalog=stated)[0], "qwen3.5:4b")
         seen = dict(self.ollama, capabilities={"qwen3.5:4b": ["completion", "vision"]})
         self.assertEqual(orchestrate.pick_ollama_model(oconf, seen, needs=["vision"])[0], "qwen3.5:4b")
         blocked = orchestrate.delegate_ollama("hello", model="qwen3-embedding:0.6b", caps=self.ollama)
