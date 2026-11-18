@@ -4,6 +4,8 @@ All notable changes to this standard are documented here. The format follows [Ke
 
 ## [Unreleased]
 
+## [1.21.2] - 2026-11-18
+
 ### Fixed
 
 - A session that another session started got no router context. The desktop app puts `<system-reminder>` blocks and a "Background" and "Task:" wrapper around the prompt, so "Continúa con todo lo autorizado" was `other` and started no supervisor pass. The prompt hook now routes only the owner's words. Found by the owner's final acceptance test on 2026-11-18.
