@@ -4,6 +4,8 @@ All notable changes to this standard are documented here. The format follows [Ke
 
 ## [Unreleased]
 
+## [1.21.0] - 2026-11-18
+
 ### Added
 
 - A request to send a message to another session, such as "Manda un mensaje a la otra sesión de OpenTutor", is its own `message` intent. The prompt hook gives the session the `peerbox.py send` command, its own peerbox name and the groups on this machine, and the session edits nothing. Before, the request was `other` and got no context, so Murmur's messaging never started from a normal request.
