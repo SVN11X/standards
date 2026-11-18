@@ -4,6 +4,8 @@ All notable changes to this standard are documented here. The format follows [Ke
 
 ## [Unreleased]
 
+## [1.22.1] - 2026-11-18
+
 ### Fixed
 
 - `orchestrate.py delegate opencode` without `--model` took the first free model in the owner's `local.yml` and only then asked the gate. After the owner renewed the checks on 2026-11-18, `mimo-v2.6-flash-free` came first. It may train on what it receives, so in a private folder the run would end blocked although `deepseek-v4.1-flash-free` was allowed, and in a public one it skipped the faster verified model `route` chose. Delegate now chooses with the same function as `route`, `pick_opencode_model()`, using the bench evidence of `edit-small`.
