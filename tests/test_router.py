@@ -590,6 +590,13 @@ class HookTests(Base):
         self.assertIn("work request", added)
         self.assertIn("diseña", added)
 
+    def test_a_prompt_with_a_bom_is_read(self):
+        # Windows PowerShell puts a BOM in front of what it pipes, as when the owner tests a hook by hand.
+        payload = json.dumps({"prompt": "Diseña de nuevo la portada", "cwd": str(self.web), "session_id": "h10"}, ensure_ascii=False)
+        ran = subprocess.run([sys.executable, str(ROOT / "hooks" / "route_prompt.py")], input=b"\xef\xbb\xbf" + payload.encode("utf-8"),
+                             capture_output=True, timeout=60, env={**os.environ, "STANDARDS_NO_SUPERVISOR": "1"})
+        self.assertIn("work request", json.loads(ran.stdout.decode("utf-8"))["hookSpecificOutput"]["additionalContext"])
+
     def test_a_message_request_gets_the_peerbox_command_and_the_name(self):
         code, out = self.hook({"prompt": "Manda un mensaje a la otra sesión de OpenTutor", "cwd": str(self.web), "session_id": "abc123"},
                               env={"STANDARDS_NO_SUPERVISOR": "1"})

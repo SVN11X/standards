@@ -192,8 +192,8 @@ def prompt_message(path: Path, ttl: float | None, now: datetime | None = None) -
 def main(argv: list[str]) -> int:
     try:
         mode = argv[1] if len(argv) > 1 else ""
-        if hasattr(sys.stdin, "reconfigure"):  # Claude Code sends UTF-8, a Windows pipe would read it as cp1252
-            sys.stdin.reconfigure(encoding="utf-8")
+        if hasattr(sys.stdin, "reconfigure"):  # UTF-8 from Claude Code. A Windows pipe reads cp1252 and PowerShell adds a BOM
+            sys.stdin.reconfigure(encoding="utf-8-sig")
         data = json.load(sys.stdin)
         path = Path(data.get("transcript_path") or "")
         if mode not in ("stop", "prompt") or not path.is_file():

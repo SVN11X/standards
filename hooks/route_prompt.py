@@ -129,8 +129,8 @@ def resume_plans(data: dict) -> str | None:
 
 
 def main() -> int:
-    if hasattr(sys.stdin, "reconfigure"):  # Claude Code sends UTF-8, a Windows pipe would read it as cp1252
-        sys.stdin.reconfigure(encoding="utf-8")
+    if hasattr(sys.stdin, "reconfigure"):  # UTF-8 from Claude Code. A Windows pipe reads cp1252 and PowerShell adds a BOM
+        sys.stdin.reconfigure(encoding="utf-8-sig")
     try:
         data = json.load(sys.stdin)
     except ValueError:
