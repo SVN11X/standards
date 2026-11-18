@@ -4,6 +4,8 @@ All notable changes to this standard are documented here. The format follows [Ke
 
 ## [Unreleased]
 
+## [1.21.1] - 2026-11-18
+
 ### Fixed
 
 - The router sent every edit task to `opencode/glm-5.3-flash-free` after OpenCode retired it on 2026-11-18, so each delegation would fail with Model unavailable. A free OpenCode model that `opencode models` no longer lists is now refused with that reason, and `doctor` always records the list. `tests/test_scripts.py` fails before the fix and passes after.
