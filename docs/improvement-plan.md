@@ -13,11 +13,13 @@ Progress of the free routing, model analyzer and web design work of November 202
 - [x] Parse and run `analyze-models.ps1` in Windows PowerShell 5.1. On 2026-11-18 all eight `.ps1` scripts parse with no error, and `prepare`, `plan` and `run` work under the RemoteSigned policy
 - [x] Read the official pages again and set `checked` in `settings/models.yml`. On 2026-11-18 for the ten local candidates, from `ollama show`, the registry manifest and license of each tag and its tags page, and for the free OpenCode models on the models page
 - [ ] BLOCKED: owner provides pairs of screens in `~/.standards/design-pairs/` for the design judge
-- [ ] BLOCKED: owner decides whether a free model may plan or do deep review, and with which bench class
-- [ ] BLOCKED: owner decides whether to publish the gallery with GitHub Pages. The workflow needs pinned action commits
+- [x] The owner decided on 2026-11-18 that no free model plans or does deep review for now. No model passed `review-diff`, the best got 2 of 3, and only `qwen2.5-coder:7b` and `gpt-oss:20b` passed `decompose`. Planning and deep review stay with Claude. Ask again once a model passes `review-diff`
+- [x] The owner decided on 2026-11-18 not to publish the gallery with GitHub Pages for now. The repository is already public, and a Pages workflow would need the owner for every change
+- [x] The owner approved `opencode/hy4-flash-free` on 2026-11-18 with `orchestrate.py consent`. It gets real tasks only after 3 bench runs at a pass rate of 0.8
+- [x] The owner kept `longcat-2.5-free` on the strict data policy on 2026-11-18. What it stores is unknown and it is hosted in China
 - [x] Discovery of every installed Ollama model, with kind, capabilities, cloud or local and a memory check
 - [x] Transport for OpenAI-compatible providers with settings per provider, and coverage with one state per model
-- [ ] BLOCKED: run each provider adapter against its real service with the owner's key. Only a fake server was used
+- [ ] BLOCKED: run each provider adapter against its real service with the owner's key. Only a fake server was used. On 2026-11-18 the owner chose not to add provider keys for now, since OpenCode's free models and Ollama cover the work
 - [x] Open each provider's pages and confirm what `settings/providers.yml` says. On 2026-11-18 all 24 sources were read: 47 claims confirmed, 3 corrected and every unconfirmed data claim kept strict. Groq training is now unknown and Ollama cloud is paid
 - [x] Confirm that `opencode run --file` sends an image. On 2026-11-18 a local stub recorded the request of OpenCode 1.19.5: the PNG arrives byte for byte as an `image_url` data URL when the model declares `modalities.input` with `image`, and as a text saying the model cannot read it otherwise. The earlier runs failed on the speed of the local 9B, not on the transport
 - [x] Adapter for a gateway such as FreeLLMAPI, after the trial checks in the radar pass with a fake server
@@ -44,7 +46,7 @@ Progress of the free routing, model analyzer and web design work of November 202
 - [x] Executor loop calls `split_unit` when a unit is too large, instead of only failing it
 - [x] Executor loop enforces every budget declared in the work plan, not only `max_attempts_per_unit` and `final_regression`
 - [x] Pilot plan of 3 green units with `execute.py` and a real `review.py` run, local-only. Two units passed with their tests and a review by `qwen2.5:7b` with no findings, and one failed `inside_scope` on a stale integration base, which the loop now refuses
-- [ ] BLOCKED: map the gateway adapter to FreeLLMAPI's real request and reply fields and prove the four radar conditions against the real service at trial. The adapter was proven only against a fake server with its own field names. It needs the owner to approve installing it
+- [ ] BLOCKED: map the gateway adapter to FreeLLMAPI's real request and reply fields and prove the four radar conditions against the real service at trial. The adapter was proven only against a fake server with its own field names. On 2026-11-18 the owner chose not to install it for now
 - [x] Per task type p90 ceiling and evidence refresh. `limits.max_p90_s` as a ceiling on the p90 seconds to an accepted result per route task type, and `refresh_before_days` so the night run measures again the evidence that expires soon. An earlier delegated run wrote it on an old base and it was never integrated. The patch is at `~/.standards/backups/df2d69-uncommitted-p90-and-refresh.patch`, 139 added lines in `analyze.py`, `orchestrate.py`, `orchestration.yml` and two test files. It conflicts with the current `orchestrate.py`, so redo it on top of `fresh_rows` and `model_states` and do not apply it as it is
 - [x] Fix: the router skips a free OpenCode model that `opencode models` no longer lists. OpenCode retired `glm-5.3-flash-free` on 2026-11-18 and every edit task was still routed to it
 - [x] Fix: `review-diff` and `decompose` get a reply budget of 1500 tokens and a model with only thinking levels gets the lowest one. At 400 tokens every `decompose` reply of the first real run was cut, so the class measured the budget, not the model
