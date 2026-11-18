@@ -10,6 +10,7 @@ continúa, sigue or retoma, and that pass only resumes plans already started.
 """
 import json
 import os
+import re
 import sys
 from pathlib import Path
 
@@ -38,6 +39,17 @@ def context(data: dict) -> str | None:
     decision = router.decide(prompt, cwd, "claude", session=data.get("session_id"), permission_mode=data.get("permission_mode"))
     limit = int(router.owner_limits(Path(decision["repository"]["root"])).get("max_context_chars", 1800))
     text = router.render(decision, limit) or ""
+    if decision["intent"] == "message":
+        name = peer_name(data)
+        if name is not None:
+            text += f" Your name on the peerbox: {name}."
+        try:
+            import peerbox
+            groups = peerbox.groups(peerbox.connect())
+            if groups:
+                text += " Groups on this machine: " + ", ".join("@" + g for g in groups) + "."
+        except Exception:  # noqa: BLE001 (the peerbox is a hint, the request goes on without it)
+            pass
     if decision["intent"] in ("work", "review", "publish", "setup"):
         try:
             import recall
@@ -49,19 +61,32 @@ def context(data: dict) -> str | None:
     return text or None
 
 
+def folder_slug(data: dict) -> str:
+    """The folder of this session as a peerbox name: also the name of the group its sessions share."""
+    return re.sub(r"[^a-z0-9-]+", "-", Path(data.get("cwd") or os.getcwd()).name.lower()).strip("-")[:30] or "repo"
+
+
+def peer_name(data: dict) -> str | None:
+    """The peerbox name of this session, or None when the client gave no session id."""
+    session = str(data.get("session_id") or "")
+    if not session:
+        return None
+    return f"claude-{folder_slug(data)}-{re.sub(r'[^a-z0-9]', '', session.lower())[:6]}"
+
+
 def inbox(data: dict) -> str | None:
     """Register this session on the peerbox and hand it the messages waiting for it. Never blocks a request."""
     scripts = router_dir()
-    session = str(data.get("session_id") or "")
-    if scripts is None or not session or os.environ.get("STANDARDS_NO_PEERBOX"):
+    if scripts is None or os.environ.get("STANDARDS_NO_PEERBOX"):
         return None
+    name = peer_name(data)
+    if name is None:
+        return None
+    folder = folder_slug(data)
     sys.path.insert(0, str(scripts))
-    import re
     import peerbox
-    folder = re.sub(r"[^a-z0-9-]+", "-", Path(data.get("cwd") or os.getcwd()).name.lower()).strip("-")[:30] or "repo"
-    name = f"claude-{folder}-{re.sub(r'[^a-z0-9]', '', session.lower())[:6]}"
     db = peerbox.connect()
-    peerbox.register(db, name, "claude", session)
+    peerbox.register(db, name, "claude", str(data.get("session_id") or ""))
     peerbox.group(db, folder if len(folder) > 1 else "repo", [name])
     text = peerbox.render(peerbox.pull(db, name))
     return (text + f" Your name on the peerbox: {name}.") if text else None

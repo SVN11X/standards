@@ -54,6 +54,7 @@
         "setup",
         "publish",
         "control",
+        "message",
         "other"
       ]
     },

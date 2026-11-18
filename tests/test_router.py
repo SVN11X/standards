@@ -62,6 +62,14 @@ class ClassifyTests(unittest.TestCase):
     def test_pause_inside_a_work_request_is_not_control(self):
         self.assertEqual(router.classify("pausa la animación del vídeo")[0], "other")
 
+    def test_a_message_to_another_session_is_its_own_intent(self):
+        for prompt in ("Manda un mensaje a la otra sesión de OpenTutor", "Dile a la sesión de standards que ya terminé",
+                       "Send a message to the other session", "Avísale a OpenCode que el PR está listo"):
+            self.assertEqual(router.classify(prompt)[0], "message", prompt)
+        for prompt in ("Manda el informe por correo", "continúa con lo pendiente y avísame cuando termines",
+                       "Manda esta tarea a OpenCode", "Tell me what the other session did"):
+            self.assertNotEqual(router.classify(prompt)[0], "message", prompt)
+
     CASES = [
         ("Corrige esta página", "work"), ("¿Qué cambiarías?", "query"), ("Explícame por qué se duplica", "query"),
         ("Corrige por qué se duplica una transcripción al reanudar", "work"), ("¿Puedes corregir el formulario?", "work"),
@@ -562,6 +570,14 @@ class HookTests(Base):
         added = json.loads(ran.stdout.decode("utf-8"))["hookSpecificOutput"]["additionalContext"]
         self.assertIn("work request", added)
         self.assertIn("diseña", added)
+
+    def test_a_message_request_gets_the_peerbox_command_and_the_name(self):
+        code, out = self.hook({"prompt": "Manda un mensaje a la otra sesión de OpenTutor", "cwd": str(self.web), "session_id": "abc123"},
+                              env={"STANDARDS_NO_SUPERVISOR": "1"})
+        self.assertEqual(code, 0)
+        added = json.loads(out)["hookSpecificOutput"]["additionalContext"]
+        for text in ("message request", "peerbox.py", "Your name on the peerbox: claude-"):
+            self.assertIn(text, added)
 
     def test_resume_words_are_recognized_and_a_question_is_not(self):
         for prompt in ("Continúa con lo pendiente", "sigue", "Por favor retoma el plan", "continue"):
