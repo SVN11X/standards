@@ -416,7 +416,10 @@ class CostAndData(Base):
     def test_embedding_and_capabilities(self):
         oconf = dict(orchestrate.policy()["executors"]["ollama"], prefer=["qwen3-embedding:0.6b", "qwen3.5:4b"])
         self.assertEqual(orchestrate.pick_ollama_model(oconf, self.ollama)[0], "qwen3.5:4b")
-        self.assertIsNone(orchestrate.pick_ollama_model(oconf, self.ollama, needs=["vision"])[0])
+        nothing = {"models": []}
+        self.assertIsNone(orchestrate.pick_ollama_model(oconf, self.ollama, needs=["vision"], catalog=nothing)[0])
+        stated = {"models": [{"id": "qwen3.5:4b", "executor": "ollama", "capabilities": ["vision"]}]}
+        self.assertEqual(orchestrate.pick_ollama_model(oconf, self.ollama, needs=["vision"], catalog=stated)[0], "qwen3.5:4b")
         seen = dict(self.ollama, capabilities={"qwen3.5:4b": ["completion", "vision"]})
         self.assertEqual(orchestrate.pick_ollama_model(oconf, seen, needs=["vision"])[0], "qwen3.5:4b")
         blocked = orchestrate.delegate_ollama("hello", model="qwen3-embedding:0.6b", caps=self.ollama)

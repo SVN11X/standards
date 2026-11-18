@@ -24,9 +24,16 @@ CHAT_TASKS = {"classify": [], "extract": [], "summarize": [], "web-subprofile": 
               "vision": ["vision"], "design-judge": ["vision"],
               "review-diff": [], "decompose": []}
 BASELINES = {"classify", "extract", "web-subprofile"}
-# Version of the rule that grades each task. Raise it when a grader changes what it accepts: runs graded by an older
-# rule stay in the history and stop counting. A task that is not listed is at version 1.
-GRADERS = {"summarize": 3, "tool-call": 2, "refactor-module": 1, "review-diff": 1, "decompose": 1}
+# Version of the rule that grades each task. Raise it when a grader changes what it accepts, or when the reply budget
+# changes what a model can answer: runs graded by an older rule stay in the history and stop counting. A task that is
+# not listed is at version 1. Version 1 of review-diff and decompose cut replies at 400 tokens, so most were invalid JSON.
+GRADERS = {"summarize": 3, "tool-call": 2, "refactor-module": 1, "review-diff": 2, "decompose": 2}
+# Reply tokens a task needs beyond the executor's num_predict. A 5 unit work plan is about 650 tokens.
+REPLY_TOKENS = {"review-diff": 1500, "decompose": 1500}
+
+
+def reply_tokens(task: str | None, default: int) -> int:
+    return max(default, REPLY_TOKENS.get(str(task), 0))
 
 
 def grader_version(task: str | None) -> int:

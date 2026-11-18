@@ -15,7 +15,8 @@ class ReviewDiff(unittest.TestCase):
     def test_six_cases_in_the_bench(self):
         self.assertEqual(len(bench_tasks.REVIEW_CASES), 6)
         self.assertIn("review-diff", bench_tasks.CHAT_TASKS)
-        self.assertEqual(bench_tasks.grader_version("review-diff"), 1)
+        self.assertEqual(bench_tasks.grader_version("review-diff"), 2)
+        self.assertEqual(bench_tasks.reply_tokens("review-diff", 400), 1500)
 
     def test_diff_line_numbers_match_the_new_file(self):
         for case in bench_tasks.REVIEW_CASES:
@@ -71,7 +72,10 @@ class Decompose(unittest.TestCase):
     def test_three_specs_registered(self):
         self.assertEqual(len(bench_tasks.DECOMPOSE_SPECS), 3)
         self.assertIn("decompose", bench_tasks.CHAT_TASKS)
-        self.assertEqual(bench_tasks.grader_version("decompose"), 1)
+        self.assertEqual(bench_tasks.grader_version("decompose"), 2)
+        # The reference split of 5 units does not fit in 400 reply tokens once a model writes its own titles.
+        self.assertEqual(bench_tasks.reply_tokens("decompose", 400), 1500)
+        self.assertEqual(bench_tasks.reply_tokens("classify", 400), 400)
 
     def test_reference_passes(self):
         for spec in bench_tasks.DECOMPOSE_SPECS:

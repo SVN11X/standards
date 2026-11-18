@@ -7,6 +7,7 @@ All notable changes to this standard are documented here. The format follows [Ke
 ### Fixed
 
 - The router sent every edit task to `opencode/glm-5.3-flash-free` after OpenCode retired it on 2026-11-18, so each delegation would fail with Model unavailable. A free OpenCode model that `opencode models` no longer lists is now refused with that reason, and `doctor` always records the list. `tests/test_scripts.py` fails before the fix and passes after.
+- The bench classes `review-diff` and `decompose` cut every reply at 400 tokens, so a 5 unit work plan from `qwen3.5:4b` (637 tokens) was invalid JSON, and `gpt-oss` spent all 400 on thinking because it ignores `think: false`. Each class now has its own reply budget of 1500 tokens, and a model whose thinking only has levels gets its lowest one. Both graders move to version 2, so the 6 rows measured with the old budget stop counting.
 
 ### Changed
 
