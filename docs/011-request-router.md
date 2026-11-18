@@ -12,7 +12,7 @@ It answers the gap `docs/010-multiagent-autopilot.md` left open: the orchestrato
 | `settings/recipes.yml` | Recipes (signals and words to capabilities) and, per capability, its providers in order of preference. |
 | `scripts/router.py` | Classifies the request, picks the folder, the recipe and the providers, opens or updates one task, prints the decision. |
 | `schemas/route-decision.schema.json` | The shape of a decision. |
-| `hooks/route_prompt.py` | The Claude Code `UserPromptSubmit` hook. It adds the decision to a work request as context. |
+| `hooks/route_prompt.py` | The Claude Code `UserPromptSubmit` hook. It adds the decision to a work request as context. "Continúa", "sigue" or "retoma" also starts one supervisor pass in the background, which resumes only plans already started. |
 | `settings/opencode/commands/route.md` | The `/route` command for OpenCode, which has no such hook. |
 
 ## What a request is

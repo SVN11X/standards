@@ -4,6 +4,14 @@ All notable changes to this standard are documented here. The format follows [Ke
 
 ## [Unreleased]
 
+### Added
+
+- "Continúa", "sigue" or "retoma" now starts one supervisor pass in the background from the prompt hook, so a started plan resumes at once instead of at the next 5 minute run of the Task Scheduler. The pass only resumes plans already started with pending work, no live process and no owner pause. A new request still goes through the session, so the owner sees the plan before any edit. The owner chose this on 2026-11-17. `STANDARDS_NO_SUPERVISOR=1` turns it off. `router.resumes` recognizes the words and leaves a question such as "¿Sigue abierto el PR?" alone.
+
+### Fixed
+
+- On Windows every hook read its input as cp1252, while Claude Code sends UTF-8. "Continúa" reached the router as "ContinÃºa", so a request with an accented verb got no decision at all, and a path with ñ was misread. The hooks now read their input as UTF-8. `secret_scan.py` gets the same change in its own pull request, because the owner reviews that file. The guard was not opened by this: undefined bytes were replaced, so its checks on commands still ran. `test_router` sends the hook UTF-8 bytes as Claude Code does.
+
 ## [1.19.0] - 2026-11-17
 
 ### Added
