@@ -4,6 +4,8 @@ All notable changes to this standard are documented here. The format follows [Ke
 
 ## [Unreleased]
 
+## [1.20.0] - 2026-11-17
+
 ### Added
 
 - "Continúa", "sigue" or "retoma" now starts one supervisor pass in the background from the prompt hook, so a started plan resumes at once instead of at the next 5 minute run of the Task Scheduler. The pass only resumes plans already started with pending work, no live process and no owner pause. A new request still goes through the session, so the owner sees the plan before any edit. The owner chose this on 2026-11-17. `STANDARDS_NO_SUPERVISOR=1` turns it off. `router.resumes` recognizes the words and leaves a question such as "¿Sigue abierto el PR?" alone.
