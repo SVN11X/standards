@@ -4,6 +4,10 @@ All notable changes to this standard are documented here. The format follows [Ke
 
 ## [Unreleased]
 
+### Fixed
+
+- On Windows `secret_scan.py` missed a credential written to a file with an accented name, such as `configuración.py`: the misread path pointed to no file, so nothing was scanned. It now reads its input as UTF-8 too. `tests/test_secret_scan.py` fails before the fix and passes after.
+
 ## [1.20.0] - 2026-11-17
 
 ### Added
