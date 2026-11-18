@@ -1133,6 +1133,38 @@ def opencode_offers(model: str, offered: list[str] | None) -> bool:
     return offered is None or any(name.split("/")[-1] == model.split("/")[-1] for name in offered)
 
 
+def pick_opencode_model(models, repo, conf, local, caps, measured, mode, proven, catalog, cool) -> tuple[bool, str, str | None]:
+    """(ok, why, model) among `models`: the fastest verified one the gate allows, else the allowed one that keeps the least.
+    Route and delegate both choose here, so a model the gate refuses never blocks a run while an allowed one exists."""
+    offered = (caps.get("opencode") or {}).get("models")
+    pool, refused = [], []
+    for model in models:
+        entry = cool.get(("opencode", model))
+        if entry:
+            refused.append((model, f"{model} failed with {entry['code']} and rests until {entry['until']}"))
+            continue
+        if not opencode_offers(model, offered):
+            refused.append((model, f"`opencode models` does not list {model} any more"))
+            continue
+        ok, why = gate("opencode", model, repo, conf, local, mode, caps, catalog)
+        (pool if ok else refused).append((model, why))
+    if not pool:
+        return False, refused[0][1], None
+    timed = [item for item in pool if ("opencode", item[0]) in measured]
+    if timed:
+        model, why = min(timed, key=lambda item: measured[("opencode", item[0])]["p50_s"])
+        return True, f"{why}. Fastest verified free model in the bench history", model
+    if proven:
+        return False, "no free model checked by the owner has passed the bench class of this task", None
+    order = conf["executors"]["opencode"].get("prefer_match", [])
+
+    def rank(item):
+        use = data_use(catalog_entry("opencode", item[0], catalog))
+        return DATA_RANK[use], next((i for i, k in enumerate(order) if k in item[0].lower()), len(order))
+    model, why = sorted(pool, key=rank)[0]
+    return True, f"{why}. Not measured yet", model
+
+
 def eligible(candidate, task, repo, input_chars, conf, local, caps, measured=None, mode=None, proven=False,
              catalog=None, cool=None) -> tuple[bool, str, str | None]:
     """Whether a candidate may do the task, why, and with which model. Cost and privacy go through gate()."""
@@ -1186,32 +1218,7 @@ def eligible(candidate, task, repo, input_chars, conf, local, caps, measured=Non
         models = [*checked_free_models(local, conf), *[m for m in local_proven if m not in checked_free_models(local, conf)]]
         if not models:
             return False, "no free model checked by the owner in the last days (local.yml free_models)", None
-        offered = (caps.get("opencode") or {}).get("models")
-        pool, refused = [], []
-        for model in models:
-            if cooled("opencode", model):
-                refused.append((model, cooled("opencode", model)))
-                continue
-            if not opencode_offers(model, offered):
-                refused.append((model, f"`opencode models` does not list {model} any more"))
-                continue
-            ok, why = gate("opencode", model, repo, conf, local, mode, caps, catalog)
-            (pool if ok else refused).append((model, why))
-        if not pool:
-            return False, refused[0][1], None
-        timed = [item for item in pool if ("opencode", item[0]) in measured]
-        if timed:
-            model, why = min(timed, key=lambda item: measured[("opencode", item[0])]["p50_s"])
-            return True, f"{why}. Fastest verified free model in the bench history", model
-        if proven:
-            return False, "no free model checked by the owner has passed the bench class of this task", None
-        order = conf["executors"]["opencode"].get("prefer_match", [])
-
-        def rank(item):
-            use = data_use(catalog_entry("opencode", item[0], catalog))
-            return DATA_RANK[use], next((i for i, k in enumerate(order) if k in item[0].lower()), len(order))
-        model, why = sorted(pool, key=rank)[0]
-        return True, f"{why}. Not measured yet", model
+        return pick_opencode_model(models, repo, conf, local, caps, measured, mode, proven, catalog, cool)
     if candidate == "api":
         known = providers.load()
         needs = (conf.get("needs") or {}).get(task) or []
@@ -1478,9 +1485,11 @@ def delegate_opencode(repo: Path, task: str, allowed: list[str], test: str | Non
                       protect: list[str] | None = None, untrusted: str | None = None, keep: bool = False,
                       conf: dict | None = None, local: dict | None = None, command: list[str] | None = None,
                       executor: str = "opencode", mode: str | None = None, catalog: dict | None = None,
-                      stop=None, timeout_s: int | None = None, test_lock=None, caps: dict | None = None) -> dict:
+                      stop=None, timeout_s: int | None = None, test_lock=None, caps: dict | None = None,
+                      task_type: str = "edit-small") -> dict:
     """`stop` cancels the run, `timeout_s` lowers the time limit of this run and `test_lock` is held while the
-    tests run, so a caller with several runs decides how many test suites load the machine at once."""
+    tests run, so a caller with several runs decides how many test suites load the machine at once. Without a
+    model, `task_type` says which bench evidence picks one."""
     conf = conf or policy()
     local = local if local is not None else local_config()
     limits = conf["limits"]
@@ -1497,17 +1506,14 @@ def delegate_opencode(repo: Path, task: str, allowed: list[str], test: str | Non
             return run_data
         model = model or f"colibri/{found['models'][0]}"
     if executor == "opencode" and not model:
-        # Without --model, take the first checked free model that is not cooling down after a failure and that
-        # `opencode models` still lists, as route() does.
-        cooling = cooling_set()
-        offered = ((caps if caps is not None else cached_capabilities(max_age_s=86400) or {})
-                   .get("opencode") or {}).get("models")
-        models = [m for m in checked_free_models(local, conf)
-                  if ("opencode", m) not in cooling and opencode_offers(m, offered)]
-        model = models[0] if models else None
-        if not model:
-            set_state(run_data, "blocked", "no free model checked by the owner in local.yml is out of its "
-                                           "cooldown and still listed by `opencode models`")
+        # Without --model, choose as route() does for this task type: never simply the first model the owner listed.
+        caps = caps if caps is not None else cached_capabilities(max_age_s=86400) or {}
+        measured, _ = judged_models(task_type, conf)
+        models = checked_free_models(local, conf)
+        ok, why, model = (pick_opencode_model(models, repo, conf, local, caps, measured, mode, False, catalog, cooling_set())
+                          if models else (False, "no free model checked by the owner in the last days (local.yml free_models)", None))
+        if not ok:
+            set_state(run_data, "blocked", why)
             return run_data
     ok, why = gate(executor, model, repo, conf, local, mode, None, catalog)
     if not ok:
