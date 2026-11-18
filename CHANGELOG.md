@@ -13,6 +13,7 @@ All notable changes to this standard are documented here. The format follows [Ke
 ### Fixed
 
 - On Windows every hook read its input as cp1252, while Claude Code sends UTF-8. "Continúa" reached the router as "ContinÃºa", so a request with an accented verb got no decision at all, and a path with ñ was misread. The hooks now read their input as UTF-8. `secret_scan.py` gets the same change in its own pull request, because the owner reviews that file. The guard was not opened by this: undefined bytes were replaced, so its checks on commands still ran. `test_router` sends the hook UTF-8 bytes as Claude Code does.
+- On Windows `secret_scan.py` missed a credential written to a file with an accented name, such as `configuración.py`: the misread path pointed to no file, so nothing was scanned. It now reads its input as UTF-8 too. `tests/test_secret_scan.py` fails before the fix and passes after.
 
 ## [1.19.0] - 2026-11-17
 
