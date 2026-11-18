@@ -26,6 +26,7 @@ import argparse
 import contextlib
 import datetime as dt
 import fnmatch
+import functools
 import hashlib
 import json
 import os
@@ -424,16 +425,46 @@ def cached_capabilities(max_age_s: int = 3600) -> dict | None:
 # Privacy and consent
 
 
+def owning_repo(path: Path) -> Path | None:
+    """The main repository of a linked git worktree, or None when path is the repository itself."""
+    return _owning_repo(str(path.resolve()))
+
+
+@functools.lru_cache(maxsize=256)
+def _owning_repo(path_str: str) -> Path | None:
+    common = run(["git", "-C", path_str, "rev-parse", "--path-format=absolute", "--git-common-dir"], timeout=30)
+    if common["exit"] != 0 or not common["stdout"].strip():
+        return None
+    common_dir = Path(common["stdout"].strip())
+    if common_dir.name != ".git":
+        return None
+    owner = common_dir.parent
+    toplevel = run(["git", "-C", path_str, "rev-parse", "--show-toplevel"], timeout=30)
+    if toplevel["exit"] != 0 or owner.resolve() == Path(toplevel["stdout"].strip()).resolve():
+        return None
+    return owner
+
+
 def folder_entry(repo: Path, local: dict) -> dict:
-    """The owner's entry for this folder. The most specific matching pattern wins."""
-    target = str(repo.resolve()).replace("\\", "/").lower()
-    best, best_len = {}, -1
-    for entry in local.get("folders") or []:
-        pattern = str(entry.get("path", "")).replace("\\", "/").lower().rstrip("/")
-        if fnmatch.fnmatch(target, pattern) or target == pattern or target.startswith(pattern + "/"):
-            if len(pattern) > best_len:
-                best, best_len = entry, len(pattern)
-    return best
+    """The owner's entry for this folder. The most specific matching pattern wins.
+    A linked worktree takes the entry of the repository it belongs to, wherever the worktree sits."""
+
+    def best_entry(target: Path) -> dict:
+        text = str(target.resolve()).replace("\\", "/").lower()
+        best, best_len = {}, -1
+        for entry in local.get("folders") or []:
+            pattern = str(entry.get("path", "")).replace("\\", "/").lower().rstrip("/")
+            if fnmatch.fnmatch(text, pattern) or text == pattern or text.startswith(pattern + "/"):
+                if len(pattern) > best_len:
+                    best, best_len = entry, len(pattern)
+        return best
+
+    owner = owning_repo(repo)
+    if owner is not None:
+        entry = best_entry(owner)
+        if entry:
+            return entry
+    return best_entry(repo)
 
 
 def privacy_class(repo: Path, conf: dict, local: dict) -> tuple[str, str]:
