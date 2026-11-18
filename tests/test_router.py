@@ -85,12 +85,27 @@ class ClassifyTests(unittest.TestCase):
             with self.subTest(text):
                 self.assertEqual(router.classify(text)[0], expected)
 
+    def test_a_readiness_question_is_a_review(self):
+        for prompt in ("¿Está listo el PR 42 para fusionar?", "is PR 12 ready to merge?",
+                       "¿Se puede fusionar la rama feat/x?"):
+            self.assertEqual(router.classify(prompt)[0], "review", prompt)
+        self.assertNotEqual(router.classify("¿Está listo el almuerzo?")[0], "review")
+
     def test_every_answer_says_why(self):
         self.assertIn("corrige", router.classify("Corrige esta página")[1])
         self.assertIn("qué", router.classify("¿Qué cambiarías?")[1])
 
 
 class ControlCases(Base):
+    def test_a_readiness_question_gets_the_readiness_check(self):
+        decision = self.decide("¿Está listo el PR 42 para fusionar?")
+        self.assertEqual(decision["recipe"], "pr-review")
+        self.assertIn("merge-readiness", [c["capability"] for c in decision["capabilities"]])
+        self.assertEqual(router.check(), [])
+        work = self.decide("Agrega una lista de tareas a la portada", session="s2")
+        self.assertEqual(work["intent"], "work")
+        self.assertNotIn("merge-readiness", [c["capability"] for c in work["capabilities"]])
+
     def test_control_a_question_ends_with_an_explanation_and_opens_no_task(self):
         decision = self.decide("¿Qué cambiarías en esta página?")
         self.assertEqual((decision["intent"], decision["task"]["state"], decision["recipe"]), ("query", "none", None))

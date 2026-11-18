@@ -580,6 +580,23 @@ capabilities:
       leaves_machine: nothing
       detect: always
       evidence: PlanExe2's checker, which flagged 4 of 189 statements in its own runs, all real. A decimal comma reads as a thousands separator
+  merge-readiness:
+    purpose: >-
+      say whether a change is ready to merge: READY, NEEDS_DECISION or BLOCKED. Run `readiness.py <change> --ci green|red|unknown`
+      where <change> is the folder in docs/specs that the pull request implements. Without a spec, say so and judge from the
+      checks, the review and the open questions. A critical requirement without a test blocks it even with green CI.
+    providers:
+    - id: readiness
+      kind: cli
+      runs: local
+      radar: Interlock
+      maintainer: SVN11X
+      source: scripts/readiness.py
+      clients: [claude, opencode, coordinator]
+      writes: false
+      cost: free
+      leaves_machine: nothing
+      detect: always
   comprehension-test:
     purpose: 'show with real readers that the page helps: they do its task and answer its questions'
     providers:
@@ -1559,7 +1576,7 @@ recipes:
     capabilities: [code-navigation, unit-test]
     proof: a test that fails without the change passes with it
 
-# A capability added to any recipe when the request shows the need.
+# A capability added to any recipe when the request shows the need. `intents` limits an addition to those kinds of request.
 additions:
   - capability: library-docs
     words: [version, versión, upgrade, actualiza, migrate, migra, migration, migración, deprecated, obsoleto, api, breaking]
@@ -1583,6 +1600,10 @@ additions:
   - capability: calculation-check
     words: [cálculo, cálculos, cuentas, presupuesto, aritmética, calculation, calculations, arithmetic, budget, sumas, totales]
     why: the document states calculations that can be re-computed
+  - capability: merge-readiness
+    intents: [review]
+    words: [listo, lista, preparado, preparada, ready, mergeable, fusionar, fusionarlo, merge, readiness]
+    why: the request asks whether a change is ready to merge
   - capability: project-plan
     words: [plan de negocio, plan de proyecto, plan de empresa, business plan, project plan, estudio de viabilidad, feasibility study]
     why: the request asks for the plan of a real project, not of a code change

@@ -93,6 +93,9 @@ CONTROL_OBJECT = re.compile(r"\b(plan|trabajo|ejecución|ejecucion|todo|autopilo
 WHY_STOPPED = re.compile(r"^(por qué|porque|por que|why)\b.*\b(no puedes|no pudiste|no puede|se detuvo|se paró|se paro|bloquead\w*|"
                          r"bloqueo\w*|can't you|cannot you|couldn't you|did it stop|is it blocked|blocked)\b")
 STATUS = re.compile(r"\b(estado|status|avance|progreso|progress)\b")
+READY = re.compile(r"\b(listo|lista|listos|listas|preparado|preparada|ready|mergeable|se puede fusionar|puedo fusionar|"
+                   r"podemos fusionar|can i merge|can we merge|safe to merge)\b")
+CHANGE_OBJECT = re.compile(r"\b(pr|prs|pull request|merge request|cambio|cambios|change|rama|branch)\b")
 CONTINUE = re.compile(r"^(también|tambien|además|ademas|y |pero |mejor |en vez|no,|sí,|si,|also|and |but |instead|actually|wait)\b")
 THIRD_PARTY = ("remote",)
 
@@ -129,6 +132,8 @@ def classify(prompt: str) -> tuple[str, str]:
         return "control", "asks why the work stopped"
     if len(words) <= 8 and STATUS.search(text) and re.match(r"^(muéstrame|muestrame|dime|show|cuál|cual|cómo|como|qué|que|what|how|estado|status)\b", text):
         return "control", "asks for the status of the running work"
+    if READY.search(text) and CHANGE_OBJECT.search(text):
+        return "review", "asks whether a change is ready to merge"
     if not polite and QUESTION.match(text):
         return "query", f"starts with the question word '{QUESTION.match(text).group(1)}'"
     if ASK.match(text):
@@ -521,6 +526,8 @@ def decide(prompt: str, cwd: Path, client: str = "claude", session: str | None =
     names = list((recipe or {}).get("capabilities") or [])
     notes = [recipe["notes"]] if recipe and recipe.get("notes") else []
     for extra in recipes.get("additions") or []:
+        if extra.get("intents") and intent not in extra["intents"]:
+            continue
         hit = words_in(prompt, extra.get("words") or [])
         if recipe and hit and extra["capability"] not in names:
             names.append(extra["capability"])
@@ -671,6 +678,7 @@ def check(recipes: dict | None = None) -> list[str]:
     for extra in recipes.get("additions") or []:
         if extra.get("capability") not in capabilities:
             problems.append(f"addition: unknown capability {extra.get('capability')}")
+        problems += [f"addition {extra.get('capability')}: unknown intent {i}" for i in extra.get("intents") or [] if i not in INTENTS]
     for name, capability in capabilities.items():
         for provider in capability.get("providers") or []:
             where = f"{name}/{provider.get('id')}"
