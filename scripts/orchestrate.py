@@ -1128,6 +1128,11 @@ def cooling_set(at: dt.datetime | None = None) -> dict:
     return found
 
 
+def opencode_offers(model: str, offered: list[str] | None) -> bool:
+    """Whether `opencode models` still lists the model. An unknown list counts as listed."""
+    return offered is None or any(name.split("/")[-1] == model.split("/")[-1] for name in offered)
+
+
 def eligible(candidate, task, repo, input_chars, conf, local, caps, measured=None, mode=None, proven=False,
              catalog=None, cool=None) -> tuple[bool, str, str | None]:
     """Whether a candidate may do the task, why, and with which model. Cost and privacy go through gate()."""
@@ -1187,7 +1192,7 @@ def eligible(candidate, task, repo, input_chars, conf, local, caps, measured=Non
             if cooled("opencode", model):
                 refused.append((model, cooled("opencode", model)))
                 continue
-            if offered is not None and not any(name.split("/")[-1] == model.split("/")[-1] for name in offered):
+            if not opencode_offers(model, offered):
                 refused.append((model, f"`opencode models` does not list {model} any more"))
                 continue
             ok, why = gate("opencode", model, repo, conf, local, mode, caps, catalog)
@@ -1473,7 +1478,7 @@ def delegate_opencode(repo: Path, task: str, allowed: list[str], test: str | Non
                       protect: list[str] | None = None, untrusted: str | None = None, keep: bool = False,
                       conf: dict | None = None, local: dict | None = None, command: list[str] | None = None,
                       executor: str = "opencode", mode: str | None = None, catalog: dict | None = None,
-                      stop=None, timeout_s: int | None = None, test_lock=None) -> dict:
+                      stop=None, timeout_s: int | None = None, test_lock=None, caps: dict | None = None) -> dict:
     """`stop` cancels the run, `timeout_s` lowers the time limit of this run and `test_lock` is held while the
     tests run, so a caller with several runs decides how many test suites load the machine at once."""
     conf = conf or policy()
@@ -1492,12 +1497,17 @@ def delegate_opencode(repo: Path, task: str, allowed: list[str], test: str | Non
             return run_data
         model = model or f"colibri/{found['models'][0]}"
     if executor == "opencode" and not model:
-        # Without --model, take the first checked free model that is not cooling down after a failure, as route() does.
+        # Without --model, take the first checked free model that is not cooling down after a failure and that
+        # `opencode models` still lists, as route() does.
         cooling = cooling_set()
-        models = [m for m in checked_free_models(local, conf) if ("opencode", m) not in cooling]
+        offered = ((caps if caps is not None else cached_capabilities(max_age_s=86400) or {})
+                   .get("opencode") or {}).get("models")
+        models = [m for m in checked_free_models(local, conf)
+                  if ("opencode", m) not in cooling and opencode_offers(m, offered)]
         model = models[0] if models else None
         if not model:
-            set_state(run_data, "blocked", "no free model checked by the owner in local.yml is out of its cooldown")
+            set_state(run_data, "blocked", "no free model checked by the owner in local.yml is out of its "
+                                           "cooldown and still listed by `opencode models`")
             return run_data
     ok, why = gate(executor, model, repo, conf, local, mode, None, catalog)
     if not ok:

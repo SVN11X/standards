@@ -67,7 +67,9 @@ The first recipes:
 
 `python scripts/router.py route "REQUEST" --cwd DIR --json` prints it. It records the repository, folder and revision, the kind of request and why, the profile and the web experience with their source, the signals with their files, the recipe with the others that matched, the provider of each capability with the ones passed over and why, the permission the request needs, what leaves the machine, how the result is verified, what was reused and any open question. No confidence percentage is given: the evidence is listed instead.
 
-The owner's `.standard.yml` wins over the recipe for the profile and the experience. A repository without it is told so.
+The owner's `.standard.yml` wins over the recipe for the profile and the experience. A repository without it is told so. The standard's own repository, which holds `base/base.yml` and `profiles/`, counts as software. Once the profile is known, a recipe of another profile is chosen only when the request names its words.
+
+The prompt hook routes the owner's words only. It drops the `<system-reminder>` blocks a client adds and, in a session that another session started, the background and the shared notes line around the task.
 
 ## Tasks
 

@@ -70,7 +70,7 @@ class FingerprintTests(Base):
 
     def test_the_owners_declaration_is_read_before_the_files(self):
         data = fingerprint.fingerprint(repo(self.root / "web", WEB))
-        self.assertEqual(data["standard"], {"present": True, "profile": "web", "experience": "editorial", "privacy": None, "parts": []})
+        self.assertEqual(data["standard"], {"present": True, "profile": "web", "experience": "editorial", "privacy": None, "own_source": False, "parts": []})
         bare = fingerprint.fingerprint(repo(self.root / "go", GO))
         self.assertEqual((bare["standard"]["present"], bare["standard"]["profile"]), (False, None))
 

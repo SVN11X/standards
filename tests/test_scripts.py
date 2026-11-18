@@ -578,6 +578,13 @@ class Probe(Base):
         self.assertIn("route", text)
         self.assertIn("privacy of this folder", text)
 
+    def test_in_the_standards_own_source(self):
+        repo = self.repo()
+        (repo / "base").mkdir()
+        (repo / "base" / "base.yml").write_text("version: 1.0.0\n", encoding="utf-8")
+        (repo / "profiles").mkdir()
+        self.assertIn("Executors on this machine", session_probe.context(repo))
+
 
 class ProbeSupervisor(Base):
     def test_the_supervisor_starts_once_with_the_session_and_can_be_turned_off(self):
