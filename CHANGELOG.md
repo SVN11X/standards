@@ -4,6 +4,8 @@ All notable changes to this standard are documented here. The format follows [Ke
 
 ## [Unreleased]
 
+## [1.22.2] - 2026-11-18
+
 ### Fixed
 
 - A hook fed from Windows PowerShell stayed silent: PowerShell puts a BOM in front of what it pipes, so `json.load` failed and the hook read an empty input. The eight hooks that read stdin now decode it as `utf-8-sig`, which drops a BOM and reads the rest as UTF-8. Claude Code sends no BOM, so only a hook tested by hand was affected.
