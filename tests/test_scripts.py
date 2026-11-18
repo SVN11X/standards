@@ -2,6 +2,7 @@
 import datetime as dt
 import json
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -248,6 +249,23 @@ class Route(Base):
         self.assertEqual(orchestrate.privacy_class(self.tmp, orchestrate.policy(), self.local())[0], "work")
         (self.tmp / ".standard.yml").write_text("privacy: personal-public\n", encoding="utf-8")
         self.assertEqual(orchestrate.privacy_class(self.tmp, orchestrate.policy(), self.local("restricted"))[0], "restricted")
+
+    def test_a_worktree_outside_the_owner_folders_keeps_the_class_of_its_repository(self):
+        repo = self.repo()
+        wt = Path(tempfile.mkdtemp(prefix="std-wt-")) / "wt"
+        self.addCleanup(shutil.rmtree, wt.parent, ignore_errors=True)
+        git(repo, "worktree", "add", "-q", str(wt))
+        local = {"folders": [{"path": str(repo), "class": "personal-public"}]}
+        self.assertEqual(orchestrate.privacy_class(wt, orchestrate.policy(), local), ("personal-public", "owner file"))
+
+    def test_a_worktree_of_a_restricted_repository_inside_a_public_folder_stays_restricted(self):
+        repo = self.repo()
+        wt = Path(tempfile.mkdtemp(prefix="std-wt-")) / "wt"
+        self.addCleanup(shutil.rmtree, wt.parent, ignore_errors=True)
+        git(repo, "worktree", "add", "-q", str(wt))
+        local = {"folders": [{"path": str(repo), "class": "restricted"},
+                             {"path": str(wt.parent), "class": "personal-public"}]}
+        self.assertEqual(orchestrate.privacy_class(wt, orchestrate.policy(), local)[0], "restricted")
 
 
 class CostAndData(Base):
