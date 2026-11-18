@@ -67,9 +67,14 @@ def recover(script: Path | None) -> None:
                      stderr=subprocess.DEVNULL, **flags)
 
 
+def follows_standard(root: Path) -> bool:
+    """True for a repository with .standard.yml, or for the standard's own source (base/base.yml and profiles/)."""
+    return (root / ".standard.yml").is_file() or ((root / "base" / "base.yml").is_file() and (root / "profiles").is_dir())
+
+
 def context(cwd: Path) -> str | None:
     root = autopilot.repository_root(cwd)
-    if root is None or not (root / ".standard.yml").exists():
+    if root is None or not follows_standard(root):
         return None
     script = orchestrate_path()
     recover(script)
