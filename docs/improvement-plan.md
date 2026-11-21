@@ -63,10 +63,19 @@ From the owner's "Plan de mejoras para STANDARDS". One branch with one commit pe
 - [x] Specialists per job in `settings/models.yml`, routed to nothing
 - [x] Recipes `web-visitor-ai`, `static-search`, `visitor-ai`, `3d-preview`, `isolated-test` and `remote-node`, and the STL check
 - [x] `scripts/workqueue.py` with privacy checks, expiring claims, one result per task, backup and restore
-- [ ] BLOCKED: the owner runs the first session on the notebook from `C:\my_drive\Portafolio\standards`: `git rev-parse --short HEAD`, `ollama list`, `ollama ps`, `orchestrate.py consent --cost-mode local-only`, `doctor --mode local-only`, `models --mode local-only`, `bench --report`, `colibri.py status` and `colibri.py models`, and compares the table with `bench.jsonl`. Only the notebook has Ollama, Colibri and the bench history
-- [ ] BLOCKED: `orchestrate.py route extract-short --mode local-only --json` and `route edit-small --executor colibri --json` on the notebook. In this container both answer blocked, because Ollama, OpenCode and Colibri are not installed here
-- [ ] BLOCKED: `memory.py index --repo .` on the notebook with `qwen3-embedding:0.6b`, then real Spanish and English questions with their right fragment marked first, run with `memory.py eval`. The tests here use a fake embedding model, which proves the mechanism and not the quality. Tune `memory.min_similarity` from that run. A reranker is tested only if the right answer is often in the first 10 and rarely in the first 3
-- [ ] BLOCKED: engine pilot with official llama.cpp Vulkan and one known GGUF against Ollama, by the rule in `docs/006-model-analyzer.md`. Integrate only the winner, off by default
+- [x] Released 1.23.0 and 1.24.0 on 2026-11-21, and opened one pull request with the regenerated `AGENTS.md` in each of the five repositories that use the standard
+- [ ] BLOCKED: OpenTutor, Fieldnotes and transcribe fail the standard check on decision records with Status proposed and a name in Accepted by. The owner confirms each acceptance
+- [x] First notebook session on 2026-11-21 at 1.24.0: `ollama list`, `ollama ps`, `doctor`, `models` and `bench --report` with `--mode local-only`, and `colibri.py status` and `models`. The table was compared with `bench.jsonl`
+- [ ] BLOCKED: `orchestrate.py consent --cost-mode local-only` stays with the owner. The session passed `--mode local-only` to each command instead
+- [x] The proposed split of `analyze.py report` leaves out models the last run found retired. It named `opencode/glm-5.3-flash-free` first for the edit tasks
+- [x] A blocked OpenCode route names every distinct refusal. In local-only `doctor` blamed only the retired glm model, while the cost mode refused deepseek and mimo
+- [x] On the notebook on 2026-11-21: `route extract-short` gives ollama `qwen3.5:4b` at p50 5.81 s. `route edit-small --executor colibri` answers blocked with exit 3, because Colibri was not running
+- [x] Recall measured on 2026-11-21 with `qwen3-embedding:0.6b` on OpenTutor and Fieldnotes, 8 questions: words alone 5 of 7 in the first 3, words and meaning 7 of 7, and the unanswerable one returned nothing
+- [x] `memory.min_similarity` stays at 0.5. Right fragments scored 0.506 to 0.722 and the unanswerable question at most 0.394. Revisit with more Spanish paraphrases
+- [ ] BLOCKED: `memory.py index --repo .` finds nothing in this repository, which has no memory entries and no `docs/decisions/`. The owner decides whether recall reads its numbered docs
+- [x] Bench of `qwen3.5-9b-ctx16k` on 2026-11-21 in local-only: 3 of 3 on classify, extract, summarize, web-subprofile and vision, 2 of 3 on tool-call, 0 of 3 on the sample design judge
+- [x] Engine pilot on 2026-11-21, `qwen2.5:7b` Q4_K_M on classify: llama.cpp b12613 Vulkan median 2.69 s, Ollama 0.40.17 with all layers on the card 2.23 s, both 12 of 12. Not integrated
+- [ ] BLOCKED: Ollama put 18 % of `qwen2.5:7b` on the CPU by itself and took 6.45 s. The owner decides whether a model that fits gets `num_gpu` in the settings
 - [ ] BLOCKED: the owner picks one consumer project and one pending task for the first specialist. Granite 4.1 3B if Spanish extraction fails, PaddleOCR-VL-1.5 if a table of the notes extractor is misread
 - [ ] BLOCKED: Fieldnotes and tesis_explain adopt `web-visitor-ai` in their own repositories, with the owner's Cloudflare account on Workers Free. The acceptance test needs a browser with an empty cache and the notebook off
 - [ ] BLOCKED: the Raspberry Pi 4 case adopts `3d-preview` in the prototype's repository
@@ -81,5 +90,5 @@ From the owner's "Plan de mejoras para STANDARDS". One branch with one commit pe
 - [ ] BLOCKED: the owner decides whether to run `orchestrate.py consent --merge-workflows when-green`. Workflow changes keep waiting for the owner until then
 - [ ] BLOCKED: the owner adds narrow allow rules in `%USERPROFILE%\.claude\settings.json` for the commands the auto mode classifier stops, such as the exact `merge_when_green.py` command, as `docs/003-autopilot-and-hooks.md` explains. Nothing in a repository can change that file
 - [ ] BLOCKED: the owner chooses whether to soften "show me the plan before deleting files" for files the task itself created. It lives in the owner's own instructions
-- [ ] BLOCKED: `skill_eval.py run code-review --executor claude --runs 3` on the owner's machine. The tests here use a fake agent
+- [x] `skill_eval.py run code-review --executor claude --runs 3` on 2026-11-21: 32 of 33 criteria met. One run wrote the severity labels in Spanish, so no step was skipped by half of the runs
 

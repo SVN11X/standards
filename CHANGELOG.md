@@ -4,6 +4,11 @@ All notable changes to this standard are documented here. The format follows [Ke
 
 ## [Unreleased]
 
+### Fixed
+
+- The proposed split of `analyze.py report` named `opencode/glm-5.3-flash-free` first for the edit tasks after `opencode models` stopped listing it. The split now leaves out every model the last run found retired.
+- A blocked OpenCode route gave only the first refusal. In local-only that blamed the retired glm model, while the cost mode was what refused deepseek and mimo. The reason now names every distinct refusal.
+
 ## [1.24.0] - 2026-11-21
 
 The owner asked on 2026-11-21 for the four principles of andrej-karpathy-skills (MIT), drawn from Andrej Karpathy's post on the coding mistakes of language models, and for what fits from HyperQwen. Both are written here in the standard's own words.

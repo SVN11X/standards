@@ -617,8 +617,9 @@ def describe(executor: str, model: str | None, catalog: dict) -> tuple[str, str]
     return DATA_TEXT[orchestrate.data_use(entry)], "measured here" + ("" if entry else ", not in the catalog")
 
 
-def proposal(conf: dict, catalog: dict) -> list[str]:
-    """For each task type, the models that passed the existing threshold, the one that does not train and is fastest first."""
+def proposal(conf: dict, catalog: dict, retired: set | None = None) -> list[str]:
+    """For each task type, the models that passed the existing threshold, the one that does not train and is fastest first.
+    A model the last run found retired is left out, because the router can no longer use it."""
     lines = []
     for task in conf["tasks"]:
         prefer, origin = orchestrate.preferred_models(conf["executors"]["ollama"], task)
@@ -634,7 +635,7 @@ def proposal(conf: dict, catalog: dict) -> list[str]:
                 return orchestrate.DATA_RANK[orchestrate.data_use(known.get(orchestrate.providers.split(model)[0]))]
             return 0
         ranked = sorted(passed.items(), key=lambda kv: (data_rank(*kv[0]), kv[1]["p50_s"]))
-        ranked = [(key, row) for key, row in ranked if key[0] != "tools"]
+        ranked = [(key, row) for key, row in ranked if key[0] != "tools" and key not in (retired or set())]
         if not ranked:
             lines.append(f"- `{task}`: nobody passed yet. It stays with {', '.join(conf['tasks'][task])}.")
             continue
@@ -694,7 +695,9 @@ def build_report(conf: dict | None = None, catalog: dict | None = None, rows: li
     out += ["A model and a task that do not appear above were not measured. That is not a score of zero: the reason is under Not tested or not evaluated.", ""]
     out += ["## Proposed split", "", "The router already reads this history: among the models you allowed, it takes the one that "
             "passed and is fastest. What stays your decision is which models you allow, and the order in `settings/orchestration.yml`.", ""]
-    out += proposal(conf, catalog) + [""]
+    retired = {(item.get("executor"), item.get("model")) for item in (state or {}).get("left_out") or []
+               if item.get("status") == "retired"}
+    out += proposal(conf, catalog, retired) + [""]
     failed = [row for row in summary if row["executor"] != "tools"
               and not (row["runs"] >= limits["bench_min_runs"] and row["pass_rate"] >= limits["bench_min_pass_rate"])]
     out += ["## Below the threshold", ""]

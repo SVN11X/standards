@@ -1246,7 +1246,7 @@ def pick_opencode_model(models, repo, conf, local, caps, measured, mode, proven,
         ok, why = gate("opencode", model, repo, conf, local, mode, caps, catalog)
         (pool if ok else refused).append((model, why))
     if not pool:
-        return False, refused[0][1], None
+        return False, ". ".join(dict.fromkeys(why.rstrip(".") for _, why in refused)), None
     timed = [item for item in pool if ("opencode", item[0]) in measured]
     if timed:
         model, why = min(timed, key=lambda item: measured[("opencode", item[0])]["p50_s"])
