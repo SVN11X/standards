@@ -103,8 +103,10 @@ def commit_gate(cwd: Path, command: str = "") -> str | None:
     if root is None or script is None or not (root / ".standard.yml").exists():
         return None
     try:
+        # The plain format: inside GitHub Actions the check prints annotations, which carry no "ERROR" prefix.
+        env = {key: value for key, value in os.environ.items() if key != "GITHUB_ACTIONS"}
         result = subprocess.run([sys.executable, str(script), "check", str(root)], capture_output=True,
-                                text=True, timeout=90)
+                                text=True, timeout=90, env=env)
     except (OSError, subprocess.TimeoutExpired):
         return None
     if result.returncode == 0:
@@ -113,7 +115,8 @@ def commit_gate(cwd: Path, command: str = "") -> str | None:
         return None
     errors = [line for line in result.stdout.splitlines() if line.startswith("ERROR")]
     paths = committed_paths(root, command)
-    if paths is not None:
+    # A failed check whose errors cannot be read blocks the commit: the gate fails closed.
+    if paths is not None and errors:
         errors = [line for line in errors if about(line[len("ERROR"):].strip(), paths)]
         if not errors:
             return None
