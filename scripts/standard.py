@@ -42,7 +42,7 @@ DEFAULT_OWNER = "SVN11X"
 OWNER_TODO = "TODO(owner)"
 LANGUAGES = {"en": "English", "es": "Spanish", "pt": "Portuguese", "fr": "French", "de": "German", "it": "Italian"}
 CONFIG_KEYS = ["standard", "owner", "name", "profile", "setup", "license", "content_language",
-               "github", "options", "parts", "part_options", "extra_folders", "skills"]
+               "github", "options", "parts", "part_options", "extra_folders", "skills", "guardrails"]
 
 PLACEHOLDER = re.compile(r"(?<!\$)\{\{([a-z_]+)\}\}")
 STANDARD_REF = re.compile(r"^(?P<repo>[\w.-]+/[\w.-]+)@(?P<ref>v\d+(?:\.\d+){0,2})$")
@@ -310,6 +310,18 @@ def common_context(repo: Path, config: dict) -> dict:
     }
 
 
+def guardrail_rules(config: dict) -> list[str]:
+    """The guardrails of .standard.yml as rules of AGENTS.md. The check enforces them, the lines only say so first."""
+    block = config.get("guardrails") or {}
+    lines = [f"Guardrail {rule.get('id') or rule.get('pattern')}: `{rule.get('pattern')}` may not appear in "
+             f"{', '.join(rule.get('paths') or [])}. {rule.get('why')} The check blocks it."
+             for rule in block.get("forbidden") or []]
+    lines += [f"Guardrail boundary: files in {rule.get('module')} import, inside this repository, only from "
+              f"{', '.join([rule.get('module'), *(rule.get('may_import') or [])])}. {rule.get('why')} The check blocks it."
+              for rule in block.get("boundaries") or []]
+    return lines
+
+
 def build_instruction_files(repo: Path, config: dict) -> dict[str, str]:
     """Return every generated instruction file, keyed by its path relative to the repository."""
     base = base_config()
@@ -327,7 +339,7 @@ def build_instruction_files(repo: Path, config: dict) -> dict[str, str]:
                                  for p, pp in parts.items()),
         "goal_summary": "\n".join(goal_summary(repo)),
         "content_language_rule": content_language_rule(profile["name"], str(config.get("content_language", "en"))),
-        "fixed_rules": bullets(list(base["fixed"]) + list(profile.get("fixed") or [])),
+        "fixed_rules": bullets(list(base["fixed"]) + list(profile.get("fixed") or []) + guardrail_rules(config)),
         "option_rules": bullets(resolved["option_rules"]) or "- None.",
         "with_reason": bullets(profile.get("with_reason") or []) or "- Nothing listed for this profile.",
         "patterns": ", ".join(profile.get("patterns") or []) or "none listed for this profile",
@@ -847,6 +859,17 @@ def check_content(repo: Path, files: list[str], report: Report) -> None:
                 report.warn(rel, f"{dashes} em dashes. Use periods and commas.")
 
 
+def check_guardrails(repo: Path, files: list[str], config: dict, report: Report) -> None:
+    """The rules the repository asked its environment to enforce: forbidden patterns and module boundaries."""
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    import guardrails
+    hits, broken = guardrails.check(repo, files, config)
+    for message in broken:
+        report.error(".standard.yml", message)
+    for where, message in hits:
+        report.error(where, message)
+
+
 # GitHub shows an STL file in its 3D viewer up to this size. See references.md.
 STL_VIEWER_MB = 10
 
@@ -968,6 +991,7 @@ def run_check(repo: Path, pull_request: bool = False) -> Report:
         check_generated(repo, config, report)
         check_content(repo, files, report)
         check_mechanical(repo, files, report)
+        check_guardrails(repo, files, config, report)
         check_github(config, report)
         check_plan(repo, report)
         check_decisions(repo, report)
@@ -1381,7 +1405,7 @@ def skill_names() -> list[str]:
 
 
 # Scripts the skills call from the bundled copy of the standard, next to standard.py.
-BUNDLED_SCRIPTS = ("standard.py", "orchestrate.py", "verify.py", "evidence.py", "preserve.py", "adversarial.py",
+BUNDLED_SCRIPTS = ("standard.py", "guardrails.py", "orchestrate.py", "verify.py", "evidence.py", "preserve.py", "adversarial.py",
                    "safe_patch.py", "memory.py", "bench_tasks.py", "analyze.py", "providers.py",
                    # The executor loop, the planner and the router. verify.py and adversarial.py import them.
                    "execute.py", "workplan.py", "review.py", "scheduler.py", "resources.py", "plan_autopilot.py",
@@ -1504,6 +1528,31 @@ def cmd_selftest() -> int:
                 failures.append(f"{repo.name}: {report.errors}")
             first_repo = first_repo or repo
 
+        web = next(iter(sorted(root.glob("case-*-web"))), None)
+        if web is not None:
+            config = read_config(web)
+            config["guardrails"] = {"forbidden": [{"id": "no-use-effect", "pattern": r"\buseEffect\(", "paths": ["src/*.tsx"],
+                                                   "why": "Derive the state or use an event handler."}],
+                                    "boundaries": [{"module": "src/features/signup", "may_import": ["src/shared"],
+                                                    "why": "A feature reaches another only through shared."}]}
+            write_config(web, config)
+            for folder in ("signup", "billing"):
+                (web / "src" / "features" / folder).mkdir(parents=True, exist_ok=True)
+            write_text(web / "src" / "features" / "signup" / "Form.tsx",
+                       'import { total } from "../billing/total";\nuseEffect(() => {}, []);\n')
+            write_text(web / "src" / "features" / "billing" / "total.ts", "export const total = 1;\n")
+            git_add_all(web)
+            errors = [message for _, message in run_check(web).errors]
+            if not any("Guardrail no-use-effect" in m for m in errors) or not any("boundary of src/features/signup" in m for m in errors):
+                failures.append(f"guardrails should block a forbidden pattern and a crossed boundary: {errors}")
+            else:
+                print("negative case passed: guardrails block a forbidden pattern and a crossed boundary")
+            if "Guardrail boundary: files in src/features/signup" not in "\n".join(build_instruction_files(web, config).values()):
+                failures.append("the guardrails should be written into AGENTS.md")
+            shutil.rmtree(web / "src" / "features")
+            config.pop("guardrails")
+            write_config(web, config)
+            git_add_all(web)
         cad = next((repo for repo in sorted(root.glob("case-*-hardware")) if (repo / "mechanical").is_dir()), None)
         if cad is not None:
             write_text(cad / "mechanical" / "top-cover.stl", "solid top\nendsolid top\n")

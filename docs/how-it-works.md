@@ -28,7 +28,7 @@ flowchart LR
 
 - `base/base.yml`: rules and required files shared by every profile. `base/files/` holds the files every repository receives and `base/agents.md.tmpl` is the template of the generated `AGENTS.md`.
 - `profiles/`: one folder per profile with its `profile.yml`: folders, fixed rules, techniques that need a reason and setup questions. `profiles/web/subprofiles.yml` describes the five web sub-profiles.
-- `scripts/standard.py`: the engine. It creates, regenerates, checks and migrates repositories, and packages the skills.
+- `scripts/standard.py`: the engine. It creates, regenerates, checks and migrates repositories, and packages the skills. `scripts/guardrails.py` checks the forbidden patterns and module boundaries a repository declares.
 - `scripts/orchestrate.py`: routing, delegation, bench, consent and the gate every model call passes.
 - `scripts/learning_check.py`, `scripts/text_check.py` and `scripts/media.py`: whether a question bank teaches, whether a text helps its reader, and whether images and clips reach every reader with their credit.
 - `scripts/router.py`, `scripts/repo_fingerprint.py` and `settings/recipes.yml`: a request in plain words gets a decision before work starts: the repository and folder, the recipe, and the tool on this machine that provides each capability. `hooks/route_prompt.py` adds it to a work request in Claude Code.

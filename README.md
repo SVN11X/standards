@@ -14,6 +14,17 @@ Each repository carries three things:
 - `AGENTS.md` is generated from this repo and from the repository's own `docs/goals.md`. AI tools read it at the start of every session. People can read it too.
 - `.github/workflows/standard.yml` calls the shared check in this repo on every push and pull request.
 
+A rule an agent can miss belongs in `.standard.yml` under `guardrails`, where the check enforces it on every push and pull request. `forbidden` lists patterns that may not appear in some files, such as `useEffect(` in React components. `boundaries` lists modules and what each may import inside the repository, read from Python and JavaScript or TypeScript imports. A change that breaks one is an error of the check, and the generated `AGENTS.md` lists every guardrail. Keeping the files of one feature in one folder lets a boundary name it.
+
+```yaml
+guardrails:
+  forbidden:
+    - {id: no-use-effect, pattern: "\\buseEffect\\(", paths: ["src/*.tsx"], why: "Derive the state or use an event handler."}
+  boundaries:
+    - {module: src/features/signup, may_import: [src/shared], why: "A feature reaches another only through shared."}
+  aliases: {"@/": "src/"}
+```
+
 Each repository also keeps its intent in `docs/`: goals, glossary, assumptions, decisions and specs. The owner writes the goals. AI tools may ask, transcribe and format, never invent.
 
 ## Profiles
