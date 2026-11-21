@@ -910,7 +910,9 @@ def model_states(found: list[dict], conf: dict, now: dt.datetime | None = None) 
         for record in sorted(found, key=lambda r: (str(r.get("executor")), str(r.get("model")))):
             key = (record.get("executor"), record.get("model"))
             evidence = proven.get(key)
-            authorized = record.get("status") == "eligible" and task in (record.get("tasks") or [])
+            # A coverage record lists bench classes, such as fix-bug. A task type counts when one of its classes is there.
+            classes = {task, *(conf.get("proof", {}).get(task) or [])}
+            authorized = record.get("status") == "eligible" and bool(classes & set(record.get("tasks") or []))
             if not (evidence or authorized):
                 continue
             expires = None
@@ -938,6 +940,41 @@ def model_states(found: list[dict], conf: dict, now: dt.datetime | None = None) 
                          "tested": f"yes ({evidence['task']})", "authorized": "decided by the gate at run time",
                          "expires": expires or "no date"})
     return rows
+
+
+def na(value) -> str:
+    """A counter a provider did not report is shown as n/a, never as zero."""
+    return "n/a" if value is None or value == "" else str(value)
+
+
+def evidence(executor: str, model: str | None, classes: list[str], conf: dict) -> list[dict]:
+    """The fresh bench runs of one model in these classes, one summary per class, with its timeouts counted.
+    An empty list means nobody measured the model in them, which is not a failure."""
+    rows = [row for row in fresh_rows(bench_rows(), conf["limits"].get("bench_recheck_days"), hardware())
+            if row.get("executor") == executor and row.get("model") == model and row.get("task") in classes]
+    graded = current_rows(rows)
+    found = []
+    for row in summarize_bench(rows):
+        found.append({"class": row["task"], "runs": row["runs"], "accepted": round(row["pass_rate"] * row["runs"]),
+                      "p50_s": row["p50_s"], "last": str(row.get("last") or "")[:10] or None,
+                      "timeouts": sum(1 for r in graded if r.get("task") == row["task"] and r.get("timeout"))})
+    return sorted(found, key=lambda item: classes.index(item["class"]))
+
+
+def evidence_text(items: list[dict], conf: dict) -> str:
+    if not items:
+        return "no bench run yet"
+    needed = conf["limits"]["bench_min_runs"]
+    return "; ".join(f"{item['class']}: {item['accepted']} of {item['runs']} runs accepted ({needed} needed), "
+                     f"{item['timeouts']} timed out, median {na(item['p50_s'])} s, last {na(item['last'])}" for item in items)
+
+
+def usage_text(usage: dict | None) -> str:
+    """Model, tokens in and out and time of one run. What the executor did not report reads n/a."""
+    usage = usage or {}
+    return (f"model {na(usage.get('model'))}, input {na(usage.get('input_tokens'))} tokens "
+            f"({na(usage.get('input_chars'))} characters), output {na(usage.get('output_tokens'))} tokens, "
+            f"{na(usage.get('seconds'))} s")
 
 
 def is_installed(model: str | None, info: dict) -> bool:
@@ -1166,10 +1203,12 @@ def pick_opencode_model(models, repo, conf, local, caps, measured, mode, proven,
 
 
 def eligible(candidate, task, repo, input_chars, conf, local, caps, measured=None, mode=None, proven=False,
-             catalog=None, cool=None) -> tuple[bool, str, str | None]:
-    """Whether a candidate may do the task, why, and with which model. Cost and privacy go through gate()."""
+             catalog=None, cool=None, model=None) -> tuple[bool, str, str | None]:
+    """Whether a candidate may do the task, why, and with which model. Cost and privacy go through gate().
+    `model` pins one model: the candidate then uses that one or refuses with the reason, never another."""
     measured = measured or {}
     cool = cool or {}
+    pinned = model
 
     def cooled(executor, model):
         entry = cool.get((executor, model or ""))
@@ -1184,6 +1223,8 @@ def eligible(candidate, task, repo, input_chars, conf, local, caps, measured=Non
             return False, "Ollama is not running", None
         if input_chars > conf["limits"]["ollama_max_input_chars"]:
             return False, f"input of {input_chars} characters is too large for a small local model", None
+        if pinned:
+            oconf = {**oconf, "prefer": [pinned]}
         model, note = pick_ollama_model(oconf, info, measured, (conf.get("needs") or {}).get(task), proven, catalog)
         if not model:
             return False, note, None
@@ -1197,7 +1238,12 @@ def eligible(candidate, task, repo, input_chars, conf, local, caps, measured=Non
             return False, "OpenCode is not installed, and it is what runs Colibri's model", None
         if not info.get("up") or not info.get("models"):
             return False, "Colibri is not running (python scripts/colibri.py ensure)", None
-        model = f"colibri/{info['models'][0]}"
+        served = [f"colibri/{name}" for name in info["models"]]
+        wanted = f"colibri/{pinned}" if pinned and not pinned.startswith("colibri/") else pinned
+        if wanted and wanted not in served:
+            return False, (f"Colibri serves {', '.join(served)}, not {wanted}. Each id keeps its own bench evidence, "
+                           "so no other model is used"), None
+        model = wanted or served[0]
         if cooled("colibri", model):
             return False, cooled("colibri", model), None
         stats = measured.get(("colibri", model))
@@ -1216,6 +1262,12 @@ def eligible(candidate, task, repo, input_chars, conf, local, caps, measured=Non
         # Local Ollama models that passed the bench of this task also run through OpenCode, with no remote call.
         local_proven = [m for (e, m) in measured if e == "opencode" and m.startswith("ollama/")]
         models = [*checked_free_models(local, conf), *[m for m in local_proven if m not in checked_free_models(local, conf)]]
+        if pinned:
+            if pinned.startswith("colibri/"):
+                return False, f"{pinned} is served by Colibri: pin the colibri executor", None
+            models = [pinned] if pinned in models or pinned.startswith("ollama/") else []
+            if not models:
+                return False, f"the owner has not checked {pinned} as free (orchestrate.py consent --free-model {pinned})", None
         if not models:
             return False, "no free model checked by the owner in the last days (local.yml free_models)", None
         return pick_opencode_model(models, repo, conf, local, caps, measured, mode, proven, catalog, cool)
@@ -1251,8 +1303,11 @@ def eligible(candidate, task, repo, input_chars, conf, local, caps, measured=Non
 
 def route(task: str, repo: Path, risk: str = "green", files: int = 1, input_chars: int = 0,
           conf: dict | None = None, local: dict | None = None, caps: dict | None = None, mode: str | None = None,
-          catalog: dict | None = None, cool: dict | None = None) -> dict:
-    """Hard limits first (a program, cost, privacy, capability, proof), then the fastest candidate that passed them."""
+          catalog: dict | None = None, cool: dict | None = None, pin: str | None = None, model: str | None = None) -> dict:
+    """Hard limits first (a program, cost, privacy, capability, proof), then the fastest candidate that passed them.
+
+    `pin` names the executor a request asked for, such as "with Colibri", and `model` one exact model. A pinned
+    request uses that executor or is blocked with the reason, and it gets no fallback."""
     conf = conf or policy()
     local = local if local is not None else local_config()
     caps = caps or cached_capabilities() or doctor(conf=conf)
@@ -1262,7 +1317,7 @@ def route(task: str, repo: Path, risk: str = "green", files: int = 1, input_char
     cls, cls_source = privacy_class(repo, conf, local)
     rule = (conf.get("risk") or {}).get(risk) or {}
     decision = {"task": task, "risk": risk, "mode": mode_name, "privacy": cls, "review": rule.get("review", "checks"),
-                "executor": None, "model": None, "reasons": [], "rejected": [], "fallbacks": []}
+                "executor": None, "model": None, "reasons": [], "rejected": [], "fallbacks": [], "pinned": pin}
     known = task in conf["tasks"]
     if known and task in TOOL_TASKS:
         decision["executor"] = "tools"
@@ -1273,6 +1328,15 @@ def route(task: str, repo: Path, risk: str = "green", files: int = 1, input_char
         decision["reasons"].append("planner work: the owner asks Claude directly")
         return decision
     candidates = list(conf["tasks"][task]) if known else list(conf.get("unknown_task") or [])
+    if pin:
+        if pin not in candidates:
+            decision["executor"] = "blocked"
+            decision["reasons"].append(f"the request asks for {pin}, and settings/orchestration.yml does not list {pin} for {task} "
+                                       f"(it lists {', '.join(candidates) or 'nobody'}). No other executor was chosen")
+            return decision
+        candidates = [pin]
+        if pin == "colibri" and model and not model.startswith("colibri/"):
+            model = f"colibri/{model}"
     if not candidates:
         decision["executor"] = "blocked"
         decision["reasons"].append(f"task type {task!r} has no candidate executor: "
@@ -1291,16 +1355,22 @@ def route(task: str, repo: Path, risk: str = "green", files: int = 1, input_char
     cool = cooling_set() if cool is None else cool
     for candidate in candidates:
         needs_proof = proven
-        ok, why, model = eligible(candidate, task, repo, input_chars, conf, local, caps, measured, mode, needs_proof, catalog, cool)
+        ok, why, chosen = eligible(candidate, task, repo, input_chars, conf, local, caps, measured, mode, needs_proof, catalog, cool,
+                                   model=model if pin else None)
+        if pin:
+            served = (caps.get("colibri") or {}).get("models") or []
+            seen = chosen or model or (f"colibri/{served[0]}" if candidate == "colibri" and served else None)
+            items = evidence(candidate, seen, (classes or conf.get("proof", {}).get(task) or []), conf) if seen else []
+            decision["evidence"] = {"model": seen, "runs": items, "text": evidence_text(items, conf)}
         if ok and decision["executor"]:
             # Later candidates that also qualify. A Colibri task has none: it never moves to another model on its own.
             if decision["executor"] != "colibri" and candidate != "colibri":
-                decision["fallbacks"].append({"executor": candidate, "model": model})
+                decision["fallbacks"].append({"executor": candidate, "model": chosen})
             continue
         if ok:
-            decision.update(executor=candidate, model=model)
+            decision.update(executor=candidate, model=chosen)
             decision["reasons"].append(why)
-            stats = measured.get((candidate, model))
+            stats = measured.get((candidate, chosen))
             if stats:
                 decision["reasons"].append(f"measured on this machine: {stats['runs']} runs, pass rate {stats['pass_rate']}, "
                                            f"p50 {stats['p50_s']}s, p90 {stats['p90_s']}s")
@@ -1311,6 +1381,8 @@ def route(task: str, repo: Path, risk: str = "green", files: int = 1, input_char
     for (executor, model), stats in sorted(slow.items()):
         decision["reasons"].append(f"{executor} {model} does not count as proven: p90 {stats['p90_s']}s is over the "
                                    f"{limits['max_p90_s'][task]}s ceiling for {task}")
+    if pin and decision.get("evidence"):
+        decision["reasons"].append(f"bench evidence of {decision['evidence']['model']} for {task}: {decision['evidence']['text']}")
     if decision["executor"] is None:
         decision["executor"] = "blocked"
         refused = " ".join(f"{item['executor']}: {item['why']}." for item in decision["rejected"])
@@ -1504,7 +1576,12 @@ def delegate_opencode(repo: Path, task: str, allowed: list[str], test: str | Non
         if not found["up"] or not found["models"]:
             set_state(run_data, "blocked", "Colibri is not running (python scripts/colibri.py ensure). No other model was used")
             return run_data
-        model = model or f"colibri/{found['models'][0]}"
+        served = [f"colibri/{name}" for name in found["models"]]
+        wanted = f"colibri/{model}" if model and not model.startswith("colibri/") else model
+        if wanted and wanted not in served:
+            set_state(run_data, "blocked", f"Colibri serves {', '.join(served)}, not {wanted}. No other model was used")
+            return run_data
+        model = wanted or served[0]
     if executor == "opencode" and not model:
         # Without --model, choose as route() does for this task type: never simply the first model the owner listed.
         caps = caps if caps is not None else cached_capabilities(max_age_s=86400) or {}
@@ -1529,8 +1606,8 @@ def delegate_opencode(repo: Path, task: str, allowed: list[str], test: str | Non
     set_state(run_data, "approved", why)
     protected = protected_patterns(conf, protect or [])
     before = file_hashes(worktree, protected)
-    (worktree / TASK_FILE).write_text(build_packet(task, allowed, protected, test, base, untrusted, reuse_hints(worktree, task)),
-                                      encoding="utf-8")
+    packet = build_packet(task, allowed, protected, test, base, untrusted, reuse_hints(worktree, task))
+    (worktree / TASK_FILE).write_text(packet, encoding="utf-8")
     message = f"Read {TASK_FILE} in this folder and do exactly that task."
     template = command or conf["executors"][executor]["command"]
     set_state(run_data, "running")
@@ -1544,6 +1621,9 @@ def delegate_opencode(repo: Path, task: str, allowed: list[str], test: str | Non
                                    "rate_limited": result["exit"] != 0 and bool(RATE_LIMIT.search(result["stdout"] + result["stderr"]))}
     code = failure_code(result["exit"], result["timeout"], result["stdout"] + result["stderr"])
     run_data["executor_result"]["failure_code"] = code
+    # OpenCode reports no token counts, so they stay None and read n/a. The size of the task packet is known.
+    run_data["usage"] = {"model": model, "input_chars": len(packet), "input_tokens": None, "output_tokens": None,
+                         "seconds": result["seconds"]}
     # A run the owner cancelled says nothing about the health of the model.
     if executor in ("opencode", "colibri") and (code or result["exit"] == 0) and not result.get("cancelled"):
         record_health(executor, model, code, conf)
@@ -1687,6 +1767,8 @@ def delegate_ollama(prompt: str, model: str | None = None, want_json: bool = Fal
         "total_duration", "load_duration", "prompt_eval_count", "eval_count", "eval_duration")})
     if reply.get("eval_count") and reply.get("eval_duration"):
         run_data["metrics"]["tokens_per_s"] = round(reply["eval_count"] / (reply["eval_duration"] / 1e9), 1)
+    run_data["usage"] = {"model": reply.get("model") or model, "input_chars": len(content), "input_tokens": reply.get("prompt_eval_count"),
+                         "output_tokens": reply.get("eval_count"), "seconds": seconds}
     run_data["checks"]["reply"] = "PASS" if answer.strip() else "FAIL"
     if not same_model(model, reply.get("model")):
         run_data["checks"]["effective_model"] = "FAIL"
@@ -1753,6 +1835,7 @@ def bench_agent(task: str, executor: str, model: str | None, command: list[str] 
             "seconds": seconds, "verified": result["state"] == "verified" and bool(hidden_ok), "state": result["state"],
             "checks": result.get("checks"), "hidden_tests": hidden_ok, "outside_scope": result.get("outside_scope"),
             "rate_limited": bool(outcome.get("rate_limited")), "timeout": bool(outcome.get("timeout")),
+            "input_chars": (result.get("usage") or {}).get("input_chars"),
             "error": ("passed the tests it could see and failed the acceptance tests it never saw"
                       if result["state"] == "verified" and not hidden_ok else (result.get("history") or [{}])[-1].get("note")),
             "hardware": hardware()}
@@ -2168,6 +2251,9 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--risk", choices=["green", "yellow", "red"], default="green")
     p.add_argument("--files", type=int, default=1)
     p.add_argument("--input-chars", type=int, default=0)
+    p.add_argument("--executor", choices=["opencode", "ollama", "colibri", "api"],
+                   help="the executor the request asks for: it is used or the route is blocked with the reason, never another one")
+    p.add_argument("--model", help="with --executor, one exact model, such as colibri/<id>")
     p.add_argument("--mode", choices=modes, help="a stricter cost mode for this run")
     p.add_argument("--json", action="store_true")
     p = sub.add_parser("models")
@@ -2243,7 +2329,10 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         if not args.task:
             parser.error("give a task type or --all")
-        decision = route(args.task, args.repo, args.risk, args.files, args.input_chars, mode=args.mode)
+        if args.model and not args.executor:
+            parser.error("--model goes with --executor")
+        decision = route(args.task, args.repo, args.risk, args.files, args.input_chars, mode=args.mode,
+                         pin=args.executor, model=args.model)
         emit(decision, args.json)
         return 0 if decision["executor"] != "blocked" else 3
     if args.command == "models":
@@ -2275,6 +2364,7 @@ def main(argv: list[str] | None = None) -> int:
                                        untrusted=untrusted, keep=args.keep, mode=args.mode,
                                        executor="colibri" if args.executor == "colibri" else "opencode")
         emit({k: v for k, v in result.items() if k not in {"history"}}, True)
+        print(f"{result['state']}: {usage_text(result.get('usage') or {'model': result.get('model')})}")
         return 0 if result["state"] == "verified" else 1
     if args.command == "runs":
         folder = home() / "runs"
@@ -2292,7 +2382,7 @@ def main(argv: list[str] | None = None) -> int:
             data = json.loads(path.read_text(encoding="utf-8"))
             why = ((data.get("history") or [{}])[-1].get("note") or "").replace("\n", " ")
             print(f"{data['id']}  {data['executor']:<9} {data['state']:<9} {data.get('model') or '-'}  {data['task'][:50]!r}"
-                  + (f"  {why[:100]}" if why else ""))
+                  + (f"  {why[:100]}" if why else "") + (f"  [{usage_text(data['usage'])}]" if data.get("usage") else ""))
         return 0
     if args.command == "bench":
         if args.report:

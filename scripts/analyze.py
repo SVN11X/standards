@@ -63,7 +63,8 @@ def grouped(items: list[dict]) -> list[dict]:
 STATUS_TEXT = {"eligible": "eligible", "not-installed": "not installed", "unavailable": "not reachable", "not-chat": "not a chat model",
                "resources": "not enough resources", "blocked": "blocked in the catalog", "owner-check": "waiting for your check",
                "no-key": "no key", "no-adapter": "no adapter", "retired": "retired", "unknown-cost": "cost unknown", "paid": "not free",
-               "privacy": "privacy does not allow it", "cost-mode": "outside the cost mode", "discovery-failed": "could not be listed"}
+               "privacy": "privacy does not allow it", "cost-mode": "outside the cost mode", "discovery-failed": "could not be listed",
+               "not-served": "not served now", "failed-before": "failed before with nothing changed"}
 
 
 def discover_providers(conf: dict, local: dict, mode: str | None = None, known: dict | None = None) -> dict:
@@ -121,6 +122,70 @@ def local_coverage(conf: dict, local: dict, caps: dict, catalog: dict, mode: str
             out.append({"provider": "ollama-local", "model": entry["id"], "endpoint": url, "executor": "ollama", "remote": False,
                         "status": "not-installed", "why": "not installed", "fix": f"ollama pull {entry['id']}",
                         "note": f"size and license: {entry.get('source') or 'see the model page'}"})
+    return out
+
+
+def colibri_coverage(conf: dict, local: dict, caps: dict, catalog: dict, mode: str | None, folder: Path, consent: dict,
+                     local_agents: bool) -> list[dict]:
+    """The model the local Colibri serves, as a coding agent through OpenCode, and the ids its bench history names.
+
+    A stopped server is listed as not reachable. An id Colibri no longer serves keeps its own evidence and is
+    never merged with the id it serves now.
+    """
+    cconf = conf["executors"]["colibri"]
+    info = caps.get("colibri") or {}
+    url = info.get("url") or cconf.get("url")
+    served = [f"colibri/{name}" for name in info.get("models") or []]
+    history = sorted({str(row["model"]) for row in orchestrate.bench_rows()
+                      if row.get("executor") == "colibri" and row.get("model")} - set(served))
+    base = {"provider": "colibri-local", "endpoint": url, "executor": "colibri",
+            "remote": orchestrate.channel("colibri", None, conf) != "local", "fix": None, "tasks": [], "cannot": []}
+    home = Path(str(cconf.get("home", ""))).expanduser()
+
+    def proof(model: str) -> str:
+        items = orchestrate.evidence("colibri", model, list(bench_tasks.AGENT_TASKS), conf)
+        return orchestrate.evidence_text(items, conf)
+    if not info.get("up"):
+        if not history and not home.exists():
+            return [{**base, "model": "(the server)", "status": "not-installed", "why": f"no Colibri clone at {home}",
+                     "fix": "scripts/standards.ps1 installs it"}]
+        return [{**base, "model": name, "status": "unavailable", "why": "Colibri is not running", "evidence": proof(name),
+                 "fix": "python scripts/colibri.py ensure"} for name in history or ["(the server)"]]
+    out = []
+    for name in served:
+        record = {**base, "model": name, "evidence": proof(name)}
+        ok, why, code = orchestrate.explain("colibri", name, folder, conf, consent, mode, caps, catalog)
+        if not (caps.get("opencode") or {}).get("path"):
+            record.update(status="unavailable", why="OpenCode is not installed, and it is what runs Colibri's model")
+        elif not ok:
+            record.update(status=code, why=why)
+        else:
+            chat = "chat tasks: not evaluated, the bench reaches Colibri only as a coding agent through OpenCode"
+            slow = "agent tasks: planned only with --local-agents, a local model as a coding agent is slow"
+            record.update(status="eligible", why=f"served by Colibri at {url}",
+                          tasks=list(bench_tasks.AGENT_TASKS) if local_agents else [], cannot=[chat] if local_agents else [slow, chat])
+        out.append(record)
+    out += [{**base, "model": name, "status": "not-served", "evidence": proof(name),
+             "why": f"Colibri serves {', '.join(served) or 'nothing'} now. The bench history of this id stays its own"} for name in history]
+    return out
+
+
+def route_key(record: dict) -> tuple:
+    """Executor, model id and kind of run. OpenCode reaching colibri/<id> is the Colibri route, not a second model."""
+    executor, model = record["executor"], str(record["model"])
+    if executor == "opencode" and model.startswith("colibri/"):
+        executor = "colibri"
+    return executor, model, "agent" if executor in ("opencode", "colibri") else "api"
+
+
+def deduplicated(records: list[dict]) -> list[dict]:
+    """One record per executor, id and kind. The first one found wins, so the Colibri record beats an OpenCode alias of it."""
+    seen, out = set(), []
+    for record in records:
+        key = route_key(record)
+        if key not in seen:
+            seen.add(key)
+            out.append(record)
     return out
 
 
@@ -238,9 +303,10 @@ def coverage(conf: dict, local: dict, caps: dict, catalog: dict, mode: str | Non
         consent = orchestrate.bench_local(folder, local)
         found = local_coverage(conf, local, caps, catalog, mode, folder, consent)
         ready = [r["model"] for r in found if r["status"] == "eligible"]
+        found += colibri_coverage(conf, local, caps, catalog, mode, folder, consent, local_agents)
         found += opencode_coverage(conf, local, caps, catalog, mode, folder, consent, ready, local_agents)
         found += provider_coverage(conf, local, mode, folder, consent, listings or {}, known)
-    return found
+    return deduplicated(found)
 
 
 def candidates(conf: dict, local: dict, caps: dict, catalog: dict, mode: str | None = None, local_agents: bool = False,
@@ -251,13 +317,21 @@ def candidates(conf: dict, local: dict, caps: dict, catalog: dict, mode: str | N
 
 
 def build_plan(ready: list[dict], conf: dict, runs: int | None = None, tasks: list[str] | None = None,
-               models: list[str] | None = None, quotas: dict | None = None) -> tuple[list[dict], list[dict]]:
+               models: list[str] | None = None, quotas: dict | None = None, night: str | None = None) -> tuple[list[dict], list[dict]]:
     """Baselines first, then each local model with all its work, then the remote models. Returns the steps and what a budget cut.
 
     A coding agent gets a number of sessions per model. A provider API gets a number of requests for the whole account.
+    Without an explicit `runs`, only the evidence that is missing is planned: a combination with fresh runs gets the
+    runs it lacks, and one that failed is not run again until its evidence lapses or its grader, OpenCode minor or GPU
+    changes. Evidence that lapses soon is measured again in full. An explicit `runs` measures every combination.
+    The runs of `night`, the run being resumed, do not count as earlier evidence, so a resumed plan keeps its steps.
     """
-    settings = conf["analysis"]
+    settings, limits = conf["analysis"], conf["limits"]
+    explicit = runs is not None
     runs = runs or settings["runs"]
+    have = {(r["executor"], r["model"], r["task"]): r for r in orchestrate.summarize_bench(
+        orchestrate.fresh_rows([r for r in orchestrate.bench_rows() if not night or r.get("night") != night],
+                               limits.get("bench_recheck_days"), orchestrate.hardware()))}
     wanted = lambda task: not tasks or task in tasks  # noqa: E731
     steps = [{"key": f"{task}|tools|-|1", "task": task, "executor": "tools", "model": None, "run": 1, "limit_s": 60,
               "remote": False, "provider": "program"} for task in sorted(bench_tasks.BASELINES) if wanted(task)]
@@ -285,9 +359,29 @@ def build_plan(ready: list[dict], conf: dict, runs: int | None = None, tasks: li
             per_day = item.get("limit")
             allowed = per_day // settings["requests_per_agent_run"] if per_day else settings["remote_runs_per_model"]
         bucket = item["provider"] if api else f"{item['executor']}:{item['model']}"
+        numbers: dict[str, range] = {}
+        for task in mine:
+            key = (item["executor"], item["model"], task)
+            row = have.get(key)
+            if explicit or row is None or key in soon:
+                numbers[task] = range(1, runs + 1)
+                continue
+            accepted = round(row["pass_rate"] * row["runs"])
+            if row["runs"] >= limits.get("bench_fail_runs", 2) and row["pass_rate"] < limits["bench_min_pass_rate"]:
+                cut.append({"executor": item["executor"], "model": item["model"], "provider": item["provider"], "fix": None,
+                            "status": "failed-before", "why": f"{task}: {accepted} of {row['runs']} fresh runs accepted. It runs again "
+                            "once that evidence lapses or its grader, OpenCode minor or GPU changes. --runs measures it now"})
+                numbers[task] = range(0)
+            else:
+                numbers[task] = range(row["runs"] + 1, max(row["runs"], runs) + 1)
+                if not numbers[task]:
+                    cut.append({"executor": item["executor"], "model": item["model"], "provider": item["provider"], "fix": None,
+                                "status": "measured", "why": f"{task}: {accepted} of {row['runs']} fresh runs accepted, enough runs"})
         dropped = 0
-        for number in range(1, runs + 1):
+        for number in range(1, max([runs, *(r.stop - 1 for r in numbers.values() if r)], default=runs) + 1):
             for task in mine:
+                if number not in numbers[task]:
+                    continue
                 cost = bench_tasks.request_estimate(task) if api else 1
                 if allowed is not None and spent.get(bucket, 0) + cost > allowed:
                     dropped += 1
@@ -335,9 +429,14 @@ def plan_lines(steps: list[dict], cut: list[dict], left_out: list[dict], conf: d
         lines.append(f"Remote in total: {sessions} agent sessions, each of several requests, and about {requests} API requests.")
     else:
         lines.append("Remote: none. Nothing leaves this machine.")
-    if cut:
+    budget_cut = [item for item in cut if item.get("status") == "budget"]
+    decided = [item for item in cut if item.get("status") != "budget"]
+    if budget_cut:
         lines.append("Cut by a budget:")
-        lines += [f"  {item['label']}: {item['why']}" for item in grouped(cut)]
+        lines += [f"  {item['label']}: {item['why']}" for item in grouped(budget_cut)]
+    if decided:
+        lines.append("Not run again, the evidence already decides:")
+        lines += [f"  {item['executor']}:{item['model']} {item['why']}" for item in decided]
     if left_out:
         places: dict[str, dict[str, int]] = {}
         for item in left_out:
@@ -393,9 +492,9 @@ def run_plan(conf: dict | None = None, local: dict | None = None, caps: dict | N
     caps = caps or probe(conf, mode_name)
     listings = listings if listings is not None else discover_providers(conf, local, mode, known)
     ready, left_out = candidates(conf, local, caps, catalog, mode, local_agents, listings, known)
-    steps, cut = build_plan(ready, conf, runs, tasks, models, account_quotas(listings, known))
     state = load_state(mode_name)
-    state["left_out"] = [*left_out, *cut]
+    steps, cut = build_plan(ready, conf, runs, tasks, models, account_quotas(listings, known), night=state["id"])
+    state["left_out"] = [*left_out, *(item for item in cut if item.get("status") != "measured")]
     state["cannot"] = [{"model": f"{r['provider']} {r['model']}", "task": c} for r in ready for c in r["cannot"]]
     budget = budget_s if budget_s is not None else conf["analysis"]["night_budget_s"]
     started, current_local, interrupted = time.monotonic(), None, False
@@ -414,8 +513,9 @@ def run_plan(conf: dict | None = None, local: dict | None = None, caps: dict | N
             if step["remote"] and halted:
                 state["done"][step["key"]] = {"skipped": f"{state['stopped'][halted]}, so it was not used again this night"}
                 continue
-            if step["executor"] == "ollama" and step["model"] != current_local:
-                unload_other_models(step["model"], conf)
+            if step["executor"] in ("ollama", "colibri") and step["model"] != current_local:
+                # Colibri shares the graphics card with Ollama, so no Ollama model stays loaded during its runs.
+                unload_other_models(step["model"] if step["executor"] == "ollama" else None, conf)
                 current_local = step["model"]
             try:
                 row = orchestrate.bench_run(step["task"], step["executor"], step["model"], conf=conf, caps=caps.get("ollama"),
@@ -644,6 +744,8 @@ def prepare_lines(conf: dict, local: dict, caps: dict, catalog: dict, mode: str 
         size = f", {item['size'] / 1e9:.1f} GB" if item.get("size") else ""
         lines.append(f"  {item['provider']}  {item['model']}{size}  at {item['endpoint']}. {item['why']}. Tasks: {', '.join(item['tasks']) or 'none'}")
         lines += [f"      {text}" for text in item["cannot"]]
+        if item.get("evidence"):
+            lines.append(f"      evidence: {item['evidence']}")
     if not ready:
         lines.append("  nothing yet")
     rest = [r for r in found if r["status"] != "eligible"]
@@ -653,6 +755,8 @@ def prepare_lines(conf: dict, local: dict, caps: dict, catalog: dict, mode: str 
         lines.append(f"  {label}: [{STATUS_TEXT.get(item['status'], item['status'])}] {item['why']}")
         if item.get("note"):
             lines.append(f"      {item['note']}")
+        if item.get("evidence") and every:
+            lines.append(f"      evidence: {item['evidence']}")
         if item.get("fix"):
             lines.append(f"      {item['fix']}")
     if not every and any(len(item["names"]) > 3 for item in grouped(rest)):
@@ -679,7 +783,8 @@ def main(argv: list[str] | None = None) -> int:
             p.add_argument("--json", action="store_true", help="print every model found as data")
         if name != "prepare":
             p.add_argument("--models", nargs="*", help="only models whose name contains one of these texts")
-            p.add_argument("--runs", type=int, help="runs per model and task (default from settings/orchestration.yml)")
+            p.add_argument("--runs", type=int, help="runs per model and task, also for combinations the evidence already decides "
+                           "(default: the runs settings/orchestration.yml asks for, minus the fresh ones)")
             p.add_argument("--tasks", nargs="*", choices=orchestrate.BENCH_NAMES, help="only these bench tasks")
             p.add_argument("--local-agents", action="store_true", help="also run the agent tasks on local models through OpenCode (slow)")
         if name == "run":
@@ -705,8 +810,8 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if args.command == "plan":
         ready, left_out = candidates(conf, local, caps, catalog, args.mode, args.local_agents, listings)
-        steps, cut = build_plan(ready, conf, args.runs, args.tasks, args.models, account_quotas(listings))
         state = load_state(mode_name) if state_file().exists() else {"done": {}}
+        steps, cut = build_plan(ready, conf, args.runs, args.tasks, args.models, account_quotas(listings), night=state.get("id"))
         print("\n".join(plan_lines(steps, cut, left_out, conf, mode_name, state["done"])))
         print("\nNothing ran. To run it: python scripts/analyze.py run")
         return 0

@@ -58,7 +58,7 @@ prints one row per task type and model with the columns `discovered` (the analyz
 
 `~/.standards/health.json` keeps one entry per `executor|model` with `code`, `at`, `until` and `count`. A failure starts a cooldown taken from `health.cooldown_s` in the policy: `rate_limit` 3600, `timeout` 900, `unavailable` 600, `auth` 86400 seconds. A success clears the entry. OpenCode and Colibri runs, Ollama calls and API calls all record it. A reply the model got wrong says nothing about its health and records nothing. A timeout kills the whole process tree of the executor, so a stuck agent does not hang the run.
 
-A Colibri task never gets a fallback and never moves to another model. If Colibri is stopped the unit is blocked.
+A Colibri task never gets a fallback and never moves to another model. If Colibri is stopped, or serves an id other than the one asked for, the unit is blocked.
 
 ## Executor loop
 

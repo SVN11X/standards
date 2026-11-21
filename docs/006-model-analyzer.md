@@ -38,7 +38,16 @@ prints every task type with the agent, the exact model on this machine and the r
 python scripts/orchestrate.py models
 ```
 
-prints, per task type and model, whether it is discovered, tested and authorized, and the date its bench evidence expires. Evidence older than `limits.bench_recheck_days`, or measured with another OpenCode minor or GPU, no longer counts.
+prints, per task type and model, whether it is discovered, tested and authorized, and the date its bench evidence expires. Evidence older than `limits.bench_recheck_days`, or measured with another OpenCode minor or GPU, no longer counts. A model is authorized for a task type when its coverage lists one of the bench classes that measure it, so a coding agent eligible for `fix-bug` is authorized for `edit-small`.
+
+A request can name the executor, as in "fix this bug with Colibri":
+
+```
+python scripts/orchestrate.py route edit-small --executor colibri --json
+python scripts/orchestrate.py route edit-small --executor colibri --model colibri/<id>
+```
+
+A pinned route uses that executor or is blocked, and it has no fallback. The answer names the model the executor serves, its bench evidence for the task (runs, accepted runs, timeouts, median and date) and the reason. A stopped server, a served id other than `--model`, a failed bench class or an executor the task type does not list blocks the route with that reason. The prompt hook does the same when a work request says "con Colibri", "with Ollama" or "using OpenCode". `delegate` and `runs` print the model, the input and output tokens and the seconds of each run, and a counter the executor did not report reads `n/a`. OpenCode reports no tokens, so an agent run shows the size of its task packet in characters instead.
 
 ## What is found, and what the files add
 
@@ -46,6 +55,7 @@ Nothing is counted against a fixed list. The analyzer finds models in three plac
 
 - The local Ollama. It reads `/api/tags` and `/api/show` and takes every installed model, in the catalog or not. From what Ollama reports it tells a chat model from an embedding model, and whether it takes images and tools. A model that runs on Ollama's servers (a cloud tag, or one with a remote host) is listed as remote and never treated as local. A model whose size, with room for its context, does not fit in the graphics memory plus a share of the RAM is not tested.
 - OpenCode, for the free models it serves as a coding agent. A model that `opencode models` no longer lists is reported as retired.
+- The local Colibri server, for the model it serves as a coding agent through OpenCode. A stopped server is listed as not reachable, and an id it no longer serves keeps its own bench history as "not served now". OpenCode can announce the same model as `colibri/<id>`, so the coverage keeps one record per executor, id and kind of run. Colibri's agent runs are planned only with `--local-agents`, like a local Ollama model through OpenCode, and no Ollama model stays loaded on the card while they run.
 - Each provider of `settings/providers.yml` that has an adapter, a free offer and a key in the environment. The adapter asks the provider for its models.
 
 `settings/models.yml` no longer decides which models exist. It adds what discovery cannot know: data use, a daily limit, a note, or `blocked: <reason>` to keep a model out. `settings/providers.yml` holds one entry per provider: address, the name of the environment variable with the key, cost category, how a model counts as free, what the adapter may send, data use, limits and sources. Measured results live in neither. They go to `~/.standards/bench.jsonl`, the same history `orchestrate.py bench` writes and the router reads.
@@ -151,7 +161,7 @@ Preview the night. Nothing runs:
 python scripts\analyze.py plan
 ```
 
-It prints the steps, the longest the run can take and the remote sessions it would open. One run stops by itself after 8 hours at most (`analysis.night_budget_s`). Set Windows not to sleep for the night, because a sleeping machine pauses the run.
+It prints the steps, the longest the run can take and the remote sessions it would open. Only the evidence that is missing is planned. A combination with fresh runs gets the runs it lacks, so two fresh passes get one more run. A combination that failed `limits.bench_fail_runs` fresh runs is not run again until that evidence lapses or its grader, OpenCode minor or GPU changes, because a failure counts in the pass rate too. Evidence that lapses within `limits.refresh_before_days` is measured again in full. `--runs N` measures every combination N times, for example after the weights behind an id changed. One run stops by itself after 8 hours at most (`analysis.night_budget_s`). Set Windows not to sleep for the night, because a sleeping machine pauses the run.
 
 Start it and leave:
 

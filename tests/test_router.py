@@ -639,5 +639,33 @@ class HookTests(Base):
             self.assertEqual(recover.call_count, 1)
 
 
+class PinnedExecutorTests(Base):
+    """"Corrige este error con Colibri" names the model Colibri serves, its evidence and whether it may do the work."""
+
+    def caps(self, up):
+        return {"opencode": {"path": "opencode"}, "colibri": {"up": up, "models": ["fake-coder"] if up else []}, "ollama": {"up": False}}
+
+    def test_a_request_with_colibri_names_the_served_model(self):
+        with mock.patch.object(router, "light_capabilities", return_value=self.caps(True)):
+            decision = self.decide("Corrige este error con Colibri")
+        pin = decision["pinned_executor"]
+        self.assertEqual((pin["executor"], pin["model"], pin["ok"]), ("colibri", "colibri/fake-coder", True))
+        self.assertEqual(pin["evidence"], "no bench run yet")
+        text = router.render(decision, 4000)
+        self.assertIn("The request asks for colibri: model colibri/fake-coder", text)
+
+    def test_a_stopped_colibri_gives_the_block_reason(self):
+        with mock.patch.object(router, "light_capabilities", return_value=self.caps(False)):
+            decision = self.decide("Fix this bug with Colibri")
+        pin = decision["pinned_executor"]
+        self.assertFalse(pin["ok"])
+        self.assertIn("Colibri is not running", pin["why"])
+        self.assertIn("use no other executor", router.render(decision, 4000))
+
+    def test_a_request_that_names_no_executor_has_no_pin(self):
+        self.assertIsNone(self.decide("Corrige este error")["pinned_executor"])
+        self.assertIsNone(self.decide("¿Qué hace Colibri con Ollama?")["pinned_executor"])
+
+
 if __name__ == "__main__":
     unittest.main()
