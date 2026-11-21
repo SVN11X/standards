@@ -4,7 +4,7 @@
 Commands:
   init PATH --profile NAME   create a repository, or add missing files with --existing
   agents PATH                regenerate AGENTS.md, nested AGENTS.md and CLAUDE.md
-  check PATH [--pr]          check structure, intent and slop, plus the pull request with --pr
+  check PATH [--pr]          check structure, intent and slop, plus the pull request with --pr (--title, --body-file)
   templates OUT_DIR          build one template repository per profile
   package-skills OUT_DIR     bundle the skills with a pinned copy of the standard
   skills-repo OUT_DIR        build the public skills repository and its release archives
@@ -962,7 +962,8 @@ def check_pull_request(report: Report) -> None:
     title = os.environ.get("PR_TITLE", "")
     body = os.environ.get("PR_BODY", "") or ""
     if not CONVENTIONAL_TITLE.match(title):
-        report.error("pull request", f"Title '{title}' does not follow Conventional Commits, "
+        report.error("pull request", f"Title '{title}' does not follow Conventional Commits: a type (feat, fix, docs, style, "
+                                     "refactor, perf, test, build, ci, chore or revert), an optional scope, a colon and a space, "
                                      "for example 'feat(api): add weather endpoint'.")
     sections = markdown_sections(body)
     for name in PR_SECTIONS:
@@ -972,7 +973,7 @@ def check_pull_request(report: Report) -> None:
             report.error("pull request", f"Section '## {name}' is empty. Write 'None' if it does not apply.")
     task = sections.get("Task", "")
     if task and not re.search(r"#\d+|https?://|\bnone\b", task, re.I):
-        report.error("pull request", "Section '## Task' must link an issue (#12) or say None.")
+        report.error("pull request", "Section '## Task' must link an issue, such as 'Closes #12', or say 'None'.")
 
 
 def run_check(repo: Path, pull_request: bool = False) -> Report:
@@ -1848,12 +1849,14 @@ def cmd_selftest() -> int:
         allowed = guard.decide({"tool_input": {"command": "git status"}, "cwd": str(first_repo)})
         os.environ["STANDARD_PY"] = str(STANDARD_ROOT / "scripts" / "standard.py")
         (first_repo / "loose_file.py").write_text("x = 1\n", encoding="utf-8")
-        gate = guard.decide({"tool_input": {"command": "git commit -m 'feat: x'"}, "cwd": str(first_repo)})
+        gate = guard.decide({"tool_input": {"command": "git add -A && git commit -m 'feat: x'"}, "cwd": str(first_repo)})
+        # A loose file the owner left outside the commit is not the commit's error.
+        unrelated = guard.decide({"tool_input": {"command": "git add README.md && git commit -m 'docs: x'"}, "cwd": str(first_repo)})
         (first_repo / "loose_file.py").unlink()
         open_gate = guard.decide({"tool_input": {"command": "git commit -m 'feat: x'"}, "cwd": str(first_repo)})
         decisions = [(asked or {}).get("hookSpecificOutput", {}).get("permissionDecision"), allowed,
-                     (gate or {}).get("hookSpecificOutput", {}).get("permissionDecision"), open_gate]
-        if decisions != ["ask", None, "deny", None]:
+                     (gate or {}).get("hookSpecificOutput", {}).get("permissionDecision"), unrelated, open_gate]
+        if decisions != ["ask", None, "deny", None, None]:
             failures.append(f"guard hook decisions are wrong: {decisions}")
         else:
             print("positive case passed: guard hook")
@@ -1922,6 +1925,8 @@ def main(argv: list[str] | None = None) -> int:
     check = commands.add_parser("check", help="check a repository")
     check.add_argument("path")
     check.add_argument("--pr", action="store_true", help="also check PR_TITLE and PR_BODY")
+    check.add_argument("--title", help="with --pr: the pull request title to check before opening it")
+    check.add_argument("--body-file", type=Path, help="with --pr: a file with the pull request body to check before opening it")
 
     templates = commands.add_parser("templates", help="build template repositories")
     templates.add_argument("out_dir")
@@ -1987,6 +1992,10 @@ def main(argv: list[str] | None = None) -> int:
             print("\n".join(f"updated {rel}" for rel in written) or "Already up to date.")
             return 0
         if args.command == "check":
+            if args.title is not None:
+                os.environ["PR_TITLE"] = args.title
+            if args.body_file is not None:
+                os.environ["PR_BODY"] = args.body_file.read_text(encoding="utf-8")
             return run_check(Path(args.path).resolve(), pull_request=args.pr).print()
         if args.command == "templates":
             cmd_templates(Path(args.out_dir).resolve())

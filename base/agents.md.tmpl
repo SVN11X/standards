@@ -15,12 +15,13 @@ Instructions for any AI agent working in this repository. People read it too.
 1. Read the task. A task states What, Why, Where, Do not touch, Done when and If unsure.
 2. Classify the change with the traffic light below.
 3. Unless it is green, first reply with an Understanding block and wait: Goal (one sentence, in your words), Plan, Out of scope, Assumptions, Questions.
-4. Work in small commits. Before you finish, run the check (README.md, section Standard) and fix every error.
-5. Fill every section of the pull request template. Move assumptions that survive review to docs/assumptions.md and decisions to docs/decisions/.
-6. When a long run ends, such as the autopilot or a request to continue everything, close with one report: what now works without a command, the version each client loads, which checks ran for real and which were simulated, the models that did each part, and links to the changes. For each item left to the owner, give the exact action, the rule or source that requires it, what is already prepared and what happens once it is done.
+4. Work in small commits. Before you finish, run the check (README.md, section Standard) and fix every error. For a change a person can see or use, follow their steps in the running app, or its closest test, before and after the change, and say what you saw. docs/feature-map.md, when present, says where each feature lives.
+5. A step that must wait for a merge, such as moving files or pulling models, you do after the merge. When the owner must run it, say "after merging" first. Check a pull request before opening it: `standard.py check . --pr --title "<title>" --body-file <file>`.
+6. Fill every section of the pull request template. Move assumptions that survive review to docs/assumptions.md and decisions to docs/decisions/.
+7. When a long run ends, such as the autopilot or a request to continue everything, close with one report: what now works without a command, the version each client loads, which checks ran for real and which were simulated, the models that did each part, and links to the changes with their size, what was reverted and how long verifying them took. For each item left to the owner, give the exact action, the rule or source that requires it, what is already prepared and what happens once it is done.
 
 ## Traffic light
-- Green, decide and record: reversible, inside Where, consistent with docs/goals.md. Note it under Assumptions in the pull request.
+- Green, decide and record: reversible, inside Where, consistent with docs/goals.md. Note it under Assumptions in the pull request. Removing what you created in this task, such as a scratch file, your own worktree with `git worktree remove` or your merged branch with `git branch -d`, is green.
 - Yellow, propose and wait: a new dependency, a public interface change, adding or removing a design pattern, moving or deleting files, a new top-level folder, or anything outside Where.
 - Red, stop and ask: conflicts with Do not touch, a non-goal or an accepted decision, or touches secrets, raw data, git history or licenses.
 - Working from an issue without live chat: for yellow, open a draft pull request with the question and the most reversible option. For red, comment on the issue and write no code.

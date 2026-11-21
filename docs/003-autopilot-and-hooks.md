@@ -14,3 +14,13 @@ Habits that save tokens:
 - Show a screenshot instead of describing a visual problem.
 - Use `/clear` between unrelated tasks.
 - Keep the concise output style from `settings/output-style-concise.md` active.
+
+## Why an agent asks, and what the owner can change
+
+Three different things stop an agent, and only the first one lives in this standard.
+
+1. The guard hook of this standard (`hooks/guard.py`). It asks before a force push, `git reset --hard`, `git clean`, `git branch -D`, a recursive deletion, a deploy, a package publish, a secret, cloud or cluster deletions, `ollama pull` and `orchestrate.py consent`. A hook that answers "ask" still asks when a settings rule allows the command, so these prompts change only here. It asks nothing for a deletion inside a temporary folder or a delegation's worktree, for a `delegate/<run>` branch it made, for `git worktree remove` or for `git branch -d`, which refuses an unmerged branch. A commit is blocked only for check errors about the files that commit holds, so a loose file the owner adds meanwhile no longer blocks an unrelated commit. `gh pr merge` goes to `merge_when_green.py` once the owner allowed merges.
+2. Claude Code's auto mode classifier, which reviews actions such as a merge into a public `main` or a change of the Pages source. A narrow allow rule in the user settings (`%USERPROFILE%\.claude\settings.json` on Windows) resolves before the classifier. A broad one such as `Bash(python*)` is dropped in auto mode. Copy the exact command the agent ran, for example the `merge_when_green.py` path the guard prints, into one rule. `autoMode.allow` in the same file loosens a routine pattern the classifier keeps flagging. The `/permissions` dialog lists the rules and the file each one comes from, and its recently blocked tab approves one action once.
+3. The owner's own instructions, such as "before moving, renaming or deleting files, show me the plan and wait". Only the owner changes them. A version that keeps the safety: files that existed before the task need the plan first, and files the task created are removed and reported.
+
+What stays with the owner on purpose: deploys and secrets, force pushes, recursive deletions outside scratch folders, and workflow changes. `python scripts/orchestrate.py consent --merge-workflows when-green` lets `merge_when_green.py` merge a workflow change once every check passed, unless the change adds a line that reaches secrets, write permissions or the triggers that run with them, which still waits. Deploy and secret files always wait. Sources: https://code.claude.com/docs/en/permissions and https://code.claude.com/docs/en/auto-mode-config.

@@ -55,6 +55,20 @@ class HealthTests(unittest.TestCase):
         orchestrate.record_health("opencode", "m", None, self.conf)
         self.assertEqual(orchestrate.load_health(), {})
 
+    def test_each_failure_in_a_row_doubles_the_rest_up_to_the_ceiling(self):
+        at = dt.datetime(2026, 11, 21, 12, 0, tzinfo=dt.timezone.utc)
+        rests = []
+        for _ in range(8):
+            orchestrate.record_health("opencode", "ollama/m", "timeout", self.conf, at)
+            entry = orchestrate.load_health()["opencode|ollama/m"]
+            rests.append((dt.datetime.fromisoformat(entry["until"]) - at).total_seconds())
+        self.assertEqual(rests[:3], [900, 1800, 3600])
+        self.assertEqual(rests[-1], self.conf["health"]["max_cooldown_s"])
+        orchestrate.record_health("opencode", "ollama/m", None, self.conf)
+        orchestrate.record_health("opencode", "ollama/m", "no_change", self.conf, at)
+        entry = orchestrate.load_health()["opencode|ollama/m"]
+        self.assertEqual((entry["count"], (dt.datetime.fromisoformat(entry["until"]) - at).total_seconds()), (1, 1800))
+
     def test_units_that_fail_at_the_same_moment_all_leave_their_cooldown(self):
         """Parallel units end together. One temp file for every writer lost a write and raised FileNotFoundError."""
         start, errors = threading.Barrier(8), []

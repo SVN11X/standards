@@ -8,7 +8,9 @@ A pull request is merged only when all of this holds, checked right before the m
 - it is open and has no merge conflict. A draft is marked ready first.
 - at least one check ran on its head commit and every check passed or was skipped. With --wait the
   script waits for running checks, up to the given seconds.
-- it changes no workflow, deploy or secret file. Those still wait for the owner.
+- it changes no workflow, deploy or secret file. Those still wait for the owner. A workflow file passes only when
+  the owner also allowed workflows (`consent --merge-workflows when-green`) and the change adds no line that reaches
+  secrets, write permissions or the triggers that run with them. Deploy and secret files always wait.
 - the merge names the head commit that was checked (--match-head-commit), so a push after the check
   cannot slip in, and it never uses --admin: every rule of the repository still applies.
 
@@ -28,8 +30,11 @@ from pathlib import Path
 SCHEMA = "standards/merge-when-green/v1"
 METHODS = ("squash", "merge", "rebase")
 # Changes the owner keeps for themselves even with the setting on: how the project deploys and its secrets.
-OWNER_ONLY = re.compile(r"(^|/)\.github/workflows/|(^|/)\.env($|\.)|secret|credential|(^|/)deploy|(^|/)wrangler\.(toml|jsonc?)$"
+OWNER_ONLY = re.compile(r"(^|/)\.env($|\.)|secret|credential|(^|/)deploy|(^|/)wrangler\.(toml|jsonc?)$"
                         r"|(^|/)(Dockerfile|docker-compose\.ya?ml|compose\.ya?ml)$|\.tf$|(^|/)(Chart\.ya?ml|kustomization\.ya?ml)$", re.I)
+WORKFLOW = re.compile(r"(^|/)\.github/workflows/", re.I)
+# An added workflow line that reaches secrets or write access, or a trigger that runs with them, keeps the owner's review.
+RISKY_WORKFLOW_LINE = re.compile(r"secrets\.|pull_request_target|workflow_run|write-all|:\s*write\b|id-token|GITHUB_TOKEN", re.I)
 
 
 class Refused(RuntimeError):
@@ -57,6 +62,34 @@ def owner_setting(path: Path | None = None) -> str:
     return "when-green" if value == "when-green" else "ask"
 
 
+def workflow_setting(path: Path | None = None) -> str:
+    """'when-green' when the owner also allowed workflow changes, else 'owner'. Read like owner_setting."""
+    path = path or home() / "local.yml"
+    try:
+        text = path.read_text(encoding="utf-8")
+    except OSError:
+        return "owner"
+    try:
+        import yaml
+        data = yaml.safe_load(text) or {}
+        value = ((data.get("autopilot") or {}) if isinstance(data, dict) else {}).get("workflows")
+    except Exception:  # noqa: BLE001 (no PyYAML: read the one key by hand)
+        found = re.search(r"(?ms)^autopilot:\s*\n(?:[ \t]+.*\n)*?[ \t]+workflows:\s*['\"]?([\w-]+)", text + "\n")
+        value = found.group(1) if found else None
+    return "when-green" if value == "when-green" else "owner"
+
+
+def risky_workflow_lines(patch: str) -> list[str]:
+    """Added lines of workflow files that reach secrets, write permissions or the triggers that run with them."""
+    found, current = [], ""
+    for line in patch.splitlines():
+        if line.startswith("+++ "):
+            current = line[4:].removeprefix("b/")
+        elif line.startswith("+") and not line.startswith("+++") and WORKFLOW.search(current) and RISKY_WORKFLOW_LINE.search(line):
+            found.append(f"{current}: {line[1:].strip()[:80]}")
+    return found
+
+
 def gh(args: list[str], run=None, timeout: int = 120) -> str:
     if run is not None:
         return run(args)
@@ -82,7 +115,7 @@ def checks_of(pr: str, repo_args: list[str], run=None) -> dict:
 
 
 def merge(pr: str, repo: str | None = None, method: str = "squash", wait: int = 0, dry: bool = False, run=None,
-          sleep=time.sleep, clock=time.monotonic, setting: str | None = None) -> dict:
+          sleep=time.sleep, clock=time.monotonic, setting: str | None = None, workflows: str | None = None) -> dict:
     """Merge one pull request when every condition holds. Raises Refused with the first condition that does not."""
     if (setting or owner_setting()) != "when-green":
         raise Refused("the owner's setting is ask. Turn merges on with: python scripts/orchestrate.py consent --merge when-green")
@@ -97,7 +130,16 @@ def merge(pr: str, repo: str | None = None, method: str = "squash", wait: int = 
     files = [line.strip() for line in gh(["pr", "diff", pr, *repo_args, "--name-only"], run).splitlines() if line.strip()]
     kept = [f for f in files if OWNER_ONLY.search(f)]
     if kept:
-        raise Refused("it changes files the owner keeps for themselves (workflows, deploy or secrets): " + ", ".join(kept[:6]))
+        raise Refused("it changes files the owner keeps for themselves (deploy or secrets): " + ", ".join(kept[:6]))
+    flows = [f for f in files if WORKFLOW.search(f)]
+    if flows and (workflows or workflow_setting()) != "when-green":
+        raise Refused("it changes workflow files, which the owner keeps for themselves: " + ", ".join(flows[:6])
+                      + ". The owner can allow them with: python scripts/orchestrate.py consent --merge-workflows when-green")
+    if flows:
+        risky = risky_workflow_lines(gh(["pr", "diff", pr, *repo_args], run))
+        if risky:
+            raise Refused("a workflow change reaches secrets, write permissions or their triggers, so the owner reviews it: "
+                          + "; ".join(risky[:4]))
     began = clock()
     status = checks_of(pr, repo_args, run)
     while status["state"] in ("pending", "none") and clock() - began < wait:

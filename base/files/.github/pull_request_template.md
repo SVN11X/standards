@@ -2,7 +2,7 @@
 
 ## Task
 
-Closes #
+<!-- Link the issue, for example Closes #12, or write None. A bare "Closes #" fails the check. -->
 
 ## What I understood
 

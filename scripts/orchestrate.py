@@ -1171,10 +1171,12 @@ def record_health(executor: str, model: str | None, code: str | None, conf: dict
                 return
         else:
             at = at or dt.datetime.now(dt.timezone.utc)
-            seconds = ((conf.get("health") or {}).get("cooldown_s") or {}).get(code, 0)
+            health = conf.get("health") or {}
+            count = int((data.get(key) or {}).get("count", 0)) + 1
+            # Each failure in a row doubles the rest, so a model that keeps failing stops costing a full timeout per task.
+            seconds = min(((health.get("cooldown_s") or {}).get(code, 0)) * 2 ** (count - 1), health.get("max_cooldown_s", 86400))
             data[key] = {"code": code, "at": at.replace(microsecond=0).isoformat(),
-                         "until": (at + dt.timedelta(seconds=seconds)).replace(microsecond=0).isoformat(),
-                         "count": int((data.get(key) or {}).get("count", 0)) + 1}
+                         "until": (at + dt.timedelta(seconds=seconds)).replace(microsecond=0).isoformat(), "count": count}
         write_json(health_file(), data)
 
 
@@ -1666,18 +1668,21 @@ def delegate_opencode(repo: Path, task: str, allowed: list[str], test: str | Non
                                    "stdout_tail": tail(result["stdout"], size), "stderr_tail": tail(result["stderr"], size),
                                    "rate_limited": result["exit"] != 0 and bool(RATE_LIMIT.search(result["stdout"] + result["stderr"]))}
     code = failure_code(result["exit"], result["timeout"], result["stdout"] + result["stderr"])
-    run_data["executor_result"]["failure_code"] = code
     # OpenCode reports no token counts, so they stay None and read n/a. The size of the task packet is known.
     run_data["usage"] = {"model": model, "input_chars": len(packet), "input_tokens": None, "output_tokens": None,
                          "seconds": result["seconds"]}
-    # A run the owner cancelled says nothing about the health of the model.
-    if executor in ("opencode", "colibri") and (code or result["exit"] == 0) and not result.get("cancelled"):
-        record_health(executor, model, code, conf)
     (worktree / TASK_FILE).unlink(missing_ok=True)
     if result.get("cancelled"):
         set_state(run_data, "blocked", "cancelled by the owner. The worktree and its branch are kept")
         return run_data
     changes, ignored = changed_files(worktree, base, conf.get("generated"))
+    if code is None and result["exit"] == 0 and not changes:
+        # Exit 0 with nothing written is a failed edit too, so the next unit does not wait a whole session for it.
+        code = "no_change"
+    run_data["executor_result"]["failure_code"] = code
+    # A run the owner cancelled says nothing about the health of the model.
+    if executor in ("opencode", "colibri") and (code or result["exit"] == 0):
+        record_health(executor, model, code, conf)
     for rel in ignored:
         path = worktree / rel
         if path.is_file():
@@ -2341,6 +2346,9 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--merge", choices=["ask", "when-green"],
                    help="when-green: an agent may merge a pull request once every check on it passed (scripts/merge_when_green.py). "
                         "Workflow, deploy and secret changes still wait for the owner")
+    p.add_argument("--merge-workflows", choices=["owner", "when-green"],
+                   help="when-green: with --merge when-green, a change to .github/workflows/ merges too once every check passed, "
+                        "unless it adds a line that reaches secrets, write permissions or their triggers. owner: they wait for you")
     p.add_argument("--route", choices=["session", "coordinator"],
                    help="coordinator: a work order typed in Claude Code goes to plan_autopilot.py, which plans by score and runs "
                         "the units in parallel with OpenCode, Ollama or Colibri. session: the Claude session does it")
@@ -2454,8 +2462,8 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "consent":
         if bool(args.path) != bool(args.cls):
             parser.error("--path and --class go together")
-        if not (args.path or args.free_model or args.free_provider or args.cost_mode or args.merge or args.route):
-            parser.error("give --path with --class, --free-model, --free-provider, --cost-mode, --merge or --route")
+        if not (args.path or args.free_model or args.free_provider or args.cost_mode or args.merge or args.route or args.merge_workflows):
+            parser.error("give --path with --class, --free-model, --free-provider, --cost-mode, --merge, --merge-workflows or --route")
         if args.data_use and not (args.free_model or args.free_provider):
             parser.error("--data-use describes a --free-model or a --free-provider")
         unknown = [name for name in args.free_provider if name not in providers.load()]
@@ -2487,6 +2495,10 @@ def main(argv: list[str] | None = None) -> int:
             data["autopilot"] = {**(data.get("autopilot") or {}), "merge": args.merge}
             print("merges: " + ("an agent merges a pull request once every check on it passed" if args.merge == "when-green"
                                 else "every merge waits for the owner"))
+        if args.merge_workflows:
+            data["autopilot"] = {**(data.get("autopilot") or {}), "workflows": args.merge_workflows}
+            print("workflow changes: " + ("merge once every check passed, unless they reach secrets or write permissions"
+                                          if args.merge_workflows == "when-green" else "wait for the owner"))
         if args.route:
             data["router"] = {**(data.get("router") or {}), "owner": args.route}
             print("work orders in Claude Code: " + ("the coordinator runs them with plan_autopilot.py" if args.route == "coordinator"
