@@ -153,6 +153,15 @@ class Analyzer(unittest.TestCase):
         path = analyze.write_report(None, conf=self.conf, catalog=CATALOG, state=state)
         self.assertNotIn(str(ROOT), str(path.resolve()))
 
+    def test_proposal_leaves_out_a_retired_model(self):
+        passed = {("opencode", "opencode/fix-free"): {"task": "fix-bug", "runs": 3, "pass_rate": 1.0, "p50_s": 10.0},
+                  ("opencode", "opencode/lazy-free"): {"task": "fix-bug", "runs": 3, "pass_rate": 1.0, "p50_s": 20.0}}
+        with mock.patch.object(orchestrate, "measured_models", lambda task, conf: passed if task == "edit-small" else {}):
+            lines = analyze.proposal(self.conf, CATALOG, retired={("opencode", "opencode/fix-free")})
+        edit = next(line for line in lines if line.startswith("- `edit-small`"))
+        self.assertIn("opencode/lazy-free", edit)
+        self.assertNotIn("opencode/fix-free", edit)
+
     def test_resume_skips_what_finished(self):
         first, _ = self.run_plan(budget_s=0)
         self.assertFalse(first["complete"])

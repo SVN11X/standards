@@ -113,6 +113,15 @@ class Route(Base):
         self.assertNotEqual(decision["executor"], "opencode")
         self.assertIn("does not list opencode/glm-5.3-flash-free any more", json.dumps(decision))
 
+    def test_a_blocked_route_names_every_reason(self):
+        local = self.local()
+        local["free_models"].append({"id": "opencode/deepseek-v4.1-flash-free", "checked": dt.date.today().isoformat()})
+        caps = {**self.caps, "opencode": {"path": "/bin/opencode", "models": ["opencode/deepseek-v4.1-flash-free"]}}
+        decision = orchestrate.route("edit-small", self.tmp, local=local, caps=caps, mode="local-only")
+        why = next(item["why"] for item in decision["rejected"] if item["executor"] == "opencode")
+        self.assertIn("does not list opencode/glm-5.3-flash-free any more", why)
+        self.assertIn("local-only", why)
+
     def test_bench_history_picks_the_model(self):
         local = self.local()
         local["free_models"].append({"id": "opencode/deepseek-v4.1-flash-free", "checked": dt.date.today().isoformat()})
