@@ -97,6 +97,11 @@ Sources behind the rules. Prefer the original source. The check verifies these l
 - Claude Code, permissions and rule precedence: https://code.claude.com/docs/en/permissions
 - Claude Code, auto mode configuration: https://code.claude.com/docs/en/auto-mode-config
 
+## Changes an agent keeps small
+
+- Andrej Karpathy on the coding mistakes of language models: https://x.com/karpathy/status/2015883857489522876
+- andrej-karpathy-skills, four principles drawn from that post (MIT): https://github.com/multica-ai/andrej-karpathy-skills
+
 ## Hardware previews
 
 - GitHub, 3D file viewer for STL files up to 10 MB: https://docs.github.com/en/repositories/working-with-files/using-files/working-with-non-code-files#3d-file-viewer

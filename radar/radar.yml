@@ -1071,3 +1071,15 @@ entries:
     expression: []
     notes: "Interface for coding agents, installed on the remote node to follow and steer a task from the phone while the notebook is off. It has no native support for local models, so the work for the RTX goes through the queue of scripts/workqueue.py. Install: docs/user/install.md, remote access: docs/user/remote-access.md, the Linux service: docs/user/background-service.md of the repository. Before trial: t3 status and t3 service status on the VM, a phone approved as a new device, and the connection again after SSH is closed."
     evaluated: 2026-11-21
+  - name: andrej-karpathy-skills
+    url: https://github.com/multica-ai/andrej-karpathy-skills
+    status: adopt
+    profiles: [web, software, data-ai, hardware, docs, infra]
+    kind: reference
+    license: MIT, stated in its README and SKILL.md. The repository has no LICENSE file
+    cost: free
+    privacy: "Text only. Nothing runs and nothing leaves the machine."
+    expression: []
+    notes: "One skill and a CLAUDE.md with four principles drawn from Andrej Karpathy's post on the coding mistakes of language models: think before coding, simplicity first, surgical changes and goal-driven execution. Since 1.24.0 the generated AGENTS.md carries them in the standard's own words, the code-review skill checks that every changed line traces to the task, and its evals.yml has a case for drive-by changes. Installing the plugin as well repeats the same rules. Read from a shallow clone of main (2c60614) on 2026-11-21."
+    evaluated: 2026-11-21
+

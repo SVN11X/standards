@@ -4,6 +4,21 @@ All notable changes to this standard are documented here. The format follows [Ke
 
 ## [Unreleased]
 
+## [1.24.0] - 2026-11-21
+
+The owner asked on 2026-11-21 for the four principles of andrej-karpathy-skills (MIT), drawn from Andrej Karpathy's post on the coding mistakes of language models. They are written here in the standard's own words.
+
+### Added
+
+- Base rules: every changed line traces to the task, with no reformatting, renaming or refactoring of the code next to it and the style around it kept. An agent removes what its own change left unused and mentions other dead code in the pull request instead of deleting it. A new slop rule: no feature, option or error handling that nobody asked for or that covers a case that cannot happen.
+- The code-review skill checks the scope of a change right after its contract, and `prompts/review.md` does the same for tools without skills. `skills/code-review/evals.yml` gets a case with a rename and a deleted function next to the fix.
+- A radar entry for andrej-karpathy-skills at adopt, and its sources in `references.md`.
+
+### Changed
+
+- `AGENTS.md`: the Understanding block gives the check of each step of the plan, names both readings of an ambiguous request, says when a simpler way exists and stops on what is unclear. Before code changes, the task becomes a check: a test that fails first for a bug, the tests passing before and after for a refactor.
+- The slop rule on dead code now covers the code an agent writes, so it no longer tells an agent to delete dead code that was there before.
+
 ## [1.23.0] - 2026-11-21
 
 The owner's plan of 2026-11-21 ("Plan de mejoras para STANDARDS") asked for these changes. What needs the notebook, its RTX 2060 or the owner's accounts is prepared here and listed in `docs/improvement-plan.md`.

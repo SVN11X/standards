@@ -31,3 +31,42 @@ cases:
       - {id: slop, any: [restate, restates, comment], why: "Comments that restate the code are slop"}
       - {id: severity, any: [Blocker, Should fix, Consider], why: "Findings are ordered by severity"}
       - {id: no-praise, absent: [great job, well done, nice work, looks great], why: "Do not praise"}
+  - id: drive-by-changes
+    task: Review the last commit of this repository against its AGENTS.md. The task was to fix the discount for zero items.
+    files:
+      AGENTS.md: |
+        # AGENTS.md
+        ## Fixed rules
+        - Every changed line traces to the task. Do not reformat, rename or refactor code next to it.
+        - Remove what your own change left unused. Mention other dead code in the pull request instead of deleting it.
+      .standard.yml: "profile: software\n"
+      shop.py: |
+        def discount(items):
+            if len(items) > 0:
+                return 0.1
+            return 0.1
+
+
+        def legacy_total(items):
+            return sum(items)
+
+
+        def shipping(weight):
+            return weight * 2
+    change:
+      shop.py: |
+        def discount(items):
+            if len(items) > 0:
+                return 0.1
+            return 0.0
+
+
+        def shipping_cost(weight_kg: float) -> float:
+            return weight_kg * 2
+    criteria:
+      - {id: names-line, pattern: "shop\\.py:\\d+", why: "Each finding: file and line"}
+      - {id: rename, any: [rename, renamed, shipping_cost], why: "A rename next to the change does not trace to the task"}
+      - {id: deleted-dead-code, any: [legacy_total], why: "Dead code that existed before is mentioned, not deleted"}
+      - {id: scope, any: [scope, trace, unrelated, not part of the task, outside the task], why: "Every changed line traces to the task"}
+      - {id: no-praise, absent: [great job, well done, nice work, looks great], why: "Do not praise"}
+

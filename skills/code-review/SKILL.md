@@ -18,12 +18,13 @@ Review a change against the rules the repository already declares. The rules liv
 ## Check, in this order
 
 1. Contract. Does the change serve the task's Why and stay inside Where and Do not touch? Does the pull request have every section filled?
-2. Fixed rules of the profile and the rules of the chosen options, as listed in `AGENTS.md`.
-3. Techniques under "Allowed only with a written reason". Each one needs a decision record. A missing record is a finding. A new dependency that is not in the radar of the standard is also a finding: evaluate it with tool-radar.
-4. Design patterns. Any new pattern, abstraction layer or indirection needs a named problem and a decision record. Flag over-engineering: one implementation behind an interface, a factory that builds one thing, layers that only pass calls through. Suggest the simpler alternative from the pattern card.
-5. AI slop. Comments that restate the code or narrate steps, banners and emoji, dead code, unused dependencies, placeholder or fabricated data, marketing words, vague TODOs.
-6. Tests. Is there a test or command for Done when? Do the tests check behavior rather than implementation details?
-7. Specialized reviews. For interface work, defer to antislop-ui and antislop-human when they are available. For security-sensitive changes, recommend a dedicated security review. For a change made by another agent or model, or one that touches data, workflows or permissions, run adversarial-testing and cite its report as evidence.
+2. Scope. Every changed line traces to the task. Reformatting, renames, refactors and style changes in code next to the change are findings, and so is dead code that existed before and was deleted without being asked. What the change itself left unused must go. A feature, option or error path nobody asked for is a finding too.
+3. Fixed rules of the profile and the rules of the chosen options, as listed in `AGENTS.md`.
+4. Techniques under "Allowed only with a written reason". Each one needs a decision record. A missing record is a finding. A new dependency that is not in the radar of the standard is also a finding: evaluate it with tool-radar.
+5. Design patterns. Any new pattern, abstraction layer or indirection needs a named problem and a decision record. Flag over-engineering: one implementation behind an interface, a factory that builds one thing, layers that only pass calls through. Suggest the simpler alternative from the pattern card.
+6. AI slop. Comments that restate the code or narrate steps, banners and emoji, dead code the change adds, unused dependencies, placeholder or fabricated data, marketing words, vague TODOs.
+7. Tests. Is there a test or command for Done when? Do the tests check behavior rather than implementation details?
+8. Specialized reviews. For interface work, defer to antislop-ui and antislop-human when they are available. For security-sensitive changes, recommend a dedicated security review. For a change made by another agent or model, or one that touches data, workflows or permissions, run adversarial-testing and cite its report as evidence.
 
 ## Deep review
 

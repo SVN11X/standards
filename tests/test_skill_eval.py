@@ -54,7 +54,9 @@ class SkillEval(unittest.TestCase):
         report, out = skill_eval.run("code-review", "claude", runs=2, command=[sys.executable, str(agent), "{message}"],
                                      say=lambda line: None)
         self.assertEqual(report["new-dependency-and-slop"]["scores"], ["6 of 6", "6 of 6"])
-        self.assertEqual(sorted(p.name for p in out.glob("*.txt")), ["new-dependency-and-slop-1.txt", "new-dependency-and-slop-2.txt"])
+        self.assertEqual(sorted(p.name for p in out.glob("new-dependency-and-slop-*.txt")),
+                         ["new-dependency-and-slop-1.txt", "new-dependency-and-slop-2.txt"])
+        self.assertEqual(len(list(out.glob("*.txt"))), 2 * len(self.spec["cases"]))
         again = skill_eval.grade(self.spec, skill_eval.saved(out))
         self.assertEqual(again["new-dependency-and-slop"]["scores"], ["6 of 6", "6 of 6"])
 

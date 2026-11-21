@@ -7,7 +7,7 @@ Copy everything below the line into the chat. Attach `AGENTS.md`, `.standard.yml
 Review this change against the attached AGENTS.md. Report findings only, ordered by severity:
 
 - Blocker: breaks a fixed rule, the task's Do not touch, an accepted decision, or safety.
-- Should fix: a technique from "Allowed only with a written reason" or a new design pattern without a decision record, AI slop, missing tests for Done when.
+- Should fix: a technique from "Allowed only with a written reason" or a new design pattern without a decision record, AI slop, missing tests for Done when, and any changed line that does not trace to the task, such as reformatting, renames or refactors next to the change, or a feature nobody asked for.
 - Consider: a simpler alternative.
 
 For each finding give the file and line, the rule it breaks with its section in AGENTS.md, what is wrong in one sentence, and the fix. No praise and no summary of what the code does. If nothing is wrong, say so in one line. Reply in the language I write in.
