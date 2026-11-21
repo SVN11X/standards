@@ -50,3 +50,36 @@ Progress of the free routing, model analyzer and web design work of November 202
 - [x] Per task type p90 ceiling and evidence refresh. `limits.max_p90_s` as a ceiling on the p90 seconds to an accepted result per route task type, and `refresh_before_days` so the night run measures again the evidence that expires soon. An earlier delegated run wrote it on an old base and it was never integrated. The patch is at `~/.standards/backups/df2d69-uncommitted-p90-and-refresh.patch`, 139 added lines in `analyze.py`, `orchestrate.py`, `orchestration.yml` and two test files. It conflicts with the current `orchestrate.py`, so redo it on top of `fresh_rows` and `model_states` and do not apply it as it is
 - [x] Fix: the router skips a free OpenCode model that `opencode models` no longer lists. OpenCode retired `glm-5.3-flash-free` on 2026-11-18 and every edit task was still routed to it
 - [x] Fix: `review-diff` and `decompose` get a reply budget of 1500 tokens and a model with only thinking levels gets the lowest one. At 400 tokens every `decompose` reply of the first real run was cut, so the class measured the budget, not the model
+
+## Plan of 2026-11-21: models per task on the RTX 2060, public sites and a remote node
+
+From the owner's "Plan de mejoras para STANDARDS". One branch with one commit per delivery, instead of seven pull requests, because this session pushes to one branch. Details are in `CHANGELOG.md` 1.23.0.
+
+- [x] PR 1. Colibri in the analyzer coverage, one record per executor, id and kind, a pinned executor that is used or blocked with the reason and the bench evidence, usage with `n/a`, and `models` authorizing edit tasks through their bench class
+- [x] PR 2. `executors.ollama.prefer_by_task` with `prefer` as the fallback, failed local models refused, `rejected_models` in `route`, and non-chat kinds in the catalog
+- [x] PR 3. Recall by words and by meaning with references, repository filter first, vectors per model revision, rebuild of only the affected vectors, and `memory.py eval`
+- [x] Night run plans only the missing evidence and does not repeat a failure with nothing changed
+- [x] Radar entries for the engines, the options on hold and the services of the plan, with `not verified` where nobody read the license
+- [x] Specialists per job in `settings/models.yml`, routed to nothing
+- [x] Recipes `web-visitor-ai`, `static-search`, `visitor-ai`, `3d-preview`, `isolated-test` and `remote-node`, and the STL check
+- [x] `scripts/workqueue.py` with privacy checks, expiring claims, one result per task, backup and restore
+- [ ] BLOCKED: the owner runs the first session on the notebook from `C:\my_drive\Portafolio\standards`: `git rev-parse --short HEAD`, `ollama list`, `ollama ps`, `orchestrate.py consent --cost-mode local-only`, `doctor --mode local-only`, `models --mode local-only`, `bench --report`, `colibri.py status` and `colibri.py models`, and compares the table with `bench.jsonl`. Only the notebook has Ollama, Colibri and the bench history
+- [ ] BLOCKED: `orchestrate.py route extract-short --mode local-only --json` and `route edit-small --executor colibri --json` on the notebook. In this container both answer blocked, because Ollama, OpenCode and Colibri are not installed here
+- [ ] BLOCKED: `memory.py index --repo .` on the notebook with `qwen3-embedding:0.6b`, then real Spanish and English questions with their right fragment marked first, run with `memory.py eval`. The tests here use a fake embedding model, which proves the mechanism and not the quality. Tune `memory.min_similarity` from that run. A reranker is tested only if the right answer is often in the first 10 and rarely in the first 3
+- [ ] BLOCKED: engine pilot with official llama.cpp Vulkan and one known GGUF against Ollama, by the rule in `docs/006-model-analyzer.md`. Integrate only the winner, off by default
+- [ ] BLOCKED: the owner picks one consumer project and one pending task for the first specialist. Granite 4.1 3B if Spanish extraction fails, PaddleOCR-VL-1.5 if a table of the notes extractor is misread
+- [ ] BLOCKED: Fieldnotes and tesis_explain adopt `web-visitor-ai` in their own repositories, with the owner's Cloudflare account on Workers Free. The acceptance test needs a browser with an empty cache and the notebook off
+- [ ] BLOCKED: the Raspberry Pi 4 case adopts `3d-preview` in the prototype's repository
+- [ ] BLOCKED: OpenSandbox QA pilot, which needs Docker or WSL2 on the notebook
+- [ ] BLOCKED: the Oracle A1 node and T3 Code on the owner's personal account, then the acceptance test of `docs/005-verification-and-orchestration.md` with the notebook off. `workqueue.py --via` was tested here without SSH
+
+## The ConquerAI video and the owner's agent reports of 2026-11-21
+
+- [x] Guardrails in `.standard.yml` enforced by the check, skill evals with several runs, the feedback loop and `docs/feature-map.md`, and the size of each change in the reports
+- [x] Commit gate scoped to the commit, `git branch -d` without a prompt, the PR template and `check --pr --title --body-file`, the Pages artifact per attempt, doubling cooldowns and `no_change`
+- [x] Base rules for UTF-8 and LF, a look at media before publishing, and files that parallel changes edit
+- [ ] BLOCKED: the owner decides whether to run `orchestrate.py consent --merge-workflows when-green`. Workflow changes keep waiting for the owner until then
+- [ ] BLOCKED: the owner adds narrow allow rules in `%USERPROFILE%\.claude\settings.json` for the commands the auto mode classifier stops, such as the exact `merge_when_green.py` command, as `docs/003-autopilot-and-hooks.md` explains. Nothing in a repository can change that file
+- [ ] BLOCKED: the owner chooses whether to soften "show me the plan before deleting files" for files the task itself created. It lives in the owner's own instructions
+- [ ] BLOCKED: `skill_eval.py run code-review --executor claude --runs 3` on the owner's machine. The tests here use a fake agent
+

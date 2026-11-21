@@ -245,6 +245,9 @@
       ]
     },
     "handoff": {},
+    "pinned_executor": {
+      "description": "The executor a work request names, such as \"con Colibri\": the model it serves, its bench evidence and whether it may do the task. null when the request names none. Fields: executor, task, model, ok, why and evidence."
+    },
     "task": {
       "type": "object",
       "required": [

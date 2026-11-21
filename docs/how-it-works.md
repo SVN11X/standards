@@ -28,7 +28,7 @@ flowchart LR
 
 - `base/base.yml`: rules and required files shared by every profile. `base/files/` holds the files every repository receives and `base/agents.md.tmpl` is the template of the generated `AGENTS.md`.
 - `profiles/`: one folder per profile with its `profile.yml`: folders, fixed rules, techniques that need a reason and setup questions. `profiles/web/subprofiles.yml` describes the five web sub-profiles.
-- `scripts/standard.py`: the engine. It creates, regenerates, checks and migrates repositories, and packages the skills.
+- `scripts/standard.py`: the engine. It creates, regenerates, checks and migrates repositories, and packages the skills. `scripts/guardrails.py` checks the forbidden patterns and module boundaries a repository declares.
 - `scripts/orchestrate.py`: routing, delegation, bench, consent and the gate every model call passes.
 - `scripts/learning_check.py`, `scripts/text_check.py` and `scripts/media.py`: whether a question bank teaches, whether a text helps its reader, and whether images and clips reach every reader with their credit.
 - `scripts/router.py`, `scripts/repo_fingerprint.py` and `settings/recipes.yml`: a request in plain words gets a decision before work starts: the repository and folder, the recipe, and the tool on this machine that provides each capability. `hooks/route_prompt.py` adds it to a work request in Claude Code.
@@ -39,7 +39,8 @@ flowchart LR
 - `scripts/providers.py`: one transport for providers with an OpenAI-compatible API. It lists models, checks the account, sends requests and names every failure.
 - `scripts/analyze.py`: the night run that finds the models of the machine and of each provider, tests the ones that are allowed and writes the report.
 - `scripts/verify.py` with `scripts/evidence.py`: the independent verifier and its report format. `scripts/adversarial.py` attacks the controls on purpose.
-- `scripts/preserve.py`, `scripts/safe_patch.py` and `scripts/memory.py`: data protection, proven patches and local memory.
+- `scripts/preserve.py`, `scripts/safe_patch.py`, `scripts/memory.py` and `scripts/recall.py`: data protection, proven patches, local memory searched by words and by meaning, and the notes a new session gets.
+- `scripts/workqueue.py`: the queue between the owner's remote VM and the notebook, for CPU work there and GPU work here.
 - `settings/`: policy as data. `settings/orchestration.yml` is the routing, privacy and cost policy, `settings/models.yml` the settings and limits of models, `settings/providers.yml` the remote providers, `settings/mcp/catalog.yml` the MCP servers and `settings/opencode/` the OpenCode setup.
 - `skills/`: the source of the skills. `agents/` and `hooks/` are published with them.
 - `patterns/`: one card per design pattern. `radar/radar.yml`: every evaluated tool with its status.

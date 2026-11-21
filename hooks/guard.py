@@ -20,7 +20,9 @@ ASK = [
     (r"\bgit\s+push\b[^\n]*\s(--force\b|--force-with-lease\b|-f\b)", "a force push"),
     (r"\bgit\s+reset\s+--hard\b", "discarding local changes with git reset --hard"),
     (r"\bgit\s+clean\s+-[a-z]*f", "deleting untracked files with git clean"),
-    (r"\bgit\s+branch\s+-D\b", "deleting a branch that may not be merged"),
+    # Case matters: -d deletes only a merged branch and needs no owner, -D also deletes an unmerged one.
+    (r"\bgit\s+branch\s+(?-i:-D|--delete\s+--force|--force\s+--delete)\b|\bgit\s+branch\s+(?-i:-d)\s+(?-i:-f)\b",
+     "deleting a branch that may not be merged"),
     (r"\bgit\s+(filter-branch|filter-repo)\b", "rewriting history"),
     (r"\brm\s+-[a-z]*r[a-z]*f|\brm\s+-[a-z]*f[a-z]*r", "a recursive deletion"),
     (r"\bRemove-Item\b[^\n]*-Recurse", "a recursive deletion"),
@@ -58,23 +60,67 @@ def repository_root(start: Path) -> Path | None:
     return None
 
 
-def commit_gate(cwd: Path) -> str | None:
-    """Return the reason to block a commit, or None to let it through."""
+def git_lines(root: Path, *args: str) -> list[str]:
+    try:
+        out = subprocess.run(["git", *args], cwd=root, capture_output=True, text=True, encoding="utf-8", timeout=30)
+    except (OSError, subprocess.TimeoutExpired):
+        return []
+    return [line.strip() for line in out.stdout.splitlines() if line.strip()]
+
+
+ADD = re.compile(r"\bgit\s+add\s+([^;&|\n]*)")
+
+
+def committed_paths(root: Path, command: str) -> set[str] | None:
+    """The files this commit will hold: what is staged, what `git add` in the same command adds, and the tracked
+    changes of `commit -a`. None when it cannot be told, so every error of the check counts."""
+    paths = set(git_lines(root, "diff", "--cached", "--name-only"))
+    for match in ADD.finditer(command):
+        try:
+            words = [w for w in shlex.split(match.group(1)) if not w.startswith("-") or w in ("-A", "--all")]
+        except ValueError:
+            return None
+        if any(w in (".", "-A", "--all", "*") for w in words) or not words:
+            paths |= set(git_lines(root, "diff", "--name-only")) | set(git_lines(root, "ls-files", "--others", "--exclude-standard"))
+        else:
+            paths |= {w.replace("\\", "/").removeprefix("./") for w in words}
+    if re.search(r"\bgit\s+commit\b[^\n]*\s(-[a-zA-Z]*a[a-zA-Z]*|--all)\b", command):
+        paths |= set(git_lines(root, "diff", "--name-only"))
+    return paths or None
+
+
+def about(where: str, paths: set[str]) -> bool:
+    """Whether an error of the check names one of the committed files or a folder that holds one."""
+    target = where.split(":", 1)[0].strip().rstrip("/")
+    return any(path == target or path.startswith(target + "/") for path in paths)
+
+
+def commit_gate(cwd: Path, command: str = "") -> str | None:
+    """Return the reason to block a commit, or None to let it through. Only errors about the files this commit holds
+    block it: a file the owner added meanwhile, outside the commit, is theirs to fix."""
     root = repository_root(cwd)
     script = find_standard_script()
     if root is None or script is None or not (root / ".standard.yml").exists():
         return None
     try:
+        # The plain format: inside GitHub Actions the check prints annotations, which carry no "ERROR" prefix.
+        env = {key: value for key, value in os.environ.items() if key != "GITHUB_ACTIONS"}
         result = subprocess.run([sys.executable, str(script), "check", str(root)], capture_output=True,
-                                text=True, timeout=90)
+                                text=True, timeout=90, env=env)
     except (OSError, subprocess.TimeoutExpired):
         return None
     if result.returncode == 0:
         return None
     if "PyYAML is required" in (result.stdout + result.stderr):
         return None
-    errors = [line for line in result.stdout.splitlines() if line.startswith("ERROR")][:10]
-    return ("The standard check fails, so this commit is blocked. Fix these first:\n" + "\n".join(errors))
+    errors = [line for line in result.stdout.splitlines() if line.startswith("ERROR")]
+    paths = committed_paths(root, command)
+    # A failed check whose errors cannot be read blocks the commit: the gate fails closed.
+    if paths is not None and errors:
+        errors = [line for line in errors if about(line[len("ERROR"):].strip(), paths)]
+        if not errors:
+            return None
+    return ("The standard check fails on files of this commit, so it is blocked. Fix these first:\n" + "\n".join(errors[:10]))
 
 
 # A delegate/<run id> branch is scratch the standard made for one delegation, with the run's record in
@@ -177,7 +223,7 @@ def decide(data: dict) -> dict | None:
             return {"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "ask",
                                            "permissionDecisionReason": f"This is {what}. The owner decides."}}
     if COMMIT.search(command):
-        reason = commit_gate(Path(data.get("cwd") or os.getcwd()))
+        reason = commit_gate(Path(data.get("cwd") or os.getcwd()), command)
         if reason:
             return {"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "deny",
                                            "permissionDecisionReason": reason}}

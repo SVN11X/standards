@@ -2,7 +2,9 @@
 """Hand a new session the decisions and notes that fit its request, so it never needs the whole history.
 
 `lines` ranks the decision records of the repository and the entries of the local memory by the words they share with
-the request, and returns at most two of each with where they came from. `handoff` stores what a finished plan left:
+the request, and returns at most two of each with where they came from. Once `memory.py index` stored meaning vectors
+for the repository and the local embedding model answers, it ranks by words and by meaning together, so a question in
+Spanish finds a note written in English. The lines stay inside a budget of characters. `handoff` stores what a finished plan left:
 what passed, what is blocked and why, so the next phase starts from it. The idea follows ProjectArchitect, whose
 license forbids redistributing it or a similar version: nothing of it is copied here. https://github.com/Druthulu/ProjectArchitect
 Run: python scripts/recall.py "REQUEST" [--repo .]
@@ -59,15 +61,51 @@ def ranked_memories(request: str, repo: str, top: int = 2) -> list[tuple]:
         return db.execute(sql, (" OR ".join(f'"{t}"' for t in terms), repo, top)).fetchall()
 
 
-def lines(root: Path, request: str) -> list[str]:
+def memory_line(_id, kind: str, source: str, ref: str | None, created: str | None, text: str) -> str:
+    label = "fact" if source in ("owner", "tool") else "agent hint, check it before acting"
+    old = " It is older than 90 days." if created and memory.age_days(created) > memory.OLD_DAYS else ""
+    return f"Memory {_id} ({kind}, {label}{', ' + ref if ref else ''}): {' '.join(text.split())[:220]}{old}"
+
+
+def within(found: list[str], budget_chars: int) -> list[str]:
+    kept, used = [], 0
+    for line in found:
+        if used + len(line) > budget_chars:
+            break
+        kept.append(line)
+        used += len(line) + 1
+    return kept
+
+
+def meaning_lines(root: Path, request: str, embed=None) -> list[str] | None:
+    """Lines ranked by words and meaning, or None when the repository has no vectors or the local model cannot answer."""
+    with contextlib.closing(memory.connect()) as db:
+        if not db.execute("SELECT 1 FROM vectors WHERE repo = ? LIMIT 1", (root.name,)).fetchone():
+            return None
+        embed = embed or memory.local_embedder()[0]
+        if embed is None:
+            return None
+        found = memory.hybrid(db, request, root.name, root, embed, top=4)
+    out = []
+    for item in found["results"]:
+        if item["source"] == "file":
+            out.append(f"Relevant decision {item['ref']} ({item.get('status', 'unknown')}): {item['text'][:260]}")
+        else:
+            out.append(memory_line(item["key"].split(":", 1)[1], item["kind"], item["source"], item.get("ref"), item.get("created"),
+                                   item["text"]))
+    return out
+
+
+def lines(root: Path, request: str, embed=None, budget_chars: int = 900) -> list[str]:
+    meaning = meaning_lines(root, request, embed)
+    if meaning is not None:
+        return within(meaning, budget_chars)
     out = []
     for row in ranked_decisions(root, request):
         out.append(f"Relevant decision {row['path']} ({row['status']}): {row['title']}. {row['decision'][:220]}")
     for _id, kind, source, ref, created, text in ranked_memories(request, root.name):
-        label = "fact" if source in ("owner", "tool") else "agent hint, check it before acting"
-        old = " It is older than 90 days." if memory.age_days(created) > memory.OLD_DAYS else ""
-        out.append(f"Memory {_id} ({kind}, {label}{', ' + ref if ref else ''}): {' '.join(text.split())[:220]}{old}")
-    return out
+        out.append(memory_line(_id, kind, source, ref, created, text))
+    return within(out, budget_chars)
 
 
 def handoff(repo: Path, plan: dict, state: dict) -> int | None:

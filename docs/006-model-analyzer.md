@@ -38,7 +38,16 @@ prints every task type with the agent, the exact model on this machine and the r
 python scripts/orchestrate.py models
 ```
 
-prints, per task type and model, whether it is discovered, tested and authorized, and the date its bench evidence expires. Evidence older than `limits.bench_recheck_days`, or measured with another OpenCode minor or GPU, no longer counts.
+prints, per task type and model, whether it is discovered, tested and authorized, and the date its bench evidence expires. Evidence older than `limits.bench_recheck_days`, or measured with another OpenCode minor or GPU, no longer counts. A model is authorized for a task type when its coverage lists one of the bench classes that measure it, so a coding agent eligible for `fix-bug` is authorized for `edit-small`.
+
+A request can name the executor, as in "fix this bug with Colibri":
+
+```
+python scripts/orchestrate.py route edit-small --executor colibri --json
+python scripts/orchestrate.py route edit-small --executor colibri --model colibri/<id>
+```
+
+A pinned route uses that executor or is blocked, and it has no fallback. The answer names the model the executor serves, its bench evidence for the task (runs, accepted runs, timeouts, median and date) and the reason. A stopped server, a served id other than `--model`, a failed bench class or an executor the task type does not list blocks the route with that reason. The prompt hook does the same when a work request says "con Colibri", "with Ollama" or "using OpenCode". `delegate` and `runs` print the model, the input and output tokens and the seconds of each run, and a counter the executor did not report reads `n/a`. OpenCode reports no tokens, so an agent run shows the size of its task packet in characters instead.
 
 ## What is found, and what the files add
 
@@ -46,6 +55,7 @@ Nothing is counted against a fixed list. The analyzer finds models in three plac
 
 - The local Ollama. It reads `/api/tags` and `/api/show` and takes every installed model, in the catalog or not. From what Ollama reports it tells a chat model from an embedding model, and whether it takes images and tools. A model that runs on Ollama's servers (a cloud tag, or one with a remote host) is listed as remote and never treated as local. A model whose size, with room for its context, does not fit in the graphics memory plus a share of the RAM is not tested.
 - OpenCode, for the free models it serves as a coding agent. A model that `opencode models` no longer lists is reported as retired.
+- The local Colibri server, for the model it serves as a coding agent through OpenCode. A stopped server is listed as not reachable, and an id it no longer serves keeps its own bench history as "not served now". OpenCode can announce the same model as `colibri/<id>`, so the coverage keeps one record per executor, id and kind of run. Colibri's agent runs are planned only with `--local-agents`, like a local Ollama model through OpenCode, and no Ollama model stays loaded on the card while they run.
 - Each provider of `settings/providers.yml` that has an adapter, a free offer and a key in the environment. The adapter asks the provider for its models.
 
 `settings/models.yml` no longer decides which models exist. It adds what discovery cannot know: data use, a daily limit, a note, or `blocked: <reason>` to keep a model out. `settings/providers.yml` holds one entry per provider: address, the name of the environment variable with the key, cost category, how a model counts as free, what the adapter may send, data use, limits and sources. Measured results live in neither. They go to `~/.standards/bench.jsonl`, the same history `orchestrate.py bench` writes and the router reads.
@@ -151,7 +161,7 @@ Preview the night. Nothing runs:
 python scripts\analyze.py plan
 ```
 
-It prints the steps, the longest the run can take and the remote sessions it would open. One run stops by itself after 8 hours at most (`analysis.night_budget_s`). Set Windows not to sleep for the night, because a sleeping machine pauses the run.
+It prints the steps, the longest the run can take and the remote sessions it would open. Only the evidence that is missing is planned. A combination with fresh runs gets the runs it lacks, so two fresh passes get one more run. A combination that failed `limits.bench_fail_runs` fresh runs is not run again until that evidence lapses or its grader, OpenCode minor or GPU changes, because a failure counts in the pass rate too. Evidence that lapses within `limits.refresh_before_days` is measured again in full. `--runs N` measures every combination N times, for example after the weights behind an id changed. One run stops by itself after 8 hours at most (`analysis.night_budget_s`). Set Windows not to sleep for the night, because a sleeping machine pauses the run.
 
 Start it and leave:
 
@@ -169,9 +179,38 @@ python scripts\analyze.py report
 
 It writes `model-analysis-<date>.md` in `%USERPROFILE%\.standards\reports\` and prints the path. Read the proposed split, the models below the threshold with their most common failure, and what was not tested and why.
 
-The router already uses the history: among the models you allowed, it takes the one that passed and is fastest. Two things stay your decision. A new local model is used for real tasks only after you add it to `executors.ollama.prefer` in `settings/orchestration.yml`. A remote model is used only while your own check is fresh.
+The router already uses the history: among the models you allowed, it takes the one that passed and is fastest. Two things stay your decision. A new local model is used for real tasks only after you add it to `executors.ollama.prefer`, or to the list of one task type in `executors.ollama.prefer_by_task`, in `settings/orchestration.yml`. A remote model is used only while your own check is fresh.
+
+## Choosing a model per task type
+
+Three files split the work. `settings/recipes.yml` and `scripts/router.py` say what a request needs. `settings/models.yml` describes the candidates: data use, license, kind and what to try first. `settings/orchestration.yml` and `scripts/orchestrate.py` choose who runs the task.
+
+`executors.ollama.prefer_by_task` gives a task type its own order of local models. A task type without a list inherits `executors.ollama.prefer`, so a policy without the key routes as before and the bench history reads the same. A listed model is used only when it is installed, local, answers chat, can do what the task needs, has not failed the bench class of the task and, without a passing history, runs fully on the GPU. A model of kind `embedding`, `reranker` or `speech` in the catalog never gets a chat task. Being installed or being added to the catalog never makes a model a candidate: the catalog entry makes it available for a run you ask for with `analyze.py --models`.
+
+`route` lists every model it passed over under `rejected_models`, each with its reason:
+
+```
+python scripts/orchestrate.py route extract-short --mode local-only --json
+```
+
+It chooses without generating any text. Read the executor, the model, the reasons and `rejected` and `rejected_models`.
 
 `scripts\analyze-models.ps1` and `scripts/analyze-models.sh` run the same commands, for example `.\scripts\analyze-models.ps1 prepare`.
+
+## Engine pilots on the notebook
+
+What decides is how long the notebook takes to finish a correct task. A speed another project publishes only says what is worth a test. The engines of the owner's plan of 2026-11-21 are in `radar/radar.yml`: Ollama stays the daily reference, Colibri with Vulkan keeps the explicit route for short work, official llama.cpp is the first comparison, and llama.cpp-BELLS, FreeToken-Kai, ik_llama.cpp and InferSSD are pilots for one concrete problem each. KTransformers, MoE-Infinity, Slipstream, AirLLM and kimi-k3-in-c are on hold with the condition that reopens each one.
+
+Before a run, record free graphics memory, RAM, the driver and free disk space. Free the card between runs: one local measurement at a time. Fix the weights hash, the quantization, the template, the context, the output limit, the temperature and the task. Measure the cold load, the warm runs, the peak memory, the time to the first token and the seconds to an accepted result. When the model or the quantization changes, the result belongs to the whole combination. When the weights or the grader change behind the same id, record the change before mixing results.
+
+The policy asks for 3 runs at a pass rate of 0.8 within 30 days, so three tries need three passes, and a failure counts in the pass rate. Another engine is integrated only when its median improves by 15 % or more with at least the same quality, or when it finishes within the time limit a task the current setup cannot finish. The 15 % is a rule of the pilot, not of the router. The integration then adds only the winning engine and the task type it passed, off by default, with a test that the previous route still works.
+
+```
+python scripts/orchestrate.py bench --task classify --executors "ollama:qwen3.5:4b" --runs 1
+python scripts/orchestrate.py bench --task fix-bug --executors "colibri:colibri/<id>" --runs 1
+```
+
+The first completes one pending classification run. The second measures an edit with the id OpenCode recorded for Colibri. A timeout is recorded in the row.
 
 ## Gateways and boards, not connected
 

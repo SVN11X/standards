@@ -279,6 +279,58 @@ class Route(Base):
         self.assertEqual(orchestrate.privacy_class(wt, orchestrate.policy(), local)[0], "restricted")
 
 
+class TaskPreferences(Base):
+    """Model choice per task type: an available model that is approved for the task, never a speech or embedding model,
+    never a model that is only installed or only in the catalog, and the general list when a task type has none."""
+
+    CATALOG = {"models": [
+        {"id": "whisper:small", "executor": "ollama", "kind": "speech"},
+        {"id": "qwen3-embedding:0.6b", "executor": "ollama", "capabilities": ["embedding"]},
+        {"id": "granite4.1:3b", "executor": "ollama", "try_first": ["extract"]}]}
+
+    def setUp(self):
+        super().setUp()
+        names = ["granite4.1:3b", "qwen2.5:7b", "qwen3-embedding:0.6b", "qwen3.5:4b", "qwen3.5:9b", "whisper:small"]
+        self.caps = {"ollama": {"up": True, "models": names, "loaded": [], "remote": []}}
+
+    def route(self, task, conf=None):
+        return orchestrate.route(task, self.tmp, conf=conf or orchestrate.policy(), local={}, caps=self.caps, mode="local-only",
+                                 catalog=self.CATALOG, cool={})
+
+    def test_extraction_picks_an_available_chat_model_and_leaves_speech_and_embeddings_out(self):
+        conf = orchestrate.policy()
+        conf["executors"]["ollama"]["prefer_by_task"]["extract-short"] = ["whisper:small", "qwen3-embedding:0.6b", "qwen3.5:4b"]
+        decision = self.route("extract-short", conf)
+        self.assertEqual((decision["executor"], decision["model"]), ("ollama", "qwen3.5:4b"))
+        passed = {item["model"]: item["why"] for item in decision["rejected_models"]}
+        self.assertIn("answers no chat", passed["whisper:small"])
+        self.assertIn("answers no chat", passed["qwen3-embedding:0.6b"])
+
+    def test_a_model_that_failed_the_class_is_passed_over_with_the_reason(self):
+        rows = [{"task": "extract", "executor": "ollama", "model": "qwen3.5:4b", "seconds": 4, "verified": False,
+                 "date": dt.datetime.now(dt.timezone.utc).isoformat(), "grader": bench_tasks.grader_version("extract")}] * 2
+        orchestrate.bench_file().write_text("".join(json.dumps(r) + "\n" for r in rows), encoding="utf-8")
+        decision = self.route("extract-short")
+        self.assertEqual(decision["model"], "qwen2.5:7b")
+        self.assertIn("failed the bench class extract (0 of 2 runs accepted)",
+                      next(i["why"] for i in decision["rejected_models"] if i["model"] == "qwen3.5:4b"))
+
+    def test_a_model_only_installed_or_only_in_the_catalog_is_never_chosen(self):
+        for task in ("extract-short", "classify", "docs-small", "web-copy"):
+            decision = self.route(task)
+            self.assertNotEqual(decision["model"], "granite4.1:3b", task)
+            self.assertNotIn("granite4.1:3b", [i["model"] for i in decision["rejected_models"]], task)
+
+    def test_without_a_list_of_its_own_a_task_type_inherits_the_general_one(self):
+        oconf = orchestrate.policy()["executors"]["ollama"]
+        self.assertEqual(orchestrate.preferred_models(oconf, "docs-small"), (oconf["prefer"], "executors.ollama.prefer"))
+        self.assertEqual(orchestrate.preferred_models(oconf, "extract-short")[1], "executors.ollama.prefer_by_task.extract-short")
+        old = orchestrate.policy()
+        del old["executors"]["ollama"]["prefer_by_task"]
+        self.assertEqual(orchestrate.preferred_models(old["executors"]["ollama"], "extract-short")[0], old["executors"]["ollama"]["prefer"])
+        self.assertEqual(self.route("extract-short", old)["model"], "qwen3.5:4b")
+
+
 class CostAndData(Base):
     caps = {"ollama": {"up": False}, "opencode": {"path": "/bin/opencode"}}
     ollama = {"up": True, "models": ["qwen3.5:4b", "qwen3-embedding:0.6b"], "loaded": [], "remote": []}
@@ -442,6 +494,14 @@ class CostAndData(Base):
                                                   command=[sys.executable, "-c", "raise SystemExit(9)"])
         self.assertEqual(unchecked["state"], "blocked")
         self.assertNotIn("worktree", unchecked)
+
+    def test_a_verified_delegation_records_the_size_of_its_change(self):
+        repo = self.repo()
+        edit = "import pathlib; pathlib.Path('a.txt').write_text('one\\ntwo\\nthree\\n')"
+        run = orchestrate.delegate_opencode(repo, "Change a.txt", ["a.txt"], f'"{sys.executable}" -c "pass"',
+                                            model="opencode/glm-5.3-flash-free", local=self.local(), command=[sys.executable, "-c", edit])
+        self.assertEqual(run["state"], "verified")
+        self.assertEqual(run["size"], {"files": 1, "added": 2, "removed": 0})
 
     def test_table_names_every_task(self):
         conf = orchestrate.policy()

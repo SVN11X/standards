@@ -96,3 +96,4 @@ options:
       cad:
         rules:
           - Commit the CAD source and a STEP export for each revision.
+          - Keep the STEP or STP master next to each STL made from it, and keep an STL shown on GitHub under 10 MB.

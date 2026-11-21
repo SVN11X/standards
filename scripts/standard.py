@@ -4,7 +4,7 @@
 Commands:
   init PATH --profile NAME   create a repository, or add missing files with --existing
   agents PATH                regenerate AGENTS.md, nested AGENTS.md and CLAUDE.md
-  check PATH [--pr]          check structure, intent and slop, plus the pull request with --pr
+  check PATH [--pr]          check structure, intent and slop, plus the pull request with --pr (--title, --body-file)
   templates OUT_DIR          build one template repository per profile
   package-skills OUT_DIR     bundle the skills with a pinned copy of the standard
   skills-repo OUT_DIR        build the public skills repository and its release archives
@@ -42,7 +42,7 @@ DEFAULT_OWNER = "SVN11X"
 OWNER_TODO = "TODO(owner)"
 LANGUAGES = {"en": "English", "es": "Spanish", "pt": "Portuguese", "fr": "French", "de": "German", "it": "Italian"}
 CONFIG_KEYS = ["standard", "owner", "name", "profile", "setup", "license", "content_language",
-               "github", "options", "parts", "part_options", "extra_folders", "skills"]
+               "github", "options", "parts", "part_options", "extra_folders", "skills", "guardrails"]
 
 PLACEHOLDER = re.compile(r"(?<!\$)\{\{([a-z_]+)\}\}")
 STANDARD_REF = re.compile(r"^(?P<repo>[\w.-]+/[\w.-]+)@(?P<ref>v\d+(?:\.\d+){0,2})$")
@@ -310,6 +310,18 @@ def common_context(repo: Path, config: dict) -> dict:
     }
 
 
+def guardrail_rules(config: dict) -> list[str]:
+    """The guardrails of .standard.yml as rules of AGENTS.md. The check enforces them, the lines only say so first."""
+    block = config.get("guardrails") or {}
+    lines = [f"Guardrail {rule.get('id') or rule.get('pattern')}: `{rule.get('pattern')}` may not appear in "
+             f"{', '.join(rule.get('paths') or [])}. {rule.get('why')} The check blocks it."
+             for rule in block.get("forbidden") or []]
+    lines += [f"Guardrail boundary: files in {rule.get('module')} import, inside this repository, only from "
+              f"{', '.join([rule.get('module'), *(rule.get('may_import') or [])])}. {rule.get('why')} The check blocks it."
+              for rule in block.get("boundaries") or []]
+    return lines
+
+
 def build_instruction_files(repo: Path, config: dict) -> dict[str, str]:
     """Return every generated instruction file, keyed by its path relative to the repository."""
     base = base_config()
@@ -327,7 +339,7 @@ def build_instruction_files(repo: Path, config: dict) -> dict[str, str]:
                                  for p, pp in parts.items()),
         "goal_summary": "\n".join(goal_summary(repo)),
         "content_language_rule": content_language_rule(profile["name"], str(config.get("content_language", "en"))),
-        "fixed_rules": bullets(list(base["fixed"]) + list(profile.get("fixed") or [])),
+        "fixed_rules": bullets(list(base["fixed"]) + list(profile.get("fixed") or []) + guardrail_rules(config)),
         "option_rules": bullets(resolved["option_rules"]) or "- None.",
         "with_reason": bullets(profile.get("with_reason") or []) or "- Nothing listed for this profile.",
         "patterns": ", ".join(profile.get("patterns") or []) or "none listed for this profile",
@@ -847,6 +859,36 @@ def check_content(repo: Path, files: list[str], report: Report) -> None:
                 report.warn(rel, f"{dashes} em dashes. Use periods and commas.")
 
 
+def check_guardrails(repo: Path, files: list[str], config: dict, report: Report) -> None:
+    """The rules the repository asked its environment to enforce: forbidden patterns and module boundaries."""
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    import guardrails
+    hits, broken = guardrails.check(repo, files, config)
+    for message in broken:
+        report.error(".standard.yml", message)
+    for where, message in hits:
+        report.error(where, message)
+
+
+# GitHub shows an STL file in its 3D viewer up to this size. See references.md.
+STL_VIEWER_MB = 10
+
+
+def check_mechanical(repo: Path, files: list[str], report: Report) -> None:
+    """An STL is a derivative: the editable STEP or STP master stays in the repository, and GitHub shows it only below 10 MB."""
+    meshes = [rel for rel in files if rel.lower().endswith(".stl")]
+    if not meshes:
+        return
+    for rel in meshes:
+        size = (repo / rel).stat().st_size
+        if size > STL_VIEWER_MB * 1024 * 1024:
+            report.warn(rel, f"{size / 1024 / 1024:.1f} MB. GitHub shows an STL up to {STL_VIEWER_MB} MB: reduce the mesh, "
+                             "or export a GLB and show it on GitHub Pages.")
+    if not any(rel.lower().endswith((".step", ".stp")) for rel in files):
+        report.warn(meshes[0], "No STEP or STP master in the repository. Keep the editable original and its source next to "
+                               "the STL made from it.")
+
+
 DOC_PATH = re.compile(r"`([\w.@-]+(?:/[\w.@-]+)*/?)`")
 
 
@@ -879,6 +921,19 @@ def check_how_it_works(repo: Path, report: Report) -> None:
         report.warn(rel, f"Names `{token}`, which does not exist. Fix the path or the explanation.")
     if re.search(r"^Status:\s*draft", text, re.I | re.M) and OWNER_TODO not in text:
         report.warn(rel, "Still marked as a draft. The owner confirms it by removing the Status line.")
+
+
+FEATURE_MAP = Path("docs") / "feature-map.md"
+
+
+def check_feature_map(repo: Path, report: Report) -> None:
+    """docs/feature-map.md is optional. When it exists, every path it names exists, so an agent that follows it
+    reaches the code and the test of the feature it changes."""
+    path = repo / FEATURE_MAP
+    if not path.exists():
+        return
+    for token in missing_doc_paths(repo, path.read_text(encoding="utf-8")):
+        report.warn(FEATURE_MAP.as_posix(), f"Names `{token}`, which does not exist. Fix the path or the row.")
 
 
 def check_decisions(repo: Path, report: Report) -> None:
@@ -920,7 +975,8 @@ def check_pull_request(report: Report) -> None:
     title = os.environ.get("PR_TITLE", "")
     body = os.environ.get("PR_BODY", "") or ""
     if not CONVENTIONAL_TITLE.match(title):
-        report.error("pull request", f"Title '{title}' does not follow Conventional Commits, "
+        report.error("pull request", f"Title '{title}' does not follow Conventional Commits: a type (feat, fix, docs, style, "
+                                     "refactor, perf, test, build, ci, chore or revert), an optional scope, a colon and a space, "
                                      "for example 'feat(api): add weather endpoint'.")
     sections = markdown_sections(body)
     for name in PR_SECTIONS:
@@ -930,7 +986,7 @@ def check_pull_request(report: Report) -> None:
             report.error("pull request", f"Section '## {name}' is empty. Write 'None' if it does not apply.")
     task = sections.get("Task", "")
     if task and not re.search(r"#\d+|https?://|\bnone\b", task, re.I):
-        report.error("pull request", "Section '## Task' must link an issue (#12) or say None.")
+        report.error("pull request", "Section '## Task' must link an issue, such as 'Closes #12', or say 'None'.")
 
 
 def run_check(repo: Path, pull_request: bool = False) -> Report:
@@ -948,10 +1004,13 @@ def run_check(repo: Path, pull_request: bool = False) -> Report:
         check_layout(files, config, profile, resolved, report)
         check_generated(repo, config, report)
         check_content(repo, files, report)
+        check_mechanical(repo, files, report)
+        check_guardrails(repo, files, config, report)
         check_github(config, report)
         check_plan(repo, report)
         check_decisions(repo, report)
         check_how_it_works(repo, report)
+        check_feature_map(repo, report)
     if pull_request:
         check_pull_request(report)
     return report
@@ -1361,7 +1420,7 @@ def skill_names() -> list[str]:
 
 
 # Scripts the skills call from the bundled copy of the standard, next to standard.py.
-BUNDLED_SCRIPTS = ("standard.py", "orchestrate.py", "verify.py", "evidence.py", "preserve.py", "adversarial.py",
+BUNDLED_SCRIPTS = ("standard.py", "guardrails.py", "orchestrate.py", "verify.py", "evidence.py", "preserve.py", "adversarial.py",
                    "safe_patch.py", "memory.py", "bench_tasks.py", "analyze.py", "providers.py",
                    # The executor loop, the planner and the router. verify.py and adversarial.py import them.
                    "execute.py", "workplan.py", "review.py", "scheduler.py", "resources.py", "plan_autopilot.py",
@@ -1483,6 +1542,61 @@ def cmd_selftest() -> int:
             if report.errors:
                 failures.append(f"{repo.name}: {report.errors}")
             first_repo = first_repo or repo
+
+        web = next(iter(sorted(root.glob("case-*-web"))), None)
+        if web is not None:
+            config = read_config(web)
+            config["guardrails"] = {"forbidden": [{"id": "no-use-effect", "pattern": r"\buseEffect\(", "paths": ["src/*.tsx"],
+                                                   "why": "Derive the state or use an event handler."}],
+                                    "boundaries": [{"module": "src/features/signup", "may_import": ["src/shared"],
+                                                    "why": "A feature reaches another only through shared."}]}
+            write_config(web, config)
+            for folder in ("signup", "billing"):
+                (web / "src" / "features" / folder).mkdir(parents=True, exist_ok=True)
+            write_text(web / "src" / "features" / "signup" / "Form.tsx",
+                       'import { total } from "../billing/total";\nuseEffect(() => {}, []);\n')
+            write_text(web / "src" / "features" / "billing" / "total.ts", "export const total = 1;\n")
+            git_add_all(web)
+            errors = [message for _, message in run_check(web).errors]
+            if not any("Guardrail no-use-effect" in m for m in errors) or not any("boundary of src/features/signup" in m for m in errors):
+                failures.append(f"guardrails should block a forbidden pattern and a crossed boundary: {errors}")
+            else:
+                print("negative case passed: guardrails block a forbidden pattern and a crossed boundary")
+            if "Guardrail boundary: files in src/features/signup" not in "\n".join(build_instruction_files(web, config).values()):
+                failures.append("the guardrails should be written into AGENTS.md")
+            shutil.rmtree(web / "src" / "features")
+            config.pop("guardrails")
+            write_config(web, config)
+            git_add_all(web)
+        write_text(first_repo / "docs" / "feature-map.md", "# Feature map\n\n| Feature | Where | Code | Test |\n| --- | --- | --- | --- |\n"
+                   "| Sign up | Home, Create account | `src/signup/` | `docs/goals.md` |\n")
+        git_add_all(first_repo)
+        if not any("Names `src/signup/`" in message for _, message in run_check(first_repo).warnings):
+            failures.append("a feature map row with a missing path should warn")
+        else:
+            print("negative case passed: feature map names a missing path")
+        (first_repo / "docs" / "feature-map.md").unlink()
+        git_add_all(first_repo)
+        cad = next((repo for repo in sorted(root.glob("case-*-hardware")) if (repo / "mechanical").is_dir()), None)
+        if cad is not None:
+            write_text(cad / "mechanical" / "top-cover.stl", "solid top\nendsolid top\n")
+            git_add_all(cad)
+            if not any("No STEP or STP master" in message for _, message in run_check(cad).warnings):
+                failures.append("an STL without a STEP master should warn")
+            else:
+                print("negative case passed: STL without its STEP master")
+            write_text(cad / "mechanical" / "top-cover.step", "ISO-10303-21;\n")
+            write_text(cad / ".gitattributes", "*.stl filter=lfs diff=lfs merge=lfs -text\n")
+            with (cad / "mechanical" / "top-cover.stl").open("r+b") as handle:
+                handle.truncate((STL_VIEWER_MB + 1) * 1024 * 1024)
+            git_add_all(cad)
+            warnings = [message for _, message in run_check(cad).warnings]
+            if not any("GitHub shows an STL up to" in message for message in warnings) or any("No STEP" in m for m in warnings):
+                failures.append("an STL over the GitHub viewer limit should warn, with its STEP master present")
+            else:
+                print("negative case passed: STL over the GitHub viewer limit")
+        else:
+            failures.append("the hardware case with mechanical cad has no mechanical/ folder")
 
         def expect_error(label: str, fragment: str, pull_request: bool = False) -> None:
             report = run_check(first_repo, pull_request=pull_request)
@@ -1758,12 +1872,14 @@ def cmd_selftest() -> int:
         allowed = guard.decide({"tool_input": {"command": "git status"}, "cwd": str(first_repo)})
         os.environ["STANDARD_PY"] = str(STANDARD_ROOT / "scripts" / "standard.py")
         (first_repo / "loose_file.py").write_text("x = 1\n", encoding="utf-8")
-        gate = guard.decide({"tool_input": {"command": "git commit -m 'feat: x'"}, "cwd": str(first_repo)})
+        gate = guard.decide({"tool_input": {"command": "git add -A && git commit -m 'feat: x'"}, "cwd": str(first_repo)})
+        # A loose file the owner left outside the commit is not the commit's error.
+        unrelated = guard.decide({"tool_input": {"command": "git add README.md && git commit -m 'docs: x'"}, "cwd": str(first_repo)})
         (first_repo / "loose_file.py").unlink()
         open_gate = guard.decide({"tool_input": {"command": "git commit -m 'feat: x'"}, "cwd": str(first_repo)})
         decisions = [(asked or {}).get("hookSpecificOutput", {}).get("permissionDecision"), allowed,
-                     (gate or {}).get("hookSpecificOutput", {}).get("permissionDecision"), open_gate]
-        if decisions != ["ask", None, "deny", None]:
+                     (gate or {}).get("hookSpecificOutput", {}).get("permissionDecision"), unrelated, open_gate]
+        if decisions != ["ask", None, "deny", None, None]:
             failures.append(f"guard hook decisions are wrong: {decisions}")
         else:
             print("positive case passed: guard hook")
@@ -1832,6 +1948,8 @@ def main(argv: list[str] | None = None) -> int:
     check = commands.add_parser("check", help="check a repository")
     check.add_argument("path")
     check.add_argument("--pr", action="store_true", help="also check PR_TITLE and PR_BODY")
+    check.add_argument("--title", help="with --pr: the pull request title to check before opening it")
+    check.add_argument("--body-file", type=Path, help="with --pr: a file with the pull request body to check before opening it")
 
     templates = commands.add_parser("templates", help="build template repositories")
     templates.add_argument("out_dir")
@@ -1897,6 +2015,10 @@ def main(argv: list[str] | None = None) -> int:
             print("\n".join(f"updated {rel}" for rel in written) or "Already up to date.")
             return 0
         if args.command == "check":
+            if args.title is not None:
+                os.environ["PR_TITLE"] = args.title
+            if args.body_file is not None:
+                os.environ["PR_BODY"] = args.body_file.read_text(encoding="utf-8")
             return run_check(Path(args.path).resolve(), pull_request=args.pr).print()
         if args.command == "templates":
             cmd_templates(Path(args.out_dir).resolve())

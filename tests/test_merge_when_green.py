@@ -25,8 +25,8 @@ GREEN = [{"name": "check / standard", "bucket": "pass"}, {"name": "docs", "bucke
 class FakeGh:
     """Answers gh like GitHub would and records every call."""
 
-    def __init__(self, pr=None, files="src/app.py\n", checks=None):
-        self.pr, self.files, self.calls = {**PR, **(pr or {})}, files, []
+    def __init__(self, pr=None, files="src/app.py\n", checks=None, patch=""):
+        self.pr, self.files, self.patch, self.calls = {**PR, **(pr or {})}, files, patch, []
         self.checks = list(checks) if checks is not None else [GREEN]
 
     def __call__(self, args):
@@ -34,7 +34,7 @@ class FakeGh:
         if args[:2] == ["pr", "view"]:
             return json.dumps(self.pr)
         if args[:2] == ["pr", "diff"]:
-            return self.files
+            return self.files if "--name-only" in args else self.patch
         if args[:2] == ["pr", "checks"]:
             rows = self.checks.pop(0) if len(self.checks) > 1 else self.checks[0]
             if rows is None:
@@ -47,7 +47,8 @@ class FakeGh:
 
 
 def merge(fake, **kw):
-    return mwg.merge("7", "o/r", run=fake, setting=kw.pop("setting", "when-green"), sleep=lambda s: None, **kw)
+    return mwg.merge("7", "o/r", run=fake, setting=kw.pop("setting", "when-green"), workflows=kw.pop("workflows", "owner"),
+                     sleep=lambda s: None, **kw)
 
 
 class Setting(unittest.TestCase):
@@ -115,14 +116,36 @@ class Conditions(unittest.TestCase):
     def test_closed_conflicting_and_owner_only_changes_refuse(self):
         cases = ((FakeGh(pr={"state": "MERGED"}), "not open"),
                  (FakeGh(pr={"mergeable": "CONFLICTING"}), "merge conflict"),
-                 (FakeGh(files="src/a.py\n.github/workflows/ci.yml\n"), "workflows, deploy or secrets"),
-                 (FakeGh(files=".env.production\n"), "workflows, deploy or secrets"),
-                 (FakeGh(files="infra/main.tf\n"), "workflows, deploy or secrets"),
-                 (FakeGh(files="wrangler.toml\n"), "workflows, deploy or secrets"))
+                 (FakeGh(files="src/a.py\n.github/workflows/ci.yml\n"), "workflow files, which the owner keeps"),
+                 (FakeGh(files=".env.production\n"), "deploy or secrets"),
+                 (FakeGh(files="infra/main.tf\n"), "deploy or secrets"),
+                 (FakeGh(files="wrangler.toml\n"), "deploy or secrets"))
         for fake, reason in cases:
             with self.subTest(reason), self.assertRaisesRegex(mwg.Refused, reason):
                 merge(fake)
             self.assertEqual(fake.merged(), [])
+
+    def test_workflows_merge_only_when_the_owner_allowed_them_and_they_reach_no_secret(self):
+        safe = "diff --git a/.github/workflows/ci.yml b/.github/workflows/ci.yml\n+++ b/.github/workflows/ci.yml\n" \
+               "+      - run: python -m unittest\n"
+        fake = FakeGh(files=".github/workflows/ci.yml\n", patch=safe)
+        self.assertTrue(merge(fake, workflows="when-green")["merged"])
+        for line in ("+    permissions: {contents: write}", "+        env: {TOKEN: ${{ secrets.DEPLOY }}}", "+on: pull_request_target"):
+            risky = FakeGh(files=".github/workflows/ci.yml\n", patch=safe + line + "\n")
+            with self.subTest(line), self.assertRaisesRegex(mwg.Refused, "reaches secrets, write permissions"):
+                merge(risky, workflows="when-green")
+            self.assertEqual(risky.merged(), [])
+        with self.assertRaisesRegex(mwg.Refused, "deploy or secrets"):
+            merge(FakeGh(files=".github/workflows/ci.yml\nwrangler.toml\n", patch=safe), workflows="when-green")
+
+    def test_the_workflow_setting_is_read_without_pyyaml(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "local.yml"
+            path.write_text("autopilot:\n  merge: when-green\n  workflows: when-green\n", encoding="utf-8")
+            self.assertEqual(mwg.workflow_setting(path), "when-green")
+            with mock.patch.dict(sys.modules, {"yaml": None}):
+                self.assertEqual(mwg.workflow_setting(path), "when-green")
+            self.assertEqual(mwg.workflow_setting(Path(tmp) / "missing.yml"), "owner")
 
     def test_a_draft_is_marked_ready_and_a_dry_run_merges_nothing(self):
         fake = FakeGh(pr={"isDraft": True})

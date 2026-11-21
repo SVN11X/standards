@@ -104,6 +104,9 @@ MESSAGE_NOUN = re.compile(r"\b(mensaje|mensajes|message|messages|aviso|nota|note
 SESSION_OBJECT = re.compile(r"\b(sesión|sesion|sesiones|session|sessions|peer|peers|peerbox|opencode|agente|agentes|agent|agents)\b")
 CONTINUE = re.compile(r"^(también|tambien|además|ademas|y |pero |mejor |en vez|no,|sí,|si,|also|and |but |instead|actually|wait)\b")
 THIRD_PARTY = ("remote",)
+# A request that names who should do the work, such as "con Colibri". The router then says which model that executor
+# serves, the bench evidence it has and whether it may do the task, and never offers another executor in its place.
+EXECUTOR_NAME = re.compile(r"\b(?:con|usando|using|with|via|en|in|por|by)\s+(colibri|ollama|opencode)\b", re.IGNORECASE)
 
 
 def home() -> Path:
@@ -593,6 +596,7 @@ def decide(prompt: str, cwd: Path, client: str = "claude", session: str | None =
         "privacy": limits.get("privacy"), "cost_mode": limits.get("cost_mode"),
         "reused": ["the fingerprint saved for this commit"] if fp.get("cached") else [],
         "questions": questions, "notes": notes, "owner": owner, "handoff": handoff,
+        "pinned_executor": pinned_executor(prompt, root, intent),
         "task": {"key": None, "state": "none"},
     }
     if save:
@@ -600,6 +604,35 @@ def decide(prompt: str, cwd: Path, client: str = "claude", session: str | None =
         if decision["task"]["state"] == "updated":
             decision["notes"].append("a follow-up of the task this session already has here. No new task was opened")
     return decision
+
+
+def light_capabilities() -> dict:
+    """What the router may read at every prompt: the saved capabilities, else a quick look at the local servers only."""
+    import orchestrate
+    caps = orchestrate.cached_capabilities(max_age_s=86400)
+    if caps:
+        return caps
+    conf = orchestrate.policy()["executors"]
+    return {"opencode": {"path": shutil.which("opencode")}, "colibri": orchestrate.detect_colibri(conf["colibri"], timeout=1.0),
+            "ollama": orchestrate.detect_ollama(conf["ollama"], timeout=1.0)}
+
+
+def pinned_executor(prompt: str, root: Path, intent: str, caps: dict | None = None) -> dict | None:
+    """The executor a work request names, the model it serves, its evidence and whether it may do the task."""
+    match = EXECUTOR_NAME.search(first_sentence(prompt))
+    if intent != "work" or not match:
+        return None
+    name = match.group(1).lower()
+    try:
+        import orchestrate
+        decision = orchestrate.route("edit-small", root, caps=caps or light_capabilities(), pin=name)
+    except Exception as error:  # noqa: BLE001 (the pin is reported as unknown, never replaced by another executor)
+        return {"executor": name, "task": "edit-small", "model": None, "ok": False, "why": f"could not be checked: {error}"[:200],
+                "evidence": None}
+    ok = decision["executor"] == name
+    why = decision["reasons"][0] if ok else "; ".join(item["why"] for item in decision["rejected"]) or decision["reasons"][-1]
+    return {"executor": name, "task": "edit-small", "model": decision.get("model") or (decision.get("evidence") or {}).get("model"),
+            "ok": ok, "why": why[:300], "evidence": (decision.get("evidence") or {}).get("text")}
 
 
 def render(decision: dict, limit: int = DEFAULTS["max_context_chars"]) -> str:
@@ -655,6 +688,11 @@ def render(decision: dict, limit: int = DEFAULTS["max_context_chars"]) -> str:
                      "Lookups to repo-scout. Parts that `orchestrate.py route --all --repo .` gives to OpenCode or Ollama "
                      "to delegate-runner. A failed check to ci-fixer."
                      + "".join(f" {line}" for line in fitting_agents(decision)))
+    pin = decision.get("pinned_executor")
+    if pin:
+        lines.append(f"The request asks for {pin['executor']}: model {pin['model'] or 'unknown'}, bench evidence "
+                     f"{pin['evidence'] or 'not read'}. " + (f"It may do {pin['task']}: {pin['why']}." if pin["ok"] else
+                     f"Blocked for {pin['task']}: {pin['why']}. Say so and use no other executor in its place."))
     if decision["leaves_machine"]:
         lines.append("Leaves the machine: " + "; ".join(decision["leaves_machine"]) + ".")
     for note in decision["notes"]:

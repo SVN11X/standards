@@ -132,8 +132,15 @@ limits:
 executors:
   ollama:
     url: http://127.0.0.1:11434
-    # Chat models in order of preference. A model only counts when it is installed.
+    # Chat models in order of preference. A model only counts when it is installed. Being installed or listed in
+    # settings/models.yml never makes a model a candidate: only these lists do.
     prefer: [qwen3.5:4b, qwen2.5:7b, qwen3.5:9b]
+    # Own order for a task type. A task type not listed here inherits `prefer`. The owner's plan of 2026-11-21 keeps
+    # qwen3.5:4b for short tasks with qwen2.5:7b to compare, and qwen3.5:9b for plans (planning.local_model).
+    prefer_by_task:
+      classify: [qwen3.5:4b, qwen2.5:7b]
+      summarize-short: [qwen3.5:4b, qwen2.5:7b]
+      extract-short: [qwen3.5:4b, qwen2.5:7b]
     # A model split between GPU and CPU was several times slower on a 6 GB card. Below this share it is used
     # only when its own bench history passes for the task.
     min_gpu_share: 0.9
@@ -214,11 +221,28 @@ concurrency:
   # Seconds a ready unit may wait for a slot that something outside the plan holds before it is blocked.
   stall_s: 900
 
+# Meaning search of scripts/memory.py and scripts/recall.py, added to the FTS5 word search. Vectors come from the local
+# Ollama only. min_similarity is a starting value to tune with `memory.py eval`, not a measurement.
+memory:
+  model: qwen3-embedding:0.6b
+  min_similarity: 0.5
+  candidates: 10
+  rrf_k: 60
+
+# The owner's remote VM of scripts/workqueue.py, such as an Oracle Cloud A1 node. It is another machine, so only
+# repositories of these privacy classes enter its queue, and nothing does in local-only mode. lease_s is how long a
+# worker holds a claimed task before it expires and waits for a check.
+remote_node:
+  allow_classes: [personal-public]
+  lease_s: 1800
+
 # A model or program that fails with one of these codes is skipped until the cooldown (seconds) ends.
 # The state lives in ~/.standards/health.json. A later success clears it. Colibri is never replaced by another
 # model: its cooldown blocks Colibri tasks and the router offers no fallback for them.
+# no_change: the agent ended without error and wrote nothing. Each failure in a row doubles the cooldown, up to max_cooldown_s.
 health:
-  cooldown_s: {rate_limit: 3600, timeout: 900, unavailable: 600, auth: 86400}
+  cooldown_s: {rate_limit: 3600, timeout: 900, unavailable: 600, auth: 86400, no_change: 1800}
+  max_cooldown_s: 86400
 
 # The night run of scripts/analyze.py. It tests what is installed and allowed, one local model at a time.
 analysis:

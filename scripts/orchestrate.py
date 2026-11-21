@@ -910,7 +910,9 @@ def model_states(found: list[dict], conf: dict, now: dt.datetime | None = None) 
         for record in sorted(found, key=lambda r: (str(r.get("executor")), str(r.get("model")))):
             key = (record.get("executor"), record.get("model"))
             evidence = proven.get(key)
-            authorized = record.get("status") == "eligible" and task in (record.get("tasks") or [])
+            # A coverage record lists bench classes, such as fix-bug. A task type counts when one of its classes is there.
+            classes = {task, *(conf.get("proof", {}).get(task) or [])}
+            authorized = record.get("status") == "eligible" and bool(classes & set(record.get("tasks") or []))
             if not (evidence or authorized):
                 continue
             expires = None
@@ -940,6 +942,41 @@ def model_states(found: list[dict], conf: dict, now: dt.datetime | None = None) 
     return rows
 
 
+def na(value) -> str:
+    """A counter a provider did not report is shown as n/a, never as zero."""
+    return "n/a" if value is None or value == "" else str(value)
+
+
+def evidence(executor: str, model: str | None, classes: list[str], conf: dict) -> list[dict]:
+    """The fresh bench runs of one model in these classes, one summary per class, with its timeouts counted.
+    An empty list means nobody measured the model in them, which is not a failure."""
+    rows = [row for row in fresh_rows(bench_rows(), conf["limits"].get("bench_recheck_days"), hardware())
+            if row.get("executor") == executor and row.get("model") == model and row.get("task") in classes]
+    graded = current_rows(rows)
+    found = []
+    for row in summarize_bench(rows):
+        found.append({"class": row["task"], "runs": row["runs"], "accepted": round(row["pass_rate"] * row["runs"]),
+                      "p50_s": row["p50_s"], "last": str(row.get("last") or "")[:10] or None,
+                      "timeouts": sum(1 for r in graded if r.get("task") == row["task"] and r.get("timeout"))})
+    return sorted(found, key=lambda item: classes.index(item["class"]))
+
+
+def evidence_text(items: list[dict], conf: dict) -> str:
+    if not items:
+        return "no bench run yet"
+    needed = conf["limits"]["bench_min_runs"]
+    return "; ".join(f"{item['class']}: {item['accepted']} of {item['runs']} runs accepted ({needed} needed), "
+                     f"{item['timeouts']} timed out, median {na(item['p50_s'])} s, last {na(item['last'])}" for item in items)
+
+
+def usage_text(usage: dict | None) -> str:
+    """Model, tokens in and out and time of one run. What the executor did not report reads n/a."""
+    usage = usage or {}
+    return (f"model {na(usage.get('model'))}, input {na(usage.get('input_tokens'))} tokens "
+            f"({na(usage.get('input_chars'))} characters), output {na(usage.get('output_tokens'))} tokens, "
+            f"{na(usage.get('seconds'))} s")
+
+
 def is_installed(model: str | None, info: dict) -> bool:
     names = info.get("models") or []
     return bool(model) and (model in names or f"{model}:latest" in names)
@@ -953,11 +990,17 @@ def model_can(model: str, need: str, info: dict, catalog: dict | None) -> bool:
     return need in ((catalog_entry("ollama", model, catalog) or {}).get("capabilities") or [])
 
 
+# Kinds of model in settings/models.yml that answer no chat: they search, rank or speak, and never get a chat task.
+NOT_CHAT = ("embedding", "reranker", "speech")
+
+
 def is_embedding(model: str, oconf: dict, info: dict, catalog: dict | None = None) -> bool:
+    """True for any model that answers no chat: an embedding, a reranker or a speech model."""
     reported = (info.get("capabilities") or {}).get(model)
     if reported and "completion" not in reported:
         return True
-    return model in oconf.get("never_chat", []) or model_can(model, "embedding", info, catalog)
+    kind = (catalog_entry("ollama", model, catalog) or {}).get("kind")
+    return model in oconf.get("never_chat", []) or kind in NOT_CHAT or model_can(model, "embedding", info, catalog)
 
 
 def fits_machine(size: int | None, caps: dict, conf: dict) -> tuple[bool | None, str]:
@@ -995,7 +1038,9 @@ def classify_ollama(conf: dict, caps: dict, catalog: dict | None = None) -> list
             if reported:
                 return need in reported
             return True if need in stated else None
-        if reported:
+        if entry.get("kind") in NOT_CHAT:
+            embedding = True
+        elif reported:
             embedding = "completion" not in reported
         else:
             embedding = name in oconf.get("never_chat", []) or "embedding" in stated or "embed" in name.lower()
@@ -1003,7 +1048,8 @@ def classify_ollama(conf: dict, caps: dict, catalog: dict | None = None) -> list
         fits, memory = (None, "runs on a remote host") if remote else fits_machine(size, caps, conf)
         found.append({"provider": "ollama-cloud" if remote else "ollama-local", "model": name,
                       "endpoint": (entry.get("remote_host") or "a remote host behind " + url) if remote else url,
-                      "kind": "embedding" if embedding else "chat", "remote": remote, "in_catalog": bool(entry),
+                      "kind": (entry.get("kind") if entry.get("kind") in NOT_CHAT else "embedding") if embedding else "chat",
+                      "remote": remote, "in_catalog": bool(entry),
                       "vision": can("vision"), "tools": can("tools"), "reported": bool(reported), "size": size,
                       "parameter_size": ((info.get("details") or {}).get(name) or {}).get("parameter_size"),
                       "context": ((info.get("details") or {}).get(name) or {}).get("context") or entry.get("context"),
@@ -1011,23 +1057,55 @@ def classify_ollama(conf: dict, caps: dict, catalog: dict | None = None) -> list
     return found
 
 
-def pick_ollama_model(oconf: dict, info: dict, measured: dict | None = None, needs: list[str] | None = None,
-                      proven: bool = False, catalog: dict | None = None) -> tuple[str | None, str]:
-    """A preferred chat model that is installed, local, able to do the task and not split with the CPU.
+def preferred_models(oconf: dict, task: str | None) -> tuple[list[str], str]:
+    """The Ollama models a task type may use, in order, and where the list comes from. A task type without its own
+    list in `prefer_by_task` inherits `prefer`, so a policy without the key behaves as before."""
+    own = ((oconf.get("prefer_by_task") or {}).get(task) or []) if task else []
+    return (list(own), f"executors.ollama.prefer_by_task.{task}") if own else (list(oconf.get("prefer", [])), "executors.ollama.prefer")
 
-    A model with a passing bench history for the task goes first, the fastest one. A split model counts only with that history.
+
+def pick_ollama_model(oconf: dict, info: dict, measured: dict | None = None, needs: list[str] | None = None,
+                      proven: bool = False, catalog: dict | None = None, task: str | None = None,
+                      failed: dict | None = None, skipped: list | None = None) -> tuple[str | None, str]:
+    """A preferred chat model that is installed, local, able to do the task, not split with the CPU and not failed.
+
+    A model with a passing bench history for the task goes first, the fastest one. A split model counts only with that
+    history. A model that failed the bench class of the task is refused, a model nobody measured is not. Only the
+    models of the policy's lists are candidates: a model that is only installed or only in the catalog never is.
+    `skipped` collects (model, reason) for every listed model that was passed over.
     """
     loaded = {m["name"]: m for m in info.get("loaded") or []}
     measured = measured or {}
+    failed = failed or {}
+    skipped = skipped if skipped is not None else []
     usable = []
-    for model in oconf.get("prefer", []):
-        if not is_installed(model, info) or model in (info.get("remote") or []) or is_embedding(model, oconf, info, catalog):
+    prefer, _ = preferred_models(oconf, task)
+    for model in prefer:
+        if not is_installed(model, info):
+            skipped.append((model, "not installed"))
             continue
-        if any(not model_can(model, need, info, catalog) for need in needs or []):
+        if model in (info.get("remote") or []):
+            skipped.append((model, "runs on a remote host"))
+            continue
+        if is_embedding(model, oconf, info, catalog):
+            skipped.append((model, "answers no chat: an embedding, reranker or speech model"))
+            continue
+        lacking = [need for need in needs or [] if not model_can(model, need, info, catalog)]
+        if lacking:
+            skipped.append((model, f"cannot do {', '.join(lacking)}"))
             continue
         timed = measured.get(("ollama", model))
+        fail = failed.get(("ollama", model))
+        if fail and not timed:
+            skipped.append((model, f"failed the bench class {fail['task']} ({round(fail['pass_rate'] * fail['runs'])} of "
+                                   f"{fail['runs']} runs accepted)"))
+            continue
         share = (loaded.get(model) or {}).get("gpu_share")
-        if not timed and (proven or (share is not None and share < oconf.get("min_gpu_share", 0))):
+        if not timed and proven:
+            skipped.append((model, "has not passed the bench class of this task"))
+            continue
+        if not timed and share is not None and share < oconf.get("min_gpu_share", 0):
+            skipped.append((model, f"runs {round((1 - share) * 100)}% on the CPU and has no passing bench history"))
             continue
         usable.append((model, timed, share))
     timed_ones = [item for item in usable if item[1]]
@@ -1093,10 +1171,12 @@ def record_health(executor: str, model: str | None, code: str | None, conf: dict
                 return
         else:
             at = at or dt.datetime.now(dt.timezone.utc)
-            seconds = ((conf.get("health") or {}).get("cooldown_s") or {}).get(code, 0)
+            health = conf.get("health") or {}
+            count = int((data.get(key) or {}).get("count", 0)) + 1
+            # Each failure in a row doubles the rest, so a model that keeps failing stops costing a full timeout per task.
+            seconds = min(((health.get("cooldown_s") or {}).get(code, 0)) * 2 ** (count - 1), health.get("max_cooldown_s", 86400))
             data[key] = {"code": code, "at": at.replace(microsecond=0).isoformat(),
-                         "until": (at + dt.timedelta(seconds=seconds)).replace(microsecond=0).isoformat(),
-                         "count": int((data.get(key) or {}).get("count", 0)) + 1}
+                         "until": (at + dt.timedelta(seconds=seconds)).replace(microsecond=0).isoformat(), "count": count}
         write_json(health_file(), data)
 
 
@@ -1166,10 +1246,13 @@ def pick_opencode_model(models, repo, conf, local, caps, measured, mode, proven,
 
 
 def eligible(candidate, task, repo, input_chars, conf, local, caps, measured=None, mode=None, proven=False,
-             catalog=None, cool=None) -> tuple[bool, str, str | None]:
-    """Whether a candidate may do the task, why, and with which model. Cost and privacy go through gate()."""
+             catalog=None, cool=None, model=None, skipped=None) -> tuple[bool, str, str | None]:
+    """Whether a candidate may do the task, why, and with which model. Cost and privacy go through gate().
+    `model` pins one model: the candidate then uses that one or refuses with the reason, never another.
+    `skipped` collects the models of the candidate that were passed over, each with its reason."""
     measured = measured or {}
     cool = cool or {}
+    pinned = model
 
     def cooled(executor, model):
         entry = cool.get((executor, model or ""))
@@ -1184,7 +1267,13 @@ def eligible(candidate, task, repo, input_chars, conf, local, caps, measured=Non
             return False, "Ollama is not running", None
         if input_chars > conf["limits"]["ollama_max_input_chars"]:
             return False, f"input of {input_chars} characters is too large for a small local model", None
-        model, note = pick_ollama_model(oconf, info, measured, (conf.get("needs") or {}).get(task), proven, catalog)
+        if pinned:
+            oconf = {**oconf, "prefer": [pinned], "prefer_by_task": {}}
+        passed_over: list = []
+        model, note = pick_ollama_model(oconf, info, measured, (conf.get("needs") or {}).get(task), proven, catalog,
+                                        task=task, failed=failed_models(task, conf), skipped=passed_over)
+        if skipped is not None:
+            skipped += [{"executor": "ollama", "model": name, "why": why} for name, why in passed_over]
         if not model:
             return False, note, None
         if cooled("ollama", model):
@@ -1197,7 +1286,12 @@ def eligible(candidate, task, repo, input_chars, conf, local, caps, measured=Non
             return False, "OpenCode is not installed, and it is what runs Colibri's model", None
         if not info.get("up") or not info.get("models"):
             return False, "Colibri is not running (python scripts/colibri.py ensure)", None
-        model = f"colibri/{info['models'][0]}"
+        served = [f"colibri/{name}" for name in info["models"]]
+        wanted = f"colibri/{pinned}" if pinned and not pinned.startswith("colibri/") else pinned
+        if wanted and wanted not in served:
+            return False, (f"Colibri serves {', '.join(served)}, not {wanted}. Each id keeps its own bench evidence, "
+                           "so no other model is used"), None
+        model = wanted or served[0]
         if cooled("colibri", model):
             return False, cooled("colibri", model), None
         stats = measured.get(("colibri", model))
@@ -1216,6 +1310,12 @@ def eligible(candidate, task, repo, input_chars, conf, local, caps, measured=Non
         # Local Ollama models that passed the bench of this task also run through OpenCode, with no remote call.
         local_proven = [m for (e, m) in measured if e == "opencode" and m.startswith("ollama/")]
         models = [*checked_free_models(local, conf), *[m for m in local_proven if m not in checked_free_models(local, conf)]]
+        if pinned:
+            if pinned.startswith("colibri/"):
+                return False, f"{pinned} is served by Colibri: pin the colibri executor", None
+            models = [pinned] if pinned in models or pinned.startswith("ollama/") else []
+            if not models:
+                return False, f"the owner has not checked {pinned} as free (orchestrate.py consent --free-model {pinned})", None
         if not models:
             return False, "no free model checked by the owner in the last days (local.yml free_models)", None
         return pick_opencode_model(models, repo, conf, local, caps, measured, mode, proven, catalog, cool)
@@ -1251,8 +1351,11 @@ def eligible(candidate, task, repo, input_chars, conf, local, caps, measured=Non
 
 def route(task: str, repo: Path, risk: str = "green", files: int = 1, input_chars: int = 0,
           conf: dict | None = None, local: dict | None = None, caps: dict | None = None, mode: str | None = None,
-          catalog: dict | None = None, cool: dict | None = None) -> dict:
-    """Hard limits first (a program, cost, privacy, capability, proof), then the fastest candidate that passed them."""
+          catalog: dict | None = None, cool: dict | None = None, pin: str | None = None, model: str | None = None) -> dict:
+    """Hard limits first (a program, cost, privacy, capability, proof), then the fastest candidate that passed them.
+
+    `pin` names the executor a request asked for, such as "with Colibri", and `model` one exact model. A pinned
+    request uses that executor or is blocked with the reason, and it gets no fallback."""
     conf = conf or policy()
     local = local if local is not None else local_config()
     caps = caps or cached_capabilities() or doctor(conf=conf)
@@ -1262,7 +1365,7 @@ def route(task: str, repo: Path, risk: str = "green", files: int = 1, input_char
     cls, cls_source = privacy_class(repo, conf, local)
     rule = (conf.get("risk") or {}).get(risk) or {}
     decision = {"task": task, "risk": risk, "mode": mode_name, "privacy": cls, "review": rule.get("review", "checks"),
-                "executor": None, "model": None, "reasons": [], "rejected": [], "fallbacks": []}
+                "executor": None, "model": None, "reasons": [], "rejected": [], "rejected_models": [], "fallbacks": [], "pinned": pin}
     known = task in conf["tasks"]
     if known and task in TOOL_TASKS:
         decision["executor"] = "tools"
@@ -1273,6 +1376,15 @@ def route(task: str, repo: Path, risk: str = "green", files: int = 1, input_char
         decision["reasons"].append("planner work: the owner asks Claude directly")
         return decision
     candidates = list(conf["tasks"][task]) if known else list(conf.get("unknown_task") or [])
+    if pin:
+        if pin not in candidates:
+            decision["executor"] = "blocked"
+            decision["reasons"].append(f"the request asks for {pin}, and settings/orchestration.yml does not list {pin} for {task} "
+                                       f"(it lists {', '.join(candidates) or 'nobody'}). No other executor was chosen")
+            return decision
+        candidates = [pin]
+        if pin == "colibri" and model and not model.startswith("colibri/"):
+            model = f"colibri/{model}"
     if not candidates:
         decision["executor"] = "blocked"
         decision["reasons"].append(f"task type {task!r} has no candidate executor: "
@@ -1291,16 +1403,22 @@ def route(task: str, repo: Path, risk: str = "green", files: int = 1, input_char
     cool = cooling_set() if cool is None else cool
     for candidate in candidates:
         needs_proof = proven
-        ok, why, model = eligible(candidate, task, repo, input_chars, conf, local, caps, measured, mode, needs_proof, catalog, cool)
+        ok, why, chosen = eligible(candidate, task, repo, input_chars, conf, local, caps, measured, mode, needs_proof, catalog, cool,
+                                   model=model if pin else None, skipped=decision["rejected_models"])
+        if pin:
+            served = (caps.get("colibri") or {}).get("models") or []
+            seen = chosen or model or (f"colibri/{served[0]}" if candidate == "colibri" and served else None)
+            items = evidence(candidate, seen, (classes or conf.get("proof", {}).get(task) or []), conf) if seen else []
+            decision["evidence"] = {"model": seen, "runs": items, "text": evidence_text(items, conf)}
         if ok and decision["executor"]:
             # Later candidates that also qualify. A Colibri task has none: it never moves to another model on its own.
             if decision["executor"] != "colibri" and candidate != "colibri":
-                decision["fallbacks"].append({"executor": candidate, "model": model})
+                decision["fallbacks"].append({"executor": candidate, "model": chosen})
             continue
         if ok:
-            decision.update(executor=candidate, model=model)
+            decision.update(executor=candidate, model=chosen)
             decision["reasons"].append(why)
-            stats = measured.get((candidate, model))
+            stats = measured.get((candidate, chosen))
             if stats:
                 decision["reasons"].append(f"measured on this machine: {stats['runs']} runs, pass rate {stats['pass_rate']}, "
                                            f"p50 {stats['p50_s']}s, p90 {stats['p90_s']}s")
@@ -1311,6 +1429,8 @@ def route(task: str, repo: Path, risk: str = "green", files: int = 1, input_char
     for (executor, model), stats in sorted(slow.items()):
         decision["reasons"].append(f"{executor} {model} does not count as proven: p90 {stats['p90_s']}s is over the "
                                    f"{limits['max_p90_s'][task]}s ceiling for {task}")
+    if pin and (decision.get("evidence") or {}).get("model"):
+        decision["reasons"].append(f"bench evidence of {decision['evidence']['model']} for {task}: {decision['evidence']['text']}")
     if decision["executor"] is None:
         decision["executor"] = "blocked"
         refused = " ".join(f"{item['executor']}: {item['why']}." for item in decision["rejected"])
@@ -1504,7 +1624,12 @@ def delegate_opencode(repo: Path, task: str, allowed: list[str], test: str | Non
         if not found["up"] or not found["models"]:
             set_state(run_data, "blocked", "Colibri is not running (python scripts/colibri.py ensure). No other model was used")
             return run_data
-        model = model or f"colibri/{found['models'][0]}"
+        served = [f"colibri/{name}" for name in found["models"]]
+        wanted = f"colibri/{model}" if model and not model.startswith("colibri/") else model
+        if wanted and wanted not in served:
+            set_state(run_data, "blocked", f"Colibri serves {', '.join(served)}, not {wanted}. No other model was used")
+            return run_data
+        model = wanted or served[0]
     if executor == "opencode" and not model:
         # Without --model, choose as route() does for this task type: never simply the first model the owner listed.
         caps = caps if caps is not None else cached_capabilities(max_age_s=86400) or {}
@@ -1529,8 +1654,8 @@ def delegate_opencode(repo: Path, task: str, allowed: list[str], test: str | Non
     set_state(run_data, "approved", why)
     protected = protected_patterns(conf, protect or [])
     before = file_hashes(worktree, protected)
-    (worktree / TASK_FILE).write_text(build_packet(task, allowed, protected, test, base, untrusted, reuse_hints(worktree, task)),
-                                      encoding="utf-8")
+    packet = build_packet(task, allowed, protected, test, base, untrusted, reuse_hints(worktree, task))
+    (worktree / TASK_FILE).write_text(packet, encoding="utf-8")
     message = f"Read {TASK_FILE} in this folder and do exactly that task."
     template = command or conf["executors"][executor]["command"]
     set_state(run_data, "running")
@@ -1543,15 +1668,21 @@ def delegate_opencode(repo: Path, task: str, allowed: list[str], test: str | Non
                                    "stdout_tail": tail(result["stdout"], size), "stderr_tail": tail(result["stderr"], size),
                                    "rate_limited": result["exit"] != 0 and bool(RATE_LIMIT.search(result["stdout"] + result["stderr"]))}
     code = failure_code(result["exit"], result["timeout"], result["stdout"] + result["stderr"])
-    run_data["executor_result"]["failure_code"] = code
-    # A run the owner cancelled says nothing about the health of the model.
-    if executor in ("opencode", "colibri") and (code or result["exit"] == 0) and not result.get("cancelled"):
-        record_health(executor, model, code, conf)
+    # OpenCode reports no token counts, so they stay None and read n/a. The size of the task packet is known.
+    run_data["usage"] = {"model": model, "input_chars": len(packet), "input_tokens": None, "output_tokens": None,
+                         "seconds": result["seconds"]}
     (worktree / TASK_FILE).unlink(missing_ok=True)
     if result.get("cancelled"):
         set_state(run_data, "blocked", "cancelled by the owner. The worktree and its branch are kept")
         return run_data
     changes, ignored = changed_files(worktree, base, conf.get("generated"))
+    if code is None and result["exit"] == 0 and not changes:
+        # Exit 0 with nothing written is a failed edit too, so the next unit does not wait a whole session for it.
+        code = "no_change"
+    run_data["executor_result"]["failure_code"] = code
+    # A run the owner cancelled says nothing about the health of the model.
+    if executor in ("opencode", "colibri") and (code or result["exit"] == 0):
+        record_health(executor, model, code, conf)
     for rel in ignored:
         path = worktree / rel
         if path.is_file():
@@ -1588,6 +1719,10 @@ def delegate_opencode(repo: Path, task: str, allowed: list[str], test: str | Non
         git(worktree, "-c", "user.name=standards-delegate", "-c", "user.email=delegate@localhost",
             "commit", "-q", "-m", f"chore(delegate): {task.strip().splitlines()[0][:60]}")
         run_data["commit"] = git(worktree, "rev-parse", "HEAD")
+        # The size of a change says more than the count of changes: lines added and removed, files touched.
+        stats = [line.split("\t") for line in git(worktree, "diff", "--numstat", base, run_data["commit"]).splitlines() if line.strip()]
+        run_data["size"] = {"files": len(stats), "added": sum(int(a) for a, _, _ in stats if a.isdigit()),
+                            "removed": sum(int(r) for _, r, _ in stats if r.isdigit())}
         set_state(run_data, "verified", f"integrate with: git cherry-pick {run_data['commit'][:12]}")
     if not keep and run_data["state"] == "verified":
         # The work is committed on its branch. A worktree git refuses to remove still holds something, so it stays.
@@ -1687,6 +1822,8 @@ def delegate_ollama(prompt: str, model: str | None = None, want_json: bool = Fal
         "total_duration", "load_duration", "prompt_eval_count", "eval_count", "eval_duration")})
     if reply.get("eval_count") and reply.get("eval_duration"):
         run_data["metrics"]["tokens_per_s"] = round(reply["eval_count"] / (reply["eval_duration"] / 1e9), 1)
+    run_data["usage"] = {"model": reply.get("model") or model, "input_chars": len(content), "input_tokens": reply.get("prompt_eval_count"),
+                         "output_tokens": reply.get("eval_count"), "seconds": seconds}
     run_data["checks"]["reply"] = "PASS" if answer.strip() else "FAIL"
     if not same_model(model, reply.get("model")):
         run_data["checks"]["effective_model"] = "FAIL"
@@ -1753,6 +1890,7 @@ def bench_agent(task: str, executor: str, model: str | None, command: list[str] 
             "seconds": seconds, "verified": result["state"] == "verified" and bool(hidden_ok), "state": result["state"],
             "checks": result.get("checks"), "hidden_tests": hidden_ok, "outside_scope": result.get("outside_scope"),
             "rate_limited": bool(outcome.get("rate_limited")), "timeout": bool(outcome.get("timeout")),
+            "input_chars": (result.get("usage") or {}).get("input_chars"),
             "error": ("passed the tests it could see and failed the acceptance tests it never saw"
                       if result["state"] == "verified" and not hidden_ok else (result.get("history") or [{}])[-1].get("note")),
             "hardware": hardware()}
@@ -2168,6 +2306,9 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--risk", choices=["green", "yellow", "red"], default="green")
     p.add_argument("--files", type=int, default=1)
     p.add_argument("--input-chars", type=int, default=0)
+    p.add_argument("--executor", choices=["opencode", "ollama", "colibri", "api"],
+                   help="the executor the request asks for: it is used or the route is blocked with the reason, never another one")
+    p.add_argument("--model", help="with --executor, one exact model, such as colibri/<id>")
     p.add_argument("--mode", choices=modes, help="a stricter cost mode for this run")
     p.add_argument("--json", action="store_true")
     p = sub.add_parser("models")
@@ -2209,6 +2350,9 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--merge", choices=["ask", "when-green"],
                    help="when-green: an agent may merge a pull request once every check on it passed (scripts/merge_when_green.py). "
                         "Workflow, deploy and secret changes still wait for the owner")
+    p.add_argument("--merge-workflows", choices=["owner", "when-green"],
+                   help="when-green: with --merge when-green, a change to .github/workflows/ merges too once every check passed, "
+                        "unless it adds a line that reaches secrets, write permissions or their triggers. owner: they wait for you")
     p.add_argument("--route", choices=["session", "coordinator"],
                    help="coordinator: a work order typed in Claude Code goes to plan_autopilot.py, which plans by score and runs "
                         "the units in parallel with OpenCode, Ollama or Colibri. session: the Claude session does it")
@@ -2243,7 +2387,10 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         if not args.task:
             parser.error("give a task type or --all")
-        decision = route(args.task, args.repo, args.risk, args.files, args.input_chars, mode=args.mode)
+        if args.model and not args.executor:
+            parser.error("--model goes with --executor")
+        decision = route(args.task, args.repo, args.risk, args.files, args.input_chars, mode=args.mode,
+                         pin=args.executor, model=args.model)
         emit(decision, args.json)
         return 0 if decision["executor"] != "blocked" else 3
     if args.command == "models":
@@ -2275,6 +2422,7 @@ def main(argv: list[str] | None = None) -> int:
                                        untrusted=untrusted, keep=args.keep, mode=args.mode,
                                        executor="colibri" if args.executor == "colibri" else "opencode")
         emit({k: v for k, v in result.items() if k not in {"history"}}, True)
+        print(f"{result['state']}: {usage_text(result.get('usage') or {'model': result.get('model')})}")
         return 0 if result["state"] == "verified" else 1
     if args.command == "runs":
         folder = home() / "runs"
@@ -2292,7 +2440,7 @@ def main(argv: list[str] | None = None) -> int:
             data = json.loads(path.read_text(encoding="utf-8"))
             why = ((data.get("history") or [{}])[-1].get("note") or "").replace("\n", " ")
             print(f"{data['id']}  {data['executor']:<9} {data['state']:<9} {data.get('model') or '-'}  {data['task'][:50]!r}"
-                  + (f"  {why[:100]}" if why else ""))
+                  + (f"  {why[:100]}" if why else "") + (f"  [{usage_text(data['usage'])}]" if data.get("usage") else ""))
         return 0
     if args.command == "bench":
         if args.report:
@@ -2318,8 +2466,8 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "consent":
         if bool(args.path) != bool(args.cls):
             parser.error("--path and --class go together")
-        if not (args.path or args.free_model or args.free_provider or args.cost_mode or args.merge or args.route):
-            parser.error("give --path with --class, --free-model, --free-provider, --cost-mode, --merge or --route")
+        if not (args.path or args.free_model or args.free_provider or args.cost_mode or args.merge or args.route or args.merge_workflows):
+            parser.error("give --path with --class, --free-model, --free-provider, --cost-mode, --merge, --merge-workflows or --route")
         if args.data_use and not (args.free_model or args.free_provider):
             parser.error("--data-use describes a --free-model or a --free-provider")
         unknown = [name for name in args.free_provider if name not in providers.load()]
@@ -2351,6 +2499,10 @@ def main(argv: list[str] | None = None) -> int:
             data["autopilot"] = {**(data.get("autopilot") or {}), "merge": args.merge}
             print("merges: " + ("an agent merges a pull request once every check on it passed" if args.merge == "when-green"
                                 else "every merge waits for the owner"))
+        if args.merge_workflows:
+            data["autopilot"] = {**(data.get("autopilot") or {}), "workflows": args.merge_workflows}
+            print("workflow changes: " + ("merge once every check passed, unless they reach secrets or write permissions"
+                                          if args.merge_workflows == "when-green" else "wait for the owner"))
         if args.route:
             data["router"] = {**(data.get("router") or {}), "owner": args.route}
             print("work orders in Claude Code: " + ("the coordinator runs them with plan_autopilot.py" if args.route == "coordinator"

@@ -1,0 +1,33 @@
+# Cases for scripts/skill_eval.py. Each run reviews a fresh copy of the synthetic repository below, and a program
+# checks the answer against the steps SKILL.md asks for. A step half the runs miss points at the skill text.
+runs: 3
+cases:
+  - id: new-dependency-and-slop
+    task: Review the last commit of this repository against its AGENTS.md.
+    files:
+      AGENTS.md: |
+        # AGENTS.md
+        ## Fixed rules
+        - Every new dependency is in the radar of the standard or has a decision record in docs/decisions/.
+        - No comment restates the code.
+      .standard.yml: "profile: software\n"
+      app.py: |
+        def total(items):
+            return sum(items)
+      requirements.txt: ""
+    change:
+      app.py: |
+        import leftpad
+
+
+        def total(items):
+            # add the items
+            return sum(items)
+      requirements.txt: "leftpad==0.1\n"
+    criteria:
+      - {id: reads-agents, says: [AGENTS.md], why: "Read first: AGENTS.md"}
+      - {id: names-line, pattern: "app\\.py:\\d+", why: "Each finding: file and line"}
+      - {id: dependency, any: [radar, decision record, docs/decisions], why: "A new dependency outside the radar is a finding"}
+      - {id: slop, any: [restate, restates, comment], why: "Comments that restate the code are slop"}
+      - {id: severity, any: [Blocker, Should fix, Consider], why: "Findings are ordered by severity"}
+      - {id: no-praise, absent: [great job, well done, nice work, looks great], why: "Do not praise"}

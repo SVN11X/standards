@@ -12,6 +12,7 @@
 #   list, not read on an official page). Nothing here was measured.
 # capabilities: only what a source states (code, tools, vision, embedding). Any model that is not an
 #   embedding model is assumed to chat. What Ollama reports for an installed model wins over this list.
+# kind: optional. embedding, reranker or speech marks a model that answers no chat, so it never gets a chat task.
 # review_by: optional date after which a free offer no longer counts until someone checks it again.
 # A field nobody confirmed stays null. Do not fill one in from memory.
 version: 1
@@ -116,3 +117,56 @@ models:
   - {id: jev-1.13-free, executor: opencode, provider: opencode-zen, source: "https://opencode.ai/docs/console/models/", cost: free-promo,
      data: {stores: "unknown", trains: "unknown"}, capabilities: [], try_first: [],
      evidence: declared, checked: 2026-11-10, requests_per_day: null, review_by: null, notes: "No data policy published. Blocked until it is known."}
+
+# Specialists per job, from the owner's plan of 2026-11-21. Nothing here routes or runs: no executor reads this list.
+# It is the order in which to evaluate candidates for a job and the test each one passes before it is wired to a real
+# caller, one specialist per change, for one consumer project and one pending task. Before a download, record the exact
+# id and revision, size, format, architecture and license of the weights from the author's own page. Downloading
+# weights and calling a hosted API of the same family are two uses with two sets of terms. Fields nobody read stay out.
+# evidence: declared (its entry above was read on its page), in use (the owner already runs it) or candidate (named only).
+specialists:
+  - job: classify, extract or summarize
+    result: a label, JSON or text
+    order:
+      - {name: "qwen3.5:4b", evidence: declared, notes: "Installed baseline."}
+      - {name: Granite 4.1 3B, source: "https://huggingface.co/ibm-granite/granite-4.1-3b", evidence: candidate,
+         notes: "First to try if Spanish extraction fails. In Ollama as granite4.1:3b, see the entry above."}
+      - {name: MiniCPM5 2B, source: "https://huggingface.co/openbmb", evidence: candidate}
+      - {name: Phi-4-mini, evidence: candidate, notes: "In Ollama as phi4-mini, see the entry above."}
+      - {name: Ministral 3 3B, evidence: candidate, notes: "Only if the job also needs images."}
+    test: "Required fields, values, accents and facts kept. Count the deviations on Spanish and English cases and the median time."
+  - job: plan and program
+    result: a plan, a function call or a patch
+    order:
+      - {name: "qwen3.5:9b", evidence: declared, notes: "Plans. planning.local_model in settings/orchestration.yml."}
+      - {name: FunctionGemma 270M, evidence: candidate, notes: "Closed function calls. In Ollama as functiongemma:270m."}
+      - {name: StarCoder2 3B, evidence: candidate, notes: "Code completion."}
+      - {name: Qwen2.5-Coder 1.5B, evidence: candidate, notes: "Control."}
+    test: "Plan files and criteria validated. For tools, valid arguments and the turn after the call. An edit is measured with OpenCode on fix-bug or fix-multi."
+  - job: inspect screenshots
+    result: a finding with its place on the screen
+    order:
+      - {name: "qwen3.5:4b", evidence: declared}
+      - {name: "MiniCPM V 4.7 (explicit tag :1b)", source: "https://huggingface.co/openbmb", evidence: candidate,
+         notes: "A GGUF needs its weights and its projector from the same release."}
+      - {name: Gemma 4 E2B QAT, evidence: candidate, notes: "If the others miss controls. In Ollama as gemma4:e2b-it-qat."}
+    test: "In FocoLocal or OpenTutor, two window sizes. The label, the position and that the button really works."
+  - job: digitize documents
+    result: pages, blocks and cells
+    order:
+      - {name: PaddleOCR-VL-1.5, source: "https://huggingface.co/PaddlePaddle/PaddleOCR-VL-1.5", evidence: candidate,
+         notes: "Spanish and English. First to try when a table of the notes extractor is misread, before another chat model."}
+      - {name: Granite Docling 258M, source: "https://huggingface.co/ibm-granite/granite-docling-258M", evidence: candidate,
+         notes: "Structure."}
+      - {name: MiniCPM-OCR-1.0, source: "https://huggingface.co/openbmb", evidence: candidate, notes: "English."}
+      - {name: OCR-Jev, evidence: candidate, notes: "To compare doubtful readings."}
+    test: "One table, two columns and one scan, compared with a human correction for numbers and order. Page and reference saved to resume."
+  - job: transcribe or read aloud
+    result: text with times, or an audio file
+    order:
+      - {name: Whisper large-v3, evidence: in use, notes: "Already used by the notes extractor. Turbo for new audio."}
+      - {name: Kokoro 82M, source: "https://huggingface.co/hexgrad/Kokoro-82M/blob/main/VOICES.md", evidence: candidate,
+         notes: "Fixed questions read in Spanish."}
+      - {name: VoxCPM2, evidence: candidate, notes: "Interactive voice only."}
+      - {name: MiniCPM-o 4.5, source: "https://huggingface.co/openbmb", evidence: candidate, notes: "Interactive voice only."}
+    test: "Reuse the 131 transcriptions of the extractor. Listen for service names and acronyms. Check the language and that the WAV plays."

@@ -1,5 +1,5 @@
 # Rules and files shared by every profile.
-version: 1.22.2
+version: 1.23.0
 
 required_files:
   - README.md
@@ -49,6 +49,9 @@ fixed:
   - Credit every third-party asset, model, dataset, font or icon set with its source, author and license, in LICENSES/ or docs/credits.md.
   - Write diagrams as text in Mermaid syntax, so GitHub and sites render the same source. Use an image only when that is not possible.
   - Keep docs/how-it-works.md true. A change to the main flow updates it in the same change, and every path it names exists.
+  - Read and write text with an explicit UTF-8 encoding and LF line endings. Windows defaults to cp1252 and CRLF.
+  - Before publishing an image, a video or a document, open every one and look for card numbers, passwords, addresses and device ids such as MAC addresses.
+  - A file many parallel changes edit, such as an index or a list of items, is generated at build time or split into one file per item.
 
 anti_slop:
   - No comments that restate the code, narrate steps or decorate (banners, emoji).
