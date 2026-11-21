@@ -299,7 +299,9 @@ class Coverage(Base):
         self.assertEqual((states["keyless"], states["trial"], states["gone"], states["cli"]), ("no-key", "paid", "retired", "no-adapter"))
         self.assertTrue(all(record.get("why") and record.get("endpoint") and record.get("provider") for record in found.values()))
         self.assertEqual(set(found), {f"fake/{m['id']}" for m in fakes.PROVIDER_MODELS} | {f"plan/{m['id']}" for m in fakes.PROVIDER_MODELS}
-                         | {"keyless", "trial", "gone", "cli"})
+                         | {"keyless", "trial", "gone", "cli", "colibri-local"})
+        # Not running in this fake machine. Whether its clone exists depends on the real home folder.
+        self.assertIn(states["colibri-local"], {"not-installed", "unavailable"})
         good = found["fake/acme/good:free"]
         self.assertIn("vision", good["tasks"])
         text_only = found["fake/acme/textonly:free"]

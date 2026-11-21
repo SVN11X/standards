@@ -4,6 +4,33 @@ All notable changes to this standard are documented here. The format follows [Ke
 
 ## [Unreleased]
 
+## [1.23.0] - 2026-11-21
+
+The owner's plan of 2026-11-21 ("Plan de mejoras para STANDARDS") asked for these changes. What needs the notebook, its RTX 2060 or the owner's accounts is prepared here and listed in `docs/improvement-plan.md`.
+
+### Added
+
+- The analyzer lists the model Colibri serves as a coding agent through OpenCode, a stopped Colibri as not reachable, and each id its bench history names with its own evidence. OpenCode announcing the same model as `colibri/<id>` is counted once. Colibri's agent runs are planned only with `--local-agents`, and no Ollama model stays on the card while they run.
+- `orchestrate.py route TASK --executor colibri [--model colibri/<id>]` pins one executor: it is used or the route is blocked with the reason, with no fallback, and the answer names the served model and its bench evidence for the task. The prompt hook does the same for a work request that says "con Colibri", "with Ollama" or "using OpenCode". Delegated runs record model, input and output tokens and seconds, and `delegate` and `runs` print them with `n/a` for a counter nobody reported.
+- `executors.ollama.prefer_by_task` gives a task type its own order of local models, and a task type without one inherits `prefer`. The short tasks keep `qwen3.5:4b` first and `qwen2.5:7b` to compare. `route` lists each model it passed over in `rejected_models` with the reason. A catalog entry of kind `embedding`, `reranker` or `speech` never gets a chat task.
+- `memory.py index`, `find` and `eval`: meaning vectors from the local Ollama embedding model, added to the FTS5 word search and fused by key, with repository, source, content hash, model, revision and dimensions for every vector. `recall.py` uses them once a repository is indexed, so a Spanish question finds an English note with its source, and its lines stay within a budget. `eval` prints hits in the first 3 and 10 per language and kind for words alone and for words and meaning.
+- Radar entries for the engines and options of the plan: llama.cpp, llama.cpp-BELLS, FreeToken-Kai, ik_llama.cpp and InferSSD at assess, KTransformers, MoE-Infinity, Slipstream, AirLLM, Diffusers_minimax-h3 and Memorilla on hold with what reopens each, and Transformers.js, model-viewer, OpenSandbox and T3 Code at assess. Licenses nobody read say `not verified`.
+- `settings/models.yml` lists the specialists per job (extraction, plans and code, screenshots, documents, audio) with the order to evaluate them and the test before each is wired to a real caller. Nothing routes to them.
+- Recipes and capabilities: `web-visitor-ai` with `static-search` and `visitor-ai` (static first, Cloudflare Workers AI through the site's own Worker, ModelBest on hold), `3d-preview` for hardware, `isolated-test` and `remote-node`.
+- `scripts/workqueue.py`: a queue between the owner's remote VM and the notebook over SSH, with claims that expire and wait for a check, one result per task, a secret scan of every result, backup and restore, and no entry for a local-only task or a repository outside `remote_node.allow_classes`.
+- `standard.py check` warns on an STL over the 10 MB limit of the GitHub viewer and on an STL with no STEP or STP master. The hardware profile with mechanical design gets the matching rule.
+- `docs/006-model-analyzer.md` has the rule of an engine pilot: a median 15 % better with the same quality, or a task the current setup cannot finish in time. `docs/005-verification-and-orchestration.md` explains recall by meaning, public sites with the owner's machine off, the 3D view, disposable tests and the remote node with its sizing on Oracle Always Free.
+
+### Changed
+
+- The night run plans only the evidence that is missing. Two fresh passes get one more run, and a combination that failed is not run again until its evidence lapses or its grader, OpenCode minor or GPU changes. `--runs N` still measures every combination. Bench rows of a coding agent record the size of the task packet in `input_chars`.
+- A local Ollama model that failed the bench class of the task is refused, as a failed Colibri model already was.
+
+### Fixed
+
+- `orchestrate.py models` never showed a coding agent as authorized for `edit-small` or any other task type whose name is not a bench class: it compared the task type with the bench classes of the coverage. It now counts the classes that measure the task type.
+- `delegate colibri --model colibri/<id>` ran OpenCode with that id even when Colibri served another one. It is now blocked with both ids.
+
 ## [1.22.2] - 2026-11-18
 
 ### Fixed

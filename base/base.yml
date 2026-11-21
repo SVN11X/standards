@@ -1,5 +1,5 @@
 # Rules and files shared by every profile.
-version: 1.22.2
+version: 1.23.0
 
 required_files:
   - README.md

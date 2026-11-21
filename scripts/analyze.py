@@ -150,10 +150,10 @@ def colibri_coverage(conf: dict, local: dict, caps: dict, catalog: dict, mode: s
         return orchestrate.evidence_text(items, conf)
     if not info.get("up"):
         if not history and not home.exists():
-            return [{**base, "model": "(the server)", "status": "not-installed", "why": f"no Colibri clone at {home}",
+            return [{**base, "model": "(the service)", "status": "not-installed", "why": f"no Colibri clone at {home}",
                      "fix": "scripts/standards.ps1 installs it"}]
         return [{**base, "model": name, "status": "unavailable", "why": "Colibri is not running", "evidence": proof(name),
-                 "fix": "python scripts/colibri.py ensure"} for name in history or ["(the server)"]]
+                 "fix": "python scripts/colibri.py ensure"} for name in history or ["(the service)"]]
     out = []
     for name in served:
         record = {**base, "model": name, "evidence": proof(name)}
@@ -174,11 +174,13 @@ def colibri_coverage(conf: dict, local: dict, caps: dict, catalog: dict, mode: s
 
 
 def route_key(record: dict) -> tuple:
-    """Executor, model id and kind of run. OpenCode reaching colibri/<id> is the Colibri route, not a second model."""
+    """Executor, model id, kind of run and provider. OpenCode reaching colibri/<id> is the Colibri route, not a second
+    model, so a Colibri key leaves the provider out. Two providers are never one record."""
     executor, model = record["executor"], str(record["model"])
     if executor == "opencode" and model.startswith("colibri/"):
         executor = "colibri"
-    return executor, model, "agent" if executor in ("opencode", "colibri") else "api"
+    kind = "agent" if executor in ("opencode", "colibri") else "api"
+    return (executor, model, kind) if executor == "colibri" else (executor, model, kind, record.get("provider"))
 
 
 def deduplicated(records: list[dict]) -> list[dict]:
