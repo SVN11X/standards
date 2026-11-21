@@ -179,7 +179,21 @@ python scripts\analyze.py report
 
 It writes `model-analysis-<date>.md` in `%USERPROFILE%\.standards\reports\` and prints the path. Read the proposed split, the models below the threshold with their most common failure, and what was not tested and why.
 
-The router already uses the history: among the models you allowed, it takes the one that passed and is fastest. Two things stay your decision. A new local model is used for real tasks only after you add it to `executors.ollama.prefer` in `settings/orchestration.yml`. A remote model is used only while your own check is fresh.
+The router already uses the history: among the models you allowed, it takes the one that passed and is fastest. Two things stay your decision. A new local model is used for real tasks only after you add it to `executors.ollama.prefer`, or to the list of one task type in `executors.ollama.prefer_by_task`, in `settings/orchestration.yml`. A remote model is used only while your own check is fresh.
+
+## Choosing a model per task type
+
+Three files split the work. `settings/recipes.yml` and `scripts/router.py` say what a request needs. `settings/models.yml` describes the candidates: data use, license, kind and what to try first. `settings/orchestration.yml` and `scripts/orchestrate.py` choose who runs the task.
+
+`executors.ollama.prefer_by_task` gives a task type its own order of local models. A task type without a list inherits `executors.ollama.prefer`, so a policy without the key routes as before and the bench history reads the same. A listed model is used only when it is installed, local, answers chat, can do what the task needs, has not failed the bench class of the task and, without a passing history, runs fully on the GPU. A model of kind `embedding`, `reranker` or `speech` in the catalog never gets a chat task. Being installed or being added to the catalog never makes a model a candidate: the catalog entry makes it available for a run you ask for with `analyze.py --models`.
+
+`route` lists every model it passed over under `rejected_models`, each with its reason:
+
+```
+python scripts/orchestrate.py route extract-short --mode local-only --json
+```
+
+It chooses without generating any text. Read the executor, the model, the reasons and `rejected` and `rejected_models`.
 
 `scripts\analyze-models.ps1` and `scripts/analyze-models.sh` run the same commands, for example `.\scripts\analyze-models.ps1 prepare`.
 

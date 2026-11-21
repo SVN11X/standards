@@ -12,6 +12,7 @@
 #   list, not read on an official page). Nothing here was measured.
 # capabilities: only what a source states (code, tools, vision, embedding). Any model that is not an
 #   embedding model is assumed to chat. What Ollama reports for an installed model wins over this list.
+# kind: optional. embedding, reranker or speech marks a model that answers no chat, so it never gets a chat task.
 # review_by: optional date after which a free offer no longer counts until someone checks it again.
 # A field nobody confirmed stays null. Do not fill one in from memory.
 version: 1

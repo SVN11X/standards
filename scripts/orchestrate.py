@@ -990,11 +990,17 @@ def model_can(model: str, need: str, info: dict, catalog: dict | None) -> bool:
     return need in ((catalog_entry("ollama", model, catalog) or {}).get("capabilities") or [])
 
 
+# Kinds of model in settings/models.yml that answer no chat: they search, rank or speak, and never get a chat task.
+NOT_CHAT = ("embedding", "reranker", "speech")
+
+
 def is_embedding(model: str, oconf: dict, info: dict, catalog: dict | None = None) -> bool:
+    """True for any model that answers no chat: an embedding, a reranker or a speech model."""
     reported = (info.get("capabilities") or {}).get(model)
     if reported and "completion" not in reported:
         return True
-    return model in oconf.get("never_chat", []) or model_can(model, "embedding", info, catalog)
+    kind = (catalog_entry("ollama", model, catalog) or {}).get("kind")
+    return model in oconf.get("never_chat", []) or kind in NOT_CHAT or model_can(model, "embedding", info, catalog)
 
 
 def fits_machine(size: int | None, caps: dict, conf: dict) -> tuple[bool | None, str]:
@@ -1032,7 +1038,9 @@ def classify_ollama(conf: dict, caps: dict, catalog: dict | None = None) -> list
             if reported:
                 return need in reported
             return True if need in stated else None
-        if reported:
+        if entry.get("kind") in NOT_CHAT:
+            embedding = True
+        elif reported:
             embedding = "completion" not in reported
         else:
             embedding = name in oconf.get("never_chat", []) or "embedding" in stated or "embed" in name.lower()
@@ -1040,7 +1048,8 @@ def classify_ollama(conf: dict, caps: dict, catalog: dict | None = None) -> list
         fits, memory = (None, "runs on a remote host") if remote else fits_machine(size, caps, conf)
         found.append({"provider": "ollama-cloud" if remote else "ollama-local", "model": name,
                       "endpoint": (entry.get("remote_host") or "a remote host behind " + url) if remote else url,
-                      "kind": "embedding" if embedding else "chat", "remote": remote, "in_catalog": bool(entry),
+                      "kind": (entry.get("kind") if entry.get("kind") in NOT_CHAT else "embedding") if embedding else "chat",
+                      "remote": remote, "in_catalog": bool(entry),
                       "vision": can("vision"), "tools": can("tools"), "reported": bool(reported), "size": size,
                       "parameter_size": ((info.get("details") or {}).get(name) or {}).get("parameter_size"),
                       "context": ((info.get("details") or {}).get(name) or {}).get("context") or entry.get("context"),
@@ -1048,23 +1057,55 @@ def classify_ollama(conf: dict, caps: dict, catalog: dict | None = None) -> list
     return found
 
 
-def pick_ollama_model(oconf: dict, info: dict, measured: dict | None = None, needs: list[str] | None = None,
-                      proven: bool = False, catalog: dict | None = None) -> tuple[str | None, str]:
-    """A preferred chat model that is installed, local, able to do the task and not split with the CPU.
+def preferred_models(oconf: dict, task: str | None) -> tuple[list[str], str]:
+    """The Ollama models a task type may use, in order, and where the list comes from. A task type without its own
+    list in `prefer_by_task` inherits `prefer`, so a policy without the key behaves as before."""
+    own = ((oconf.get("prefer_by_task") or {}).get(task) or []) if task else []
+    return (list(own), f"executors.ollama.prefer_by_task.{task}") if own else (list(oconf.get("prefer", [])), "executors.ollama.prefer")
 
-    A model with a passing bench history for the task goes first, the fastest one. A split model counts only with that history.
+
+def pick_ollama_model(oconf: dict, info: dict, measured: dict | None = None, needs: list[str] | None = None,
+                      proven: bool = False, catalog: dict | None = None, task: str | None = None,
+                      failed: dict | None = None, skipped: list | None = None) -> tuple[str | None, str]:
+    """A preferred chat model that is installed, local, able to do the task, not split with the CPU and not failed.
+
+    A model with a passing bench history for the task goes first, the fastest one. A split model counts only with that
+    history. A model that failed the bench class of the task is refused, a model nobody measured is not. Only the
+    models of the policy's lists are candidates: a model that is only installed or only in the catalog never is.
+    `skipped` collects (model, reason) for every listed model that was passed over.
     """
     loaded = {m["name"]: m for m in info.get("loaded") or []}
     measured = measured or {}
+    failed = failed or {}
+    skipped = skipped if skipped is not None else []
     usable = []
-    for model in oconf.get("prefer", []):
-        if not is_installed(model, info) or model in (info.get("remote") or []) or is_embedding(model, oconf, info, catalog):
+    prefer, _ = preferred_models(oconf, task)
+    for model in prefer:
+        if not is_installed(model, info):
+            skipped.append((model, "not installed"))
             continue
-        if any(not model_can(model, need, info, catalog) for need in needs or []):
+        if model in (info.get("remote") or []):
+            skipped.append((model, "runs on a remote host"))
+            continue
+        if is_embedding(model, oconf, info, catalog):
+            skipped.append((model, "answers no chat: an embedding, reranker or speech model"))
+            continue
+        lacking = [need for need in needs or [] if not model_can(model, need, info, catalog)]
+        if lacking:
+            skipped.append((model, f"cannot do {', '.join(lacking)}"))
             continue
         timed = measured.get(("ollama", model))
+        fail = failed.get(("ollama", model))
+        if fail and not timed:
+            skipped.append((model, f"failed the bench class {fail['task']} ({round(fail['pass_rate'] * fail['runs'])} of "
+                                   f"{fail['runs']} runs accepted)"))
+            continue
         share = (loaded.get(model) or {}).get("gpu_share")
-        if not timed and (proven or (share is not None and share < oconf.get("min_gpu_share", 0))):
+        if not timed and proven:
+            skipped.append((model, "has not passed the bench class of this task"))
+            continue
+        if not timed and share is not None and share < oconf.get("min_gpu_share", 0):
+            skipped.append((model, f"runs {round((1 - share) * 100)}% on the CPU and has no passing bench history"))
             continue
         usable.append((model, timed, share))
     timed_ones = [item for item in usable if item[1]]
@@ -1203,9 +1244,10 @@ def pick_opencode_model(models, repo, conf, local, caps, measured, mode, proven,
 
 
 def eligible(candidate, task, repo, input_chars, conf, local, caps, measured=None, mode=None, proven=False,
-             catalog=None, cool=None, model=None) -> tuple[bool, str, str | None]:
+             catalog=None, cool=None, model=None, skipped=None) -> tuple[bool, str, str | None]:
     """Whether a candidate may do the task, why, and with which model. Cost and privacy go through gate().
-    `model` pins one model: the candidate then uses that one or refuses with the reason, never another."""
+    `model` pins one model: the candidate then uses that one or refuses with the reason, never another.
+    `skipped` collects the models of the candidate that were passed over, each with its reason."""
     measured = measured or {}
     cool = cool or {}
     pinned = model
@@ -1224,8 +1266,12 @@ def eligible(candidate, task, repo, input_chars, conf, local, caps, measured=Non
         if input_chars > conf["limits"]["ollama_max_input_chars"]:
             return False, f"input of {input_chars} characters is too large for a small local model", None
         if pinned:
-            oconf = {**oconf, "prefer": [pinned]}
-        model, note = pick_ollama_model(oconf, info, measured, (conf.get("needs") or {}).get(task), proven, catalog)
+            oconf = {**oconf, "prefer": [pinned], "prefer_by_task": {}}
+        passed_over: list = []
+        model, note = pick_ollama_model(oconf, info, measured, (conf.get("needs") or {}).get(task), proven, catalog,
+                                        task=task, failed=failed_models(task, conf), skipped=passed_over)
+        if skipped is not None:
+            skipped += [{"executor": "ollama", "model": name, "why": why} for name, why in passed_over]
         if not model:
             return False, note, None
         if cooled("ollama", model):
@@ -1317,7 +1363,7 @@ def route(task: str, repo: Path, risk: str = "green", files: int = 1, input_char
     cls, cls_source = privacy_class(repo, conf, local)
     rule = (conf.get("risk") or {}).get(risk) or {}
     decision = {"task": task, "risk": risk, "mode": mode_name, "privacy": cls, "review": rule.get("review", "checks"),
-                "executor": None, "model": None, "reasons": [], "rejected": [], "fallbacks": [], "pinned": pin}
+                "executor": None, "model": None, "reasons": [], "rejected": [], "rejected_models": [], "fallbacks": [], "pinned": pin}
     known = task in conf["tasks"]
     if known and task in TOOL_TASKS:
         decision["executor"] = "tools"
@@ -1356,7 +1402,7 @@ def route(task: str, repo: Path, risk: str = "green", files: int = 1, input_char
     for candidate in candidates:
         needs_proof = proven
         ok, why, chosen = eligible(candidate, task, repo, input_chars, conf, local, caps, measured, mode, needs_proof, catalog, cool,
-                                   model=model if pin else None)
+                                   model=model if pin else None, skipped=decision["rejected_models"])
         if pin:
             served = (caps.get("colibri") or {}).get("models") or []
             seen = chosen or model or (f"colibri/{served[0]}" if candidate == "colibri" and served else None)
@@ -1381,7 +1427,7 @@ def route(task: str, repo: Path, risk: str = "green", files: int = 1, input_char
     for (executor, model), stats in sorted(slow.items()):
         decision["reasons"].append(f"{executor} {model} does not count as proven: p90 {stats['p90_s']}s is over the "
                                    f"{limits['max_p90_s'][task]}s ceiling for {task}")
-    if pin and decision.get("evidence"):
+    if pin and (decision.get("evidence") or {}).get("model"):
         decision["reasons"].append(f"bench evidence of {decision['evidence']['model']} for {task}: {decision['evidence']['text']}")
     if decision["executor"] is None:
         decision["executor"] = "blocked"

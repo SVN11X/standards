@@ -100,8 +100,11 @@ def local_coverage(conf: dict, local: dict, caps: dict, catalog: dict, mode: str
             record.update(status=code if not ok else "unknown-cost", why=why)
         elif found["blocked"]:
             record.update(status="blocked", why=str(found["blocked"]))
-        elif found["kind"] == "embedding":
-            record.update(status="not-chat", why="embedding model, it serves search only")
+        elif found["kind"] != "chat":
+            record.update(status="not-chat", why={"embedding": "embedding model, it serves search only",
+                                                  "reranker": "reranker, it orders search results only",
+                                                  "speech": "speech model, it turns audio into text or text into audio"}.get(
+                                                      found["kind"], f"{found['kind']} model, it answers no chat"))
         elif found["fits"] is False:
             record.update(status="resources", why=found["memory"])
         else:
@@ -615,8 +618,8 @@ def describe(executor: str, model: str | None, catalog: dict) -> tuple[str, str]
 def proposal(conf: dict, catalog: dict) -> list[str]:
     """For each task type, the models that passed the existing threshold, the one that does not train and is fastest first."""
     lines = []
-    prefer = conf["executors"]["ollama"].get("prefer", [])
     for task in conf["tasks"]:
+        prefer, origin = orchestrate.preferred_models(conf["executors"]["ollama"], task)
         if task in orchestrate.TOOL_TASKS:
             continue
         passed = orchestrate.measured_models(task, conf)
@@ -635,7 +638,7 @@ def proposal(conf: dict, catalog: dict) -> list[str]:
             continue
         parts = []
         for (executor, model), row in ranked[:3]:
-            note = "" if executor != "ollama" or model in prefer else ", add it to `executors.ollama.prefer` to use it"
+            note = "" if executor != "ollama" or model in prefer else f", add it to `{origin}` to use it"
             parts.append(f"{executor} `{model}` ({row['task']}: {row['runs']} runs, pass rate {row['pass_rate']}, median {row['p50_s']} s{note})")
         lines.append(f"- `{task}`: " + ". Then ".join(parts) + ".")
     return lines

@@ -132,8 +132,15 @@ limits:
 executors:
   ollama:
     url: http://127.0.0.1:11434
-    # Chat models in order of preference. A model only counts when it is installed.
+    # Chat models in order of preference. A model only counts when it is installed. Being installed or listed in
+    # settings/models.yml never makes a model a candidate: only these lists do.
     prefer: [qwen3.5:4b, qwen2.5:7b, qwen3.5:9b]
+    # Own order for a task type. A task type not listed here inherits `prefer`. The owner's plan of 2026-11-21 keeps
+    # qwen3.5:4b for short tasks with qwen2.5:7b to compare, and qwen3.5:9b for plans (planning.local_model).
+    prefer_by_task:
+      classify: [qwen3.5:4b, qwen2.5:7b]
+      summarize-short: [qwen3.5:4b, qwen2.5:7b]
+      extract-short: [qwen3.5:4b, qwen2.5:7b]
     # A model split between GPU and CPU was several times slower on a 6 GB card. Below this share it is used
     # only when its own bench history passes for the task.
     min_gpu_share: 0.9
