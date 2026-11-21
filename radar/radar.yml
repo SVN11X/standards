@@ -1071,3 +1071,26 @@ entries:
     expression: []
     notes: "Interface for coding agents, installed on the remote node to follow and steer a task from the phone while the notebook is off. It has no native support for local models, so the work for the RTX goes through the queue of scripts/workqueue.py. Install: docs/user/install.md, remote access: docs/user/remote-access.md, the Linux service: docs/user/background-service.md of the repository. Before trial: t3 status and t3 service status on the VM, a phone approved as a new device, and the connection again after SSH is closed."
     evaluated: 2026-11-21
+  - name: andrej-karpathy-skills
+    url: https://github.com/multica-ai/andrej-karpathy-skills
+    status: adopt
+    profiles: [web, software, data-ai, hardware, docs, infra]
+    kind: reference
+    license: MIT, stated in its README and SKILL.md. The repository has no LICENSE file
+    cost: free
+    privacy: "Text only. Nothing runs and nothing leaves the machine."
+    expression: []
+    notes: "One skill and a CLAUDE.md with four principles drawn from Andrej Karpathy's post on the coding mistakes of language models: think before coding, simplicity first, surgical changes and goal-driven execution. Since 1.24.0 the generated AGENTS.md carries them in the standard's own words, the code-review skill checks that every changed line traces to the task, and its evals.yml has a case for drive-by changes. Installing the plugin as well repeats the same rules. Read from a shallow clone of main (2c60614) on 2026-11-21."
+    evaluated: 2026-11-21
+  - name: HyperQwen
+    url: https://github.com/syv-ai/HyperQwen
+    status: hold
+    profiles: [data-ai]
+    kind: tool
+    license: Apache-2.0
+    cost: free. The image is 9.5 GB and the requantized model about 20 GB on disk
+    privacy: "Runs on this machine. The API binds 127.0.0.1 until a key is set and BIND is changed."
+    expression: []
+    notes: "Qwen3.8-27B on a patched, pinned vLLM 0.33.0 with an OpenAI-compatible API and key auth, in Docker or WSL2. Its README reports 127 tokens per second single stream and about 1,035 at 64 concurrent requests on one RTX 3090 at 250 W, and 381 when the answer quotes its own prompt. It needs one card with 24 GB or several together: the smallest setups reported are two 12 GB RTX 3060 and four 8 GB RTX 3060 Ti, and the Turing launcher was measured on two modified 22 GB RTX 2080 Ti. On hold for the 6 GB RTX 2060. Reopen with such a card, or when its roadmap ships a smaller Qwen checkpoint for 12 and 16 GB cards. The standard took its field report fields for comparable runs and its one line per patch, see docs/006-model-analyzer.md and the software profile. Read from a shallow clone of main (3d6c954) on 2026-11-21."
+    evaluated: 2026-11-21
+

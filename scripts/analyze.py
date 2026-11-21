@@ -659,7 +659,9 @@ def build_report(conf: dict | None = None, catalog: dict | None = None, rows: li
     out = ["# Model analysis", "",
            f"Written {orchestrate.now()}. History: {orchestrate.bench_file()} ({len(rows)} runs).",
            f"Machine: {hardware.get('os', 'unknown')}, GPU {gpu.get('name', 'not seen')}"
-           + (f" with {gpu.get('vram_total_mib')} MiB" if gpu else "") + f", OpenCode {hardware.get('opencode') or 'not seen'}.",
+           + (f" with {gpu.get('vram_total_mib')} MiB, driver {orchestrate.na(gpu.get('driver'))}, power limit "
+              f"{orchestrate.na(gpu.get('power_limit_w'))} W" if gpu else "")
+           + f", OpenCode {hardware.get('opencode') or 'not seen'}, Ollama {hardware.get('ollama') or 'not seen'}.",
            "", f"A model counts for a task after {limits['bench_min_runs']} runs with a pass rate of {limits['bench_min_pass_rate']}. "
            "That is a first signal on this machine, not strong statistics. A program checked every result, no model graded another.", ""]
     if not summary:

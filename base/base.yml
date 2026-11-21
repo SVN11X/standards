@@ -1,5 +1,5 @@
 # Rules and files shared by every profile.
-version: 1.23.0
+version: 1.24.0
 
 required_files:
   - README.md
@@ -52,10 +52,13 @@ fixed:
   - Read and write text with an explicit UTF-8 encoding and LF line endings. Windows defaults to cp1252 and CRLF.
   - Before publishing an image, a video or a document, open every one and look for card numbers, passwords, addresses and device ids such as MAC addresses.
   - A file many parallel changes edit, such as an index or a list of items, is generated at build time or split into one file per item.
+  - Every changed line traces to the task. Do not reformat, rename or refactor code next to it, and match the style around it.
+  - Remove what your own change left unused. Mention other dead code in the pull request instead of deleting it.
 
 anti_slop:
   - No comments that restate the code, narrate steps or decorate (banners, emoji).
-  - No speculative abstractions, dead code, unused dependencies or leftover placeholder data.
+  - No speculative abstractions, dead code in what you write, unused dependencies or leftover placeholder data.
+  - No feature, option or error handling that nobody asked for or that covers a case that cannot happen.
   - No fabricated content. Statistics, testimonials, references and links must be real and verified.
   - No marketing words (seamless, cutting-edge, revolutionary, game-changer, supercharge).
   - Plain prose. Short sentences, no filler openers, no em dashes or semicolons as separators.
