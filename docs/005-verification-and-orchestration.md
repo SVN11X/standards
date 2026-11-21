@@ -85,3 +85,42 @@ python scripts/verify.py --level deep --live
 - Colibri prefills about 6 tokens per second on the RTX 2060, so it answers short prompts and is not a coding agent on this machine.
 - Prompt-injection resistance of a model is reported, never relied on. The controls are the protected files, the scope check and the tests.
 - MCP servers are off by default. `mcp inspect` lists what a server exposes. It does not prove the server is safe.
+
+## Public sites with the owner's machine off
+
+A public page publishes what can be prepared and uses a remote service only for an answer that changes with each visitor. The browser gets the page and its usual assets, with no software to install and no model weights to download. The `web-visitor-ai` recipe of `settings/recipes.yml` names the parts: `static-search` builds a light index at build time (titles, tags, Spanish and English synonyms, the existing ids), and `visitor-ai` starts static and adds, only where the site has its own Worker, Cloudflare Workers AI through `env.AI` on the Workers Free plan. The Worker keeps the credentials on the server, caps the request size, limits the rate and times out the wait. When the quota is spent or the service fails, the page shows the practice without AI with its criteria and a guiding answer, and keeps local search. Search by meaning uses `@cf/baai/bge-m3` with the same model version and dimensions for fragments and query and returns existing ids. ModelBest stays on hold until its free window, data use and a verifiable zero spend limit are confirmed. Transformers.js may run in a Node.js build step. The public page only loads what the build made.
+
+Accepted when, in a browser with an empty cache, the owner's machine off and the network recorded, the page opens, search or practice works, no request downloads model weights, and a simulated 429, a delay and invalid JSON each leave the static guide with the pending answers marked.
+
+## A 3D view of a part
+
+A hardware repository keeps the editable STEP or STP master and its source. It exports derivatives where the design license allows it and checks units against one known measure. The README shows a capture with alt text and links the STL, which GitHub shows up to 10 MB. A small part can sit in a `stl` code block as ASCII geometry. An assembly, or a part with materials or color, gets a GLB shown on GitHub Pages with model-viewer, loaded when the visitor presses View in 3D, with a poster first. `standard.py check` warns on an STL over 10 MB and on an STL with no STEP or STP master. The CAD and its derivatives live in the repository of the prototype, such as the Raspberry Pi 4 case. This standard holds the recipe, the check and the README pattern.
+
+## Disposable test environments
+
+The `isolated-test` capability runs a test that leaves dependencies or files behind where nothing stays. Worktrees and `safe_patch.py` come first. OpenSandbox is a QA pilot in the radar: one Linux container in Docker or WSL2, a Python or Playwright test, limits on CPU, memory and time, a copy of the starting state in a disposable folder, no mount of the user profile, its credentials or the Docker socket, and no network for the prepared test. The diff, a capture and the result are collected before the environment is destroyed. It is accepted when two runs of the same revision leave the checkout unchanged and a cancel frees the container. When the service fails, the work is marked pending or uses the authorized local test. Native behavior of FocoLocal and OpenTutor is still checked on Windows.
+
+## Remote node
+
+An optional node on the owner's own Oracle Cloud account runs CPU work while the notebook is off: git, tests, scheduled checks and ARM64 builds. It has no GPU. The work for the RTX waits in a queue until the notebook takes it.
+
+Sizing, from the owner's plan of 2026-11-21 and the Oracle pages it cites. A VM.Standard.A1.Flex with Ubuntu ARM64, 2 OCPU, 12 GB of RAM and a 100 GB boot volume. On for a 31 day month it uses 1,488 OCPU hours and 8,928 GB hours, inside the 1,500 and 9,000 Oracle documents for Always Free, a share every A1 of the account uses. The 200 GB of free block storage add the boot and block volumes of the home region, so 100 GB leaves room. Check first the free balance, the type of account, the home region and the resources in other compartments. A budget alert of US$1 sends an email, Oracle evaluates it about every 24 hours and spending can go on meanwhile, so use resource quotas where they exist and read Cost Analysis. Oracle can reclaim an idle Always Free A1 after seven days under 20 % of CPU (95th percentile), network and memory, so keep a copy of the configuration and of the queue off the VM.
+
+The queue is `scripts/workqueue.py`, one SQLite file on the VM. The notebook reaches it over SSH:
+
+```
+python scripts/workqueue.py add --repo . --commit <sha> --needs gpu --command "fix-bug with Colibri"
+python scripts/workqueue.py claim --worker vps --can cpu
+python scripts/workqueue.py claim --via <ssh host> --worker notebook --can cpu gpu
+python scripts/workqueue.py done <id> --token <token> --result "tests passed at <sha>" --via <ssh host>
+python scripts/workqueue.py export
+```
+
+A task holds its id, repository, commit, the capability it needs, the command, the privacy class and its state. A worker claims one task for `remote_node.lease_s` seconds and gets a token, and a task finishes once: a second result for the same id is refused. A lease that ran out is not handed out again by itself. Check the result and the diff, then `retry <id> --checked`. The notebook drops `gpu` from what it can take while its card is busy. A result is short text, scanned for secrets. `restore` brings back a backup without a second result for a finished task, and a claim from before the loss comes back expired.
+
+What may enter: the cost mode is not local-only and the repository's privacy class is in `remote_node.allow_classes` (only `personal-public` by default). A local-only task stays on the notebook. A model on the VM goes through OpenCode with a free model the owner checked, under `free-strict` and the data policy. The Ollama and Colibri ports never face the Internet.
+
+T3 Code on the VM shows and steers the session from the phone, through T3 Connect. It has no native support for local models, so this queue carries the GPU work. Install it as its own guide says, check `t3 status` and `t3 service status`, approve the phone as a new device, close SSH and connect again. If the service stops when SSH closes, enable the user's linger as its Linux guide says.
+
+Accepted when, with the notebook off and SSH closed, the phone shows that a CPU task finished and a GPU task is still pending, and once the notebook is back the GPU task finishes once. A provider with no quota left, or revoked, blocks the AI unit with the reason while the git and Python checks go on, and nothing paid is used. After a restart or the loss of the VM, in a test environment, the last backup restores the queue, results are reconciled by id and the phone reconnects. To retire the node, turn off the recipe and any timer, keep the results, unlink T3 Connect and check the volumes still allocated.
+

@@ -197,6 +197,21 @@ It chooses without generating any text. Read the executor, the model, the reason
 
 `scripts\analyze-models.ps1` and `scripts/analyze-models.sh` run the same commands, for example `.\scripts\analyze-models.ps1 prepare`.
 
+## Engine pilots on the notebook
+
+What decides is how long the notebook takes to finish a correct task. A speed another project publishes only says what is worth a test. The engines of the owner's plan of 2026-11-21 are in `radar/radar.yml`: Ollama stays the daily reference, Colibri with Vulkan keeps the explicit route for short work, official llama.cpp is the first comparison, and llama.cpp-BELLS, FreeToken-Kai, ik_llama.cpp and InferSSD are pilots for one concrete problem each. KTransformers, MoE-Infinity, Slipstream, AirLLM and kimi-k3-in-c are on hold with the condition that reopens each one.
+
+Before a run, record free graphics memory, RAM, the driver and free disk space. Free the card between runs: one local measurement at a time. Fix the weights hash, the quantization, the template, the context, the output limit, the temperature and the task. Measure the cold load, the warm runs, the peak memory, the time to the first token and the seconds to an accepted result. When the model or the quantization changes, the result belongs to the whole combination. When the weights or the grader change behind the same id, record the change before mixing results.
+
+The policy asks for 3 runs at a pass rate of 0.8 within 30 days, so three tries need three passes, and a failure counts in the pass rate. Another engine is integrated only when its median improves by 15 % or more with at least the same quality, or when it finishes within the time limit a task the current setup cannot finish. The 15 % is a rule of the pilot, not of the router. The integration then adds only the winning engine and the task type it passed, off by default, with a test that the previous route still works.
+
+```
+python scripts/orchestrate.py bench --task classify --executors "ollama:qwen3.5:4b" --runs 1
+python scripts/orchestrate.py bench --task fix-bug --executors "colibri:colibri/<id>" --runs 1
+```
+
+The first completes one pending classification run. The second measures an edit with the id OpenCode recorded for Colibri. A timeout is recorded in the row.
+
 ## Gateways and boards, not connected
 
 No gateway or agent board is integrated. Two candidates are in the radar at `assess`, with the checks that decide a trial: FreeLLMAPI (one endpoint in front of several free providers) and Paperclip (a board for several agents). The rules for any of them are already in the code and the policy:

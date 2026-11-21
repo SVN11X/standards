@@ -19,6 +19,7 @@
 - `preserve.py`: snapshots and compares protected data, and lists what an extraction still misses.
 - `safe_patch.py`: builds a patch for git am and proves it applies and passes the tests on its base.
 - `memory.py`: local technical memory in SQLite FTS5, outside every repository, with export and expiry of agent hints, meaning vectors from the local Ollama (`index`), search by words and meaning with references (`find`) and a comparison on the owner's questions (`eval`).
+- `workqueue.py`: a queue between the owner's remote VM and the notebook, over SSH, with claims that expire, one result per task, privacy checks before a task enters, and backup and restore.
 - `evidence.py`: the result format and the report writer the other scripts share.
 - `standard.py`: the engine of the standard. Run `python scripts/standard.py --help` for the commands. Needs PyYAML (`pip install pyyaml`).
 - `publish-templates.sh` (bash) and `publish-templates.ps1` (Windows PowerShell): build one template repository per profile and push them to GitHub as template repositories. They need Python with PyYAML and the GitHub CLI (`gh`), logged in.

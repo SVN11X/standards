@@ -847,6 +847,25 @@ def check_content(repo: Path, files: list[str], report: Report) -> None:
                 report.warn(rel, f"{dashes} em dashes. Use periods and commas.")
 
 
+# GitHub shows an STL file in its 3D viewer up to this size. See references.md.
+STL_VIEWER_MB = 10
+
+
+def check_mechanical(repo: Path, files: list[str], report: Report) -> None:
+    """An STL is a derivative: the editable STEP or STP master stays in the repository, and GitHub shows it only below 10 MB."""
+    meshes = [rel for rel in files if rel.lower().endswith(".stl")]
+    if not meshes:
+        return
+    for rel in meshes:
+        size = (repo / rel).stat().st_size
+        if size > STL_VIEWER_MB * 1024 * 1024:
+            report.warn(rel, f"{size / 1024 / 1024:.1f} MB. GitHub shows an STL up to {STL_VIEWER_MB} MB: reduce the mesh, "
+                             "or export a GLB and show it on GitHub Pages.")
+    if not any(rel.lower().endswith((".step", ".stp")) for rel in files):
+        report.warn(meshes[0], "No STEP or STP master in the repository. Keep the editable original and its source next to "
+                               "the STL made from it.")
+
+
 DOC_PATH = re.compile(r"`([\w.@-]+(?:/[\w.@-]+)*/?)`")
 
 
@@ -948,6 +967,7 @@ def run_check(repo: Path, pull_request: bool = False) -> Report:
         check_layout(files, config, profile, resolved, report)
         check_generated(repo, config, report)
         check_content(repo, files, report)
+        check_mechanical(repo, files, report)
         check_github(config, report)
         check_plan(repo, report)
         check_decisions(repo, report)
@@ -1483,6 +1503,27 @@ def cmd_selftest() -> int:
             if report.errors:
                 failures.append(f"{repo.name}: {report.errors}")
             first_repo = first_repo or repo
+
+        cad = next((repo for repo in sorted(root.glob("case-*-hardware")) if (repo / "mechanical").is_dir()), None)
+        if cad is not None:
+            write_text(cad / "mechanical" / "top-cover.stl", "solid top\nendsolid top\n")
+            git_add_all(cad)
+            if not any("No STEP or STP master" in message for _, message in run_check(cad).warnings):
+                failures.append("an STL without a STEP master should warn")
+            else:
+                print("negative case passed: STL without its STEP master")
+            write_text(cad / "mechanical" / "top-cover.step", "ISO-10303-21;\n")
+            write_text(cad / ".gitattributes", "*.stl filter=lfs diff=lfs merge=lfs -text\n")
+            with (cad / "mechanical" / "top-cover.stl").open("r+b") as handle:
+                handle.truncate((STL_VIEWER_MB + 1) * 1024 * 1024)
+            git_add_all(cad)
+            warnings = [message for _, message in run_check(cad).warnings]
+            if not any("GitHub shows an STL up to" in message for message in warnings) or any("No STEP" in m for m in warnings):
+                failures.append("an STL over the GitHub viewer limit should warn, with its STEP master present")
+            else:
+                print("negative case passed: STL over the GitHub viewer limit")
+        else:
+            failures.append("the hardware case with mechanical cad has no mechanical/ folder")
 
         def expect_error(label: str, fragment: str, pull_request: bool = False) -> None:
             report = run_check(first_repo, pull_request=pull_request)

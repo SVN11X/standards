@@ -90,6 +90,17 @@ Sources behind the rules. Prefer the original source. The check verifies these l
 - Microsoft, Windows UX guidelines, touch targets: https://learn.microsoft.com/windows/win32/uxguide/inter-touch
 - Microsoft, Axe.Windows, accessibility rules for Windows apps: https://github.com/microsoft/axe-windows
 
+## Hardware previews
+
+- GitHub, 3D file viewer for STL files up to 10 MB: https://docs.github.com/en/repositories/working-with-files/using-files/working-with-non-code-files#3d-file-viewer
+- GitHub, STL models in Markdown: https://docs.github.com/en/get-started/writing-on-github/working-with-advanced-formatting/creating-diagrams#creating-stl-3d-models
+- model-viewer, a web component for GLB files: https://modelviewer.dev/
+
+## Free services for public sites
+
+- Cloudflare Workers AI, pricing and the daily free neurons: https://developers.cloudflare.com/workers-ai/platform/pricing/
+- Cloudflare Workers AI, bindings: https://developers.cloudflare.com/workers-ai/configuration/bindings/
+
 ## Visual assets
 
 - Openverse API, licenses of openly licensed media: https://github.com/WordPress/openverse

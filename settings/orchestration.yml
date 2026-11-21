@@ -229,6 +229,13 @@ memory:
   candidates: 10
   rrf_k: 60
 
+# The owner's remote VM of scripts/workqueue.py, such as an Oracle Cloud A1 node. It is another machine, so only
+# repositories of these privacy classes enter its queue, and nothing does in local-only mode. lease_s is how long a
+# worker holds a claimed task before it expires and waits for a check.
+remote_node:
+  allow_classes: [personal-public]
+  lease_s: 1800
+
 # A model or program that fails with one of these codes is skipped until the cooldown (seconds) ends.
 # The state lives in ~/.standards/health.json. A later success clears it. Colibri is never replaced by another
 # model: its cooldown blocks Colibri tasks and the router offers no fallback for them.

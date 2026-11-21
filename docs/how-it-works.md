@@ -39,7 +39,8 @@ flowchart LR
 - `scripts/providers.py`: one transport for providers with an OpenAI-compatible API. It lists models, checks the account, sends requests and names every failure.
 - `scripts/analyze.py`: the night run that finds the models of the machine and of each provider, tests the ones that are allowed and writes the report.
 - `scripts/verify.py` with `scripts/evidence.py`: the independent verifier and its report format. `scripts/adversarial.py` attacks the controls on purpose.
-- `scripts/preserve.py`, `scripts/safe_patch.py` and `scripts/memory.py`: data protection, proven patches and local memory.
+- `scripts/preserve.py`, `scripts/safe_patch.py`, `scripts/memory.py` and `scripts/recall.py`: data protection, proven patches, local memory searched by words and by meaning, and the notes a new session gets.
+- `scripts/workqueue.py`: the queue between the owner's remote VM and the notebook, for CPU work there and GPU work here.
 - `settings/`: policy as data. `settings/orchestration.yml` is the routing, privacy and cost policy, `settings/models.yml` the settings and limits of models, `settings/providers.yml` the remote providers, `settings/mcp/catalog.yml` the MCP servers and `settings/opencode/` the OpenCode setup.
 - `skills/`: the source of the skills. `agents/` and `hooks/` are published with them.
 - `patterns/`: one card per design pattern. `radar/radar.yml`: every evaluated tool with its status.

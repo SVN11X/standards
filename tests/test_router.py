@@ -667,5 +667,31 @@ class PinnedExecutorTests(Base):
         self.assertIsNone(self.decide("¿Qué hace Colibri con Ollama?")["pinned_executor"])
 
 
+class PlanRecipeTests(Base):
+    """The recipes of the owner's plan of 2026-11-21: a static site with a free service for visitor answers, and a 3D view."""
+
+    def test_semantic_search_on_a_site_starts_static_and_keeps_the_service_second(self):
+        decision = self.decide("Agrega búsqueda semántica con Workers AI a la página")
+        self.assertEqual(decision["recipe"], "web-visitor-ai")
+        visitor = self.provider(decision, "visitor-ai")
+        self.assertEqual(visitor["provider"], "static-first")
+        self.assertEqual(self.provider(decision, "static-search")["provider"], "build-index")
+
+    def test_local_only_never_offers_the_remote_service(self):
+        site = repo(self.root / "site", {**WEB, "wrangler.toml": "name = \"site\"\n"})
+        why = {a["provider"]: a["why_not"] for a in self.provider(
+            self.decide("Agrega búsqueda semántica a la página", cwd=site, limits=LOCAL), "visitor-ai")["alternatives"]}
+        self.assertIn("keeps the task on this machine", why["cloudflare-workers-ai"])
+        self.assertEqual(why["modelbest-api"], "on hold in the radar")
+        open_why = {a["provider"]: a["why_not"] for a in self.provider(
+            self.decide("Agrega búsqueda semántica a la página", cwd=site), "visitor-ai")["alternatives"]}
+        self.assertEqual(open_why["cloudflare-workers-ai"], "a provider earlier in the list is available")
+
+    def test_a_3d_view_is_added_when_the_request_names_it(self):
+        decision = self.decide("Agrega una vista 3D de la carcasa en STL al README de la página")
+        self.assertIn("3d-preview", [c["capability"] for c in decision["capabilities"]])
+        self.assertEqual(self.provider(decision, "3d-preview")["provider"], "github-stl-viewer")
+
+
 if __name__ == "__main__":
     unittest.main()

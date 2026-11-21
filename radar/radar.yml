@@ -328,8 +328,8 @@ entries:
     cost: free
     privacy: local
     expression: [sober, balanced, expressive]
-    notes: Vector search inside SQLite. Add it only when a measurement shows FTS5 misses what the agents need.
-    evaluated: 2026-11-09
+    notes: "Vector search inside SQLite. scripts/memory.py now adds meaning vectors to FTS5 and compares them in Python, which is enough for a few thousand notes. Add sqlite-vec only when the number of vectors or the search time asks for an index."
+    evaluated: 2026-11-21
   - name: just
     url: https://github.com/casey/just
     status: hold
@@ -904,3 +904,170 @@ entries:
     expression: []
     notes: "Coding agent harness in Rust, next to Claude Code and OpenCode, which its authors measured at about 3 MB of RAM per extra headless session. Its swarm tells an agent when another one edits a file it read and lets agents message one another, it monitors the prompt cache from the usage the provider reports, and agentgrep returns matches with their enclosing function. hooks/shift_notice.py, hooks/cache_notice.py and scripts/agentgrep.py follow those three ideas with own code. It signs in to Claude with OAuth: read Anthropic's terms before using a Claude subscription from another harness. Installs with install.sh, or install.ps1 on Windows. Read from a shallow clone of main (ddde657) on 2026-11-16, not installed here. Before trial: one delegated unit through it on this machine, compared with OpenCode in agent-benchmark for time, memory and pass rate."
     evaluated: 2026-11-16
+  # Engines, pilots and services named in the owner's plan of 2026-11-21 ("Plan de mejoras para STANDARDS"). The figures
+  # come from that plan and from what each project reports about itself. None was opened or measured from this session.
+  - name: llama.cpp
+    url: https://github.com/ggml-org/llama.cpp/releases
+    status: assess
+    profiles: [data-ai]
+    kind: tool
+    license: MIT
+    cost: free
+    privacy: "Runs on this machine. llama-server listens on loopback when started so."
+    expression: []
+    notes: "First engine to compare with Ollama on the RTX 2060 under Windows: the official Vulkan binary and one known GGUF. Measure prompt processing and generation apart, with the same answer, weights hash, quantization, template, context, output limit, temperature and task. It becomes an executor only after it beats the current route by the pilot rule of docs/006-model-analyzer.md."
+    evaluated: 2026-11-21
+  - name: llama.cpp-BELLS
+    url: https://github.com/DGuckert/llama.cpp-BELLS
+    status: assess
+    profiles: [data-ai]
+    kind: tool
+    license: not verified
+    cost: free
+    privacy: "Runs on this machine."
+    expression: []
+    notes: "Fork of llama.cpp for MoE models on small cards. The project reports 28.3 against 22.4 tokens per second for Qwen3-30B-A3B Q4 on another RTX 2060 with 6 GB. A pilot only if a compatible MoE GGUF is already on disk, with the same file and task on this notebook."
+    evaluated: 2026-11-21
+  - name: FreeToken-Kai
+    url: https://github.com/yuuki-net/FreeToken-Kai
+    status: assess
+    profiles: [data-ai]
+    kind: tool
+    license: not verified
+    cost: free
+    privacy: "Runs on this machine, under WSL2."
+    expression: []
+    notes: "Fork of FreeToken (https://github.com/FlashML-org/FreeToken) that documents Turing cards and 14 to 16 tokens per second of generation at a 20k context for gpt-oss-20b on another RTX 2060. The original FreeToken announces native support for RTX 30, 40 and 50 only. A pilot only if gpt-oss-20b is wanted."
+    evaluated: 2026-11-21
+  - name: ik_llama.cpp
+    url: https://github.com/ikawrakow/ik_llama.cpp
+    status: assess
+    profiles: [data-ai]
+    kind: tool
+    license: not verified
+    cost: free
+    privacy: "Runs on this machine."
+    expression: []
+    notes: "Fork of llama.cpp with its own quantizations and optimizations. Compare one identical GGUF with official llama.cpp only when a concrete quantization needs it. A CUDA build needs a toolkit that still supports sm_75. Record when the backend changed too."
+    evaluated: 2026-11-21
+  - name: InferSSD
+    url: https://github.com/wici-ai/inferssd/releases/tag/v0.1.5
+    status: assess
+    profiles: [data-ai]
+    kind: tool
+    license: not verified
+    cost: free
+    privacy: "Runs on this machine."
+    expression: []
+    notes: "Loads MoE experts from the SSD, version 0.1.5. Only for one task that needs a model larger than the card. Check the installer signature, the model architecture, the real disk space and the disk activity. Stop on sustained paging or when it passes the time limit of the task."
+    evaluated: 2026-11-21
+  - name: KTransformers
+    url: https://github.com/kvcache-ai/ktransformers
+    status: hold
+    profiles: [data-ai]
+    kind: tool
+    license: not verified
+    cost: free
+    privacy: "Runs on this machine."
+    expression: []
+    notes: "Its documented AVX2 profile asks for 24 GB of graphics memory. Reopen when a profile is shown for sm_75 and 6 GiB."
+    evaluated: 2026-11-21
+  - name: MoE-Infinity
+    url: https://github.com/EfficientMoE/MoE-Infinity
+    status: hold
+    profiles: [data-ai]
+    kind: tool
+    license: not verified
+    cost: free
+    privacy: "Runs on this machine."
+    expression: []
+    notes: "Its default build targets sm_80 and sm_90, not the sm_75 of the RTX 2060. Reopen when a build is shown for sm_75 and 6 GiB."
+    evaluated: 2026-11-21
+  - name: Slipstream
+    url: https://github.com/Schero94/slipstream
+    status: hold
+    profiles: [data-ai]
+    kind: tool
+    license: not verified
+    cost: free
+    privacy: "Runs on this machine."
+    expression: []
+    notes: "Its documented inference from the SSD targets Apple Silicon. Reopen for a compatible machine. On the Windows notebook the comparable test is InferSSD."
+    evaluated: 2026-11-21
+  - name: AirLLM
+    url: https://github.com/lyogavin/airllm/releases/tag/v3.1.0
+    status: hold
+    profiles: [data-ai]
+    kind: library
+    license: not verified
+    cost: free
+    privacy: "Runs on this machine."
+    expression: []
+    notes: "The Kimi K3 setup of the owner's guide cites 1.56 TB of weights, more than the whole SSD of the notebook. The same holds for kimi-k3-in-c (https://github.com/FareedKhan-dev/kimi-k3-in-c), kept to study the code with its small tests. Reopen inference when compatible weights and a task with a realistic time limit exist."
+    evaluated: 2026-11-21
+  - name: Diffusers_minimax-h3
+    url: https://github.com/animede/Diffusers_minimax-h3
+    status: hold
+    profiles: [data-ai, web]
+    kind: library
+    license: "code not verified. The community license of the MiniMax H3 weights (https://huggingface.co/MiniMaxAI/MiniMax-H3/blob/main/LICENSE) limits the territory and extends the limit to the outputs"
+    cost: free
+    privacy: "Runs on this machine."
+    expression: []
+    notes: "Community implementation that makes video with synchronized audio. The repository reports 237 s for a 5 s clip at 512 by 512 on an RTX 3050 with 6 GB and an NVMe disk. The license of the weights excludes the European Union, the United Kingdom, the Republic of Korea and the United States, so its clips never go on an international public site. Stays in the lab while the intended use is not covered. A pilot only for an original clip: its own environment, a fixed seed, and a decodable MP4 with duration, frames and audio checked, peak memory and total time recorded, through scripts/media.py."
+    evaluated: 2026-11-21
+  - name: Memorilla
+    url: https://github.com/snap-stanford/memorilla
+    status: hold
+    profiles: [data-ai]
+    kind: library
+    license: not verified
+    cost: free
+    privacy: "Runs on the machine that trains it."
+    expression: []
+    notes: "Latent memory for one Qwen3-8B. Its published recipes used H100 cards with 80 GB. Future research. The recall of this standard stays auditable by source, see docs/005-verification-and-orchestration.md."
+    evaluated: 2026-11-21
+  - name: Transformers.js
+    url: https://github.com/huggingface/transformers.js
+    status: assess
+    profiles: [web, data-ai]
+    kind: library
+    license: Apache-2.0
+    cost: free
+    privacy: "In a build step it runs in Node.js on the build machine. In a page it downloads the model weights to the visitor's device."
+    expression: []
+    notes: "Runs models in the browser or in Node.js. Use it in a Node.js build step when it makes the search index or the tags simpler. The public page loads only what the build made and never downloads weights. A demo of inference in the browser stays a separate option."
+    evaluated: 2026-11-21
+  - name: model-viewer
+    url: https://modelviewer.dev/
+    status: assess
+    profiles: [web, hardware]
+    kind: library
+    license: Apache-2.0
+    cost: free
+    privacy: "Renders in the browser. The page serves the GLB file."
+    expression: [sober, balanced]
+    notes: "Web component that shows a GLB with rotation and zoom. For an assembly or a part with materials or color: a GLB on GitHub Pages, loaded when the visitor presses View in 3D, with a poster first. Test rotation and zoom on desktop and phone."
+    evaluated: 2026-11-21
+  - name: OpenSandbox
+    url: https://github.com/opensandbox-group/OpenSandbox
+    status: assess
+    profiles: [software, web, infra]
+    kind: tool
+    license: not verified
+    cost: free
+    privacy: "Runs containers on this machine with Docker or WSL2."
+    expression: []
+    notes: "Disposable sandboxes for Python and browser tests. A QA pilot only when a test leaves dependencies or files that are hard to clean: one Linux container, a Python or Playwright test, limits on CPU, memory and time, no network for the prepared test, and no mount of the user profile, its credentials or the Docker socket. Reuse worktrees and scripts/safe_patch.py. Accepted when two runs of the same revision leave the checkout unchanged and a cancel frees the container. Native checks of Windows apps stay on Windows."
+    evaluated: 2026-11-21
+  - name: T3 Code
+    url: https://github.com/pingdotgg/t3code
+    status: assess
+    profiles: [software, infra]
+    kind: app
+    license: not verified
+    cost: "free. The plan says T3 Connect gives up to three machines on a free account and phones or browsers take no place. Each model provider keeps its own terms"
+    privacy: "T3 Connect links the owner's phone or browser to the remote machine. The prompts and code of a session go to the model provider the agent uses."
+    expression: []
+    notes: "Interface for coding agents, installed on the remote node to follow and steer a task from the phone while the notebook is off. It has no native support for local models, so the work for the RTX goes through the queue of scripts/workqueue.py. Install: docs/user/install.md, remote access: docs/user/remote-access.md, the Linux service: docs/user/background-service.md of the repository. Before trial: t3 status and t3 service status on the VM, a phone approved as a new device, and the connection again after SSH is closed."
+    evaluated: 2026-11-21
