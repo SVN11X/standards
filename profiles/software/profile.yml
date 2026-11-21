@@ -42,6 +42,7 @@ with_reason:
   - Global state or a singleton.
   - Threads, async concurrency or multiprocessing.
   - Generated code committed to the repository.
+  - A patch against a pinned dependency. docs/patches.md lists each one with what it does, its upstream reference and what retires it.
 
 options:
   kind:

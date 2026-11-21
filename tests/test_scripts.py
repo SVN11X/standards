@@ -503,6 +503,14 @@ class CostAndData(Base):
         self.assertEqual(run["state"], "verified")
         self.assertEqual(run["size"], {"files": 1, "added": 2, "removed": 0})
 
+    def test_the_gpu_line_keeps_driver_and_power_limit_and_reads_a_missing_one_as_none(self):
+        desktop = orchestrate.parse_gpu("NVIDIA GeForce RTX 3090, 24576, 512, 581.42, 250.00")
+        self.assertEqual((desktop["driver"], desktop["power_limit_w"], desktop["vram_total_mib"]), ("581.42", 250.0, 24576))
+        laptop = orchestrate.parse_gpu("NVIDIA GeForce RTX 2060, 6144, 300, 581.42, [N/A]")
+        self.assertEqual((laptop["driver"], laptop["power_limit_w"]), ("581.42", None))
+        old = orchestrate.parse_gpu("NVIDIA GeForce RTX 2060, 6144, 300")
+        self.assertEqual((old["driver"], old["power_limit_w"]), (None, None))
+
     def test_table_names_every_task(self):
         conf = orchestrate.policy()
         rows = orchestrate.route_table(self.tmp, local=self.local(), caps=self.caps, mode="free-strict")

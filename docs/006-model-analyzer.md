@@ -203,6 +203,10 @@ What decides is how long the notebook takes to finish a correct task. A speed an
 
 Before a run, record free graphics memory, RAM, the driver and free disk space. Free the card between runs: one local measurement at a time. Fix the weights hash, the quantization, the template, the context, the output limit, the temperature and the task. Measure the cold load, the warm runs, the peak memory, the time to the first token and the seconds to an accepted result. When the model or the quantization changes, the result belongs to the whole combination. When the weights or the grader change behind the same id, record the change before mixing results.
 
+Two runs are comparable only when they name the same six things, as HyperQwen's field reports do: the card, its power limit, the driver, the operating system or container, the commit of the engine and the configuration. Bench rows record the card, its memory, the driver and the power limit that `nvidia-smi` reports, with the OpenCode and Ollama versions. Discard the first run after a server starts, which HyperQwen measured 30 to 50 % low, and put every speed next to a quality check of the same configuration. A drafter that proposes tokens out of the prompt pays off only when the answer repeats the input, as an edit or a translation does, so measure it on such a task apart from plain chat.
+
+HyperQwen itself needs a card with 24 GB, or two or more cards together, so it stays on hold in the radar for the 6 GB RTX 2060.
+
 The policy asks for 3 runs at a pass rate of 0.8 within 30 days, so three tries need three passes, and a failure counts in the pass rate. Another engine is integrated only when its median improves by 15 % or more with at least the same quality, or when it finishes within the time limit a task the current setup cannot finish. The 15 % is a rule of the pilot, not of the router. The integration then adds only the winning engine and the task type it passed, off by default, with a test that the previous route still works.
 
 ```

@@ -364,11 +364,28 @@ def append_telemetry(row: dict) -> None:
 def detect_gpu() -> dict | None:
     if not shutil.which("nvidia-smi"):
         return None
-    result = run(["nvidia-smi", "--query-gpu=name,memory.total,memory.used", "--format=csv,noheader,nounits"], timeout=10)
+    # Driver and power limit too: two runs are comparable only with the same card, power cap and driver.
+    result = run(["nvidia-smi", "--query-gpu=name,memory.total,memory.used,driver_version,power.limit",
+                  "--format=csv,noheader,nounits"], timeout=10)
     if result["exit"] != 0 or not result["stdout"].strip():
         return None
-    name, total, used = [part.strip() for part in result["stdout"].splitlines()[0].split(",")[:3]]
-    return {"name": name, "vram_total_mib": int(float(total)), "vram_used_mib": int(float(used))}
+    return parse_gpu(result["stdout"].splitlines()[0])
+
+
+def parse_gpu(line: str) -> dict:
+    """One line of nvidia-smi. A field the card does not report, such as the power limit of many laptops, is None."""
+    parts = [part.strip() for part in line.split(",")] + [""] * 5
+    name, total, used, driver, power = parts[:5]
+
+    def number(text: str):
+        try:
+            return float(text)
+        except ValueError:
+            return None
+    info = {"name": name, "vram_total_mib": int(float(total)), "vram_used_mib": int(float(used))}
+    info["driver"] = driver if driver and not driver.startswith("[") else None
+    info["power_limit_w"] = number(power)
+    return info
 
 
 def memory_bytes() -> int | None:
@@ -1859,7 +1876,8 @@ def make_bench_repo(root: Path, task: str = "fix-bug") -> Path:
 def hardware() -> dict:
     caps = cached_capabilities(max_age_s=86400) or {}
     return {"os": platform.platform(), "machine": platform.machine(), "python": platform.python_version(),
-            "gpu": caps.get("gpu"), "opencode": (caps.get("opencode") or {}).get("version")}
+            "gpu": caps.get("gpu"), "opencode": (caps.get("opencode") or {}).get("version"),
+            "ollama": (caps.get("ollama") or {}).get("version")}
 
 
 def bench_local(folder: Path, local: dict | None) -> dict:

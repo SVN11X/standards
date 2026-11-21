@@ -6,13 +6,14 @@ All notable changes to this standard are documented here. The format follows [Ke
 
 ## [1.24.0] - 2026-11-21
 
-The owner asked on 2026-11-21 for the four principles of andrej-karpathy-skills (MIT), drawn from Andrej Karpathy's post on the coding mistakes of language models. They are written here in the standard's own words.
+The owner asked on 2026-11-21 for the four principles of andrej-karpathy-skills (MIT), drawn from Andrej Karpathy's post on the coding mistakes of language models, and for what fits from HyperQwen. Both are written here in the standard's own words.
 
 ### Added
 
 - Base rules: every changed line traces to the task, with no reformatting, renaming or refactoring of the code next to it and the style around it kept. An agent removes what its own change left unused and mentions other dead code in the pull request instead of deleting it. A new slop rule: no feature, option or error handling that nobody asked for or that covers a case that cannot happen.
 - The code-review skill checks the scope of a change right after its contract, and `prompts/review.md` does the same for tools without skills. `skills/code-review/evals.yml` gets a case with a rename and a deleted function next to the fix.
 - A radar entry for andrej-karpathy-skills at adopt, and its sources in `references.md`.
+- From HyperQwen (Apache-2.0), which the owner sent on 2026-11-21. Bench rows record the GPU driver and power limit that `nvidia-smi` reports, and the Ollama version, and the analyzer report prints them. `docs/006-model-analyzer.md` asks an engine pilot for the six things that make two runs comparable, to discard the first run after a server start, to pair every speed with a quality check, and to measure prompt drafting on edit tasks apart. The software profile lists a patch against a pinned dependency among the techniques that need a reason, with one line per patch in `docs/patches.md`. HyperQwen goes on hold in the radar: it needs 24 GB on one card or several cards together.
 
 ### Changed
 
