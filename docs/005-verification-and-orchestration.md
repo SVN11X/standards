@@ -43,6 +43,20 @@ The class comes from `~/.standards/local.yml`, which only the owner edits (`orch
 
 `preserve.py` protects data with checksums, id lists and minimum counts, and lists what an extraction still misses so it can resume. `safe_patch.py` proves a patch applies on its base and passes the tests there. `memory.py` keeps decisions and test results in SQLite FTS5, labels agent entries as hints and refuses secrets.
 
+## Verify a change where a person uses it
+
+A test can pass while the change fails for the person who uses it. An agent closes the loop itself: it follows the person's steps in the running app, or the closest test, before the change to see the failure and after it to see the fix, and says what it saw. For the FocoLocal timer that kept counting after a tab change, that means two tabs, a change of focus and the log showing that the first counter stops, before and after the fix. A guardrail of `.standard.yml` or a required test then keeps it from coming back.
+
+`docs/feature-map.md` is optional and tells an agent where each feature lives. `standard.py check` warns on any path in it that does not exist.
+
+```markdown
+| Feature | Where a person finds it | Code | Test |
+| --- | --- | --- | --- |
+| Sign up | Home, Create account | `src/features/signup/` | `tests/e2e/signup.spec.ts` |
+```
+
+The `web-tester` and `desktop-tester` agents read it first and follow the rows the change touches. Lauren Tan's agents do the same through Cursor with Control Glass and a map of features, as ConquerAI described on 2026-11-16. Counting merged pull requests says little on its own: the report of a long run also gives the size of each change, what was reverted and how long verifying it took, and `execute.py report` records the files and lines of each unit's commit and the seconds its tests took.
+
 ## Recall by words and by meaning
 
 `recall.py` gives a new session the decisions and notes that fit its request. Words alone miss a question asked in other words, such as "¿por qué tardó tanto en corregir el error?" for a note that says prefill and timeout. Meaning search adds to the word search, it never replaces it:

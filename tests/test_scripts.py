@@ -495,6 +495,14 @@ class CostAndData(Base):
         self.assertEqual(unchecked["state"], "blocked")
         self.assertNotIn("worktree", unchecked)
 
+    def test_a_verified_delegation_records_the_size_of_its_change(self):
+        repo = self.repo()
+        edit = "import pathlib; pathlib.Path('a.txt').write_text('one\\ntwo\\nthree\\n')"
+        run = orchestrate.delegate_opencode(repo, "Change a.txt", ["a.txt"], f'"{sys.executable}" -c "pass"',
+                                            model="opencode/glm-5.3-flash-free", local=self.local(), command=[sys.executable, "-c", edit])
+        self.assertEqual(run["state"], "verified")
+        self.assertEqual(run["size"], {"files": 1, "added": 2, "removed": 0})
+
     def test_table_names_every_task(self):
         conf = orchestrate.policy()
         rows = orchestrate.route_table(self.tmp, local=self.local(), caps=self.caps, mode="free-strict")

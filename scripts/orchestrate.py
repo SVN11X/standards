@@ -1719,6 +1719,10 @@ def delegate_opencode(repo: Path, task: str, allowed: list[str], test: str | Non
         git(worktree, "-c", "user.name=standards-delegate", "-c", "user.email=delegate@localhost",
             "commit", "-q", "-m", f"chore(delegate): {task.strip().splitlines()[0][:60]}")
         run_data["commit"] = git(worktree, "rev-parse", "HEAD")
+        # The size of a change says more than the count of changes: lines added and removed, files touched.
+        stats = [line.split("\t") for line in git(worktree, "diff", "--numstat", base, run_data["commit"]).splitlines() if line.strip()]
+        run_data["size"] = {"files": len(stats), "added": sum(int(a) for a, _, _ in stats if a.isdigit()),
+                            "removed": sum(int(r) for _, r, _ in stats if r.isdigit())}
         set_state(run_data, "verified", f"integrate with: git cherry-pick {run_data['commit'][:12]}")
     if not keep and run_data["state"] == "verified":
         # The work is committed on its branch. A worktree git refuses to remove still holds something, so it stays.

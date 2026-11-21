@@ -510,7 +510,7 @@ class Executor:
                       attempt_log=log, partial=True if partial else None, failure_code=info.get("failure_code"),
                       agent_s=(data.get("executor_result") or {}).get("seconds"),
                       tests_s=(data.get("test_result") or {}).get("seconds"),
-                      tests_waited_s=(data.get("test_result") or {}).get("waited_s"))
+                      tests_waited_s=(data.get("test_result") or {}).get("waited_s"), size=data.get("size"))
         if status == DONE:
             self.mark(uid, REVIEWED, note=note, **fields)
             problem = self.take(data["commit"])
@@ -598,7 +598,7 @@ def report(plan: dict, state: dict) -> dict:
         if entry is None:
             units.append({"id": unit["id"], "status": "not_run", "commit": None, "tests": None, "review": None,
                           "findings": None, "retries": None, "executor": None, "model": None, "note": None,
-                          "channel": None, "seconds": None, "partial": None, "attempt_log": None,
+                          "channel": None, "seconds": None, "partial": None, "attempt_log": None, "size": None, "verify_s": None,
                           "depends_on": plan_deps.get(unit["id"], [])})
             continue
         found = entry.get("review")
@@ -611,8 +611,8 @@ def report(plan: dict, state: dict) -> dict:
                       "retries": max(0, tried - 1) if isinstance(tried, int) else None,
                       "executor": entry.get("executor"), "model": entry.get("model"), "note": entry.get("note"),
                       "channel": entry.get("channel"), "seconds": entry.get("seconds"),
-                      "partial": entry.get("partial"), "attempt_log": entry.get("attempt_log"),
-                      "depends_on": plan_deps.get(unit["id"], [])})
+                      "partial": entry.get("partial"), "attempt_log": entry.get("attempt_log"), "size": entry.get("size"),
+                      "verify_s": entry.get("tests_s"), "depends_on": plan_deps.get(unit["id"], [])})
     counts: dict[str, int] = {}
     for item in units:
         counts[item["status"]] = counts.get(item["status"], 0) + 1

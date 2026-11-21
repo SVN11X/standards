@@ -72,3 +72,14 @@ From the owner's "Plan de mejoras para STANDARDS". One branch with one commit pe
 - [ ] BLOCKED: the Raspberry Pi 4 case adopts `3d-preview` in the prototype's repository
 - [ ] BLOCKED: OpenSandbox QA pilot, which needs Docker or WSL2 on the notebook
 - [ ] BLOCKED: the Oracle A1 node and T3 Code on the owner's personal account, then the acceptance test of `docs/005-verification-and-orchestration.md` with the notebook off. `workqueue.py --via` was tested here without SSH
+
+## The ConquerAI video and the owner's agent reports of 2026-11-21
+
+- [x] Guardrails in `.standard.yml` enforced by the check, skill evals with several runs, the feedback loop and `docs/feature-map.md`, and the size of each change in the reports
+- [x] Commit gate scoped to the commit, `git branch -d` without a prompt, the PR template and `check --pr --title --body-file`, the Pages artifact per attempt, doubling cooldowns and `no_change`
+- [x] Base rules for UTF-8 and LF, a look at media before publishing, and files that parallel changes edit
+- [ ] BLOCKED: the owner decides whether to run `orchestrate.py consent --merge-workflows when-green`. Workflow changes keep waiting for the owner until then
+- [ ] BLOCKED: the owner adds narrow allow rules in `%USERPROFILE%\.claude\settings.json` for the commands the auto mode classifier stops, such as the exact `merge_when_green.py` command, as `docs/003-autopilot-and-hooks.md` explains. Nothing in a repository can change that file
+- [ ] BLOCKED: the owner chooses whether to soften "show me the plan before deleting files" for files the task itself created. It lives in the owner's own instructions
+- [ ] BLOCKED: `skill_eval.py run code-review --executor claude --runs 3` on the owner's machine. The tests here use a fake agent
+

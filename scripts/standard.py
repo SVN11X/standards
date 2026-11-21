@@ -923,6 +923,19 @@ def check_how_it_works(repo: Path, report: Report) -> None:
         report.warn(rel, "Still marked as a draft. The owner confirms it by removing the Status line.")
 
 
+FEATURE_MAP = Path("docs") / "feature-map.md"
+
+
+def check_feature_map(repo: Path, report: Report) -> None:
+    """docs/feature-map.md is optional. When it exists, every path it names exists, so an agent that follows it
+    reaches the code and the test of the feature it changes."""
+    path = repo / FEATURE_MAP
+    if not path.exists():
+        return
+    for token in missing_doc_paths(repo, path.read_text(encoding="utf-8")):
+        report.warn(FEATURE_MAP.as_posix(), f"Names `{token}`, which does not exist. Fix the path or the row.")
+
+
 def check_decisions(repo: Path, report: Report) -> None:
     """A decision record says who accepted it only once it is accepted. The template used to say both at once."""
     folder = repo / "docs" / "decisions"
@@ -997,6 +1010,7 @@ def run_check(repo: Path, pull_request: bool = False) -> Report:
         check_plan(repo, report)
         check_decisions(repo, report)
         check_how_it_works(repo, report)
+        check_feature_map(repo, report)
     if pull_request:
         check_pull_request(report)
     return report
@@ -1554,6 +1568,15 @@ def cmd_selftest() -> int:
             config.pop("guardrails")
             write_config(web, config)
             git_add_all(web)
+        write_text(first_repo / "docs" / "feature-map.md", "# Feature map\n\n| Feature | Where | Code | Test |\n| --- | --- | --- | --- |\n"
+                   "| Sign up | Home, Create account | `src/signup/` | `docs/goals.md` |\n")
+        git_add_all(first_repo)
+        if not any("Names `src/signup/`" in message for _, message in run_check(first_repo).warnings):
+            failures.append("a feature map row with a missing path should warn")
+        else:
+            print("negative case passed: feature map names a missing path")
+        (first_repo / "docs" / "feature-map.md").unlink()
+        git_add_all(first_repo)
         cad = next((repo for repo in sorted(root.glob("case-*-hardware")) if (repo / "mechanical").is_dir()), None)
         if cad is not None:
             write_text(cad / "mechanical" / "top-cover.stl", "solid top\nendsolid top\n")

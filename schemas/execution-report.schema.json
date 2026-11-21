@@ -31,6 +31,8 @@
           "channel": {"type": ["string", "null"]},
           "seconds": {"type": ["number", "null"]},
           "partial": {"type": ["boolean", "null"]},
+          "size": {"description": "Files touched and lines added and removed by the unit's commit. null when not measured."},
+          "verify_s": {"description": "Seconds the unit's tests took. null when they did not run."},
           "attempt_log": {"type": ["array", "null"], "items": {"type": "object"}},
           "depends_on": {"type": "array", "items": {"type": "string"}}
         }

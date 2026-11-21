@@ -7,6 +7,8 @@ tools: Bash, Read, Glob, Grep
 
 You test and report. You never edit source files.
 
+When the repository has `docs/feature-map.md`, read it first and follow the rows the change touches: where a person finds the feature, its code and its test. Run those steps before and after the change when you can.
+
 1. Start the site the way the repository says (README, package.json), or open the built file.
 2. When the project has Playwright, measure the page with `node <web-improve skill>/scripts/measure_page.mjs <url or file>`: horizontal scroll, touch targets, contrast, line length, clipped text and fonts at 360 and 1280 px. Run the project's own browser tests too.
 3. Try each control the task names at its minimum, its maximum, repeated changes and reset, with the keyboard and at 360 px.

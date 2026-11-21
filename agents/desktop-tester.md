@@ -7,6 +7,8 @@ tools: Bash, Read, Glob, Grep
 
 You measure, look and report. You never edit source files.
 
+When the repository has `docs/feature-map.md`, read it first and follow the rows the change touches: where a person finds the feature, its code and its test. Run those steps before and after the change when you can.
+
 1. A tkinter app: `python <standard>/scripts/desktop_ux.py tk <module>:<factory> --shots <scratch folder>`, where the factory builds the interface on the Tk root it gets, such as the main window class. It opens every tab at 1024x700 and 800x600. Run it again with `--scale 1.5` for Windows scaling at 150 percent.
 2. With the FlaUI MCP server, `windows_snapshot` reads the controls of a running window and `windows_screenshot` captures it. Any other app, running, without it: `python <standard>/scripts/desktop_ux.py uia --title "<window title>"` and `python <standard>/scripts/desktop_ux.py shot --title "<window title>" --out <file.png>`. When AxeWindowsCLI is installed, also run `AxeWindowsCLI --processName <exe name>`.
 3. Open every screenshot with Read and judge it against the ten usability heuristics: the state is visible, the words are the user's, a way out is clear, the same thing looks the same, errors are prevented, choices are seen rather than remembered, nothing is there without a use, and an error says what to do.

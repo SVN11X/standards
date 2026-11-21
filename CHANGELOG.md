@@ -21,8 +21,15 @@ The owner's plan of 2026-11-21 ("Plan de mejoras para STANDARDS") asked for thes
 - `standard.py check` warns on an STL over the 10 MB limit of the GitHub viewer and on an STL with no STEP or STP master. The hardware profile with mechanical design gets the matching rule.
 - `docs/006-model-analyzer.md` has the rule of an engine pilot: a median 15 % better with the same quality, or a task the current setup cannot finish in time. `docs/005-verification-and-orchestration.md` explains recall by meaning, public sites with the owner's machine off, the 3D view, disposable tests and the remote node with its sizing on Oracle Always Free.
 
+- From the ConquerAI video of 2026-11-16 on Lauren Tan's agent workflow. Guardrails in `.standard.yml`: forbidden patterns per file glob and module boundaries read from Python and JavaScript or TypeScript imports, enforced by `standard.py check` as errors and listed in the generated `AGENTS.md`. `scripts/skill_eval.py` runs the cases of a skill's `evals.yml` several times on fresh fixtures, grades each answer with a program and flags a step half the runs or more missed, with a first case for `code-review`. `AGENTS.md` asks an agent to follow the person's steps in the running app before and after a change. The optional `docs/feature-map.md` says where each feature, its code and its test live, the check warns on a missing path, and the web and desktop testers read it. Delegated runs record the files and lines of their commit, and the execution report gives each unit's size and test seconds.
+- `standard.py check . --pr --title "<title>" --body-file <file>` checks a pull request before it is opened.
+- `orchestrate.py consent --merge-workflows when-green` lets `merge_when_green.py` merge a change to `.github/workflows/` once every check passed, unless an added line reaches secrets, write permissions or the triggers that run with them. Deploy and secret files still wait for the owner.
+- Base rules from the owner's agent reports of 2026-11-21: text is read and written as UTF-8 with LF line endings (the Windows failures of three pull requests), every image, video and document is opened before publishing (card data in billing screenshots, a Wi-Fi password in a document and MAC addresses in a capture), and a file many parallel changes edit is generated at build time or split into one file per item (the conflicts on a search index and lists of items). `docs/003-autopilot-and-hooks.md` explains the three sources of permission prompts and what the owner can change.
+
 ### Changed
 
+- `AGENTS.md`: a step that must wait for a merge is done after it, or given with "after merging" first. Removing what the task created, such as a scratch file, the agent's own worktree with `git worktree remove` or its merged branch with `git branch -d`, is green. The report of a long run, now step 7, gives the size of each change, what was reverted and how long verifying it took. The `item-worker` agent follows the same steps.
+- A failure in a row doubles a model's cooldown up to `health.max_cooldown_s`, and an agent that ends without error and writes nothing gets the new `no_change` code, so a local model that timed out twice on texts is skipped instead of costing another 10 minutes.
 - The night run plans only the evidence that is missing. Two fresh passes get one more run, and a combination that failed is not run again until its evidence lapses or its grader, OpenCode minor or GPU changes. `--runs N` still measures every combination. Bench rows of a coding agent record the size of the task packet in `input_chars`.
 - A local Ollama model that failed the bench class of the task is refused, as a failed Colibri model already was.
 
@@ -30,6 +37,10 @@ The owner's plan of 2026-11-21 ("Plan de mejoras para STANDARDS") asked for thes
 
 - `orchestrate.py models` never showed a coding agent as authorized for `edit-small` or any other task type whose name is not a bench class: it compared the task type with the bench classes of the coverage. It now counts the classes that measure the task type.
 - `delegate colibri --model colibri/<id>` ran OpenCode with that id even when Colibri served another one. It is now blocked with both ids.
+- The commit gate blocked every commit while the check failed, also for a loose file the owner added meanwhile. It now blocks only for check errors about the files the commit holds.
+- `git branch -d` asked the owner, because the rule for `git branch -D` ignored case. Only a forced deletion asks now.
+- The pull request template held a bare "Closes #", which fails the check. It now says to link the issue or write None, and the check names the expected title and Task line.
+- A re-run of the Pages workflow of the web profile failed on two artifacts with one name. Each attempt now names its own artifact.
 
 ## [1.22.2] - 2026-11-18
 
