@@ -221,6 +221,14 @@ concurrency:
   # Seconds a ready unit may wait for a slot that something outside the plan holds before it is blocked.
   stall_s: 900
 
+# Meaning search of scripts/memory.py and scripts/recall.py, added to the FTS5 word search. Vectors come from the local
+# Ollama only. min_similarity is a starting value to tune with `memory.py eval`, not a measurement.
+memory:
+  model: qwen3-embedding:0.6b
+  min_similarity: 0.5
+  candidates: 10
+  rrf_k: 60
+
 # A model or program that fails with one of these codes is skipped until the cooldown (seconds) ends.
 # The state lives in ~/.standards/health.json. A later success clears it. Colibri is never replaced by another
 # model: its cooldown blocks Colibri tasks and the router offers no fallback for them.

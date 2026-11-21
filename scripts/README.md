@@ -18,7 +18,7 @@
 - `providers.py`: the transport for providers with an OpenAI-compatible API (`status`, `models`, `check`). Keys come from the environment and are never stored or printed.
 - `preserve.py`: snapshots and compares protected data, and lists what an extraction still misses.
 - `safe_patch.py`: builds a patch for git am and proves it applies and passes the tests on its base.
-- `memory.py`: local technical memory in SQLite FTS5, outside every repository, with export and expiry of agent hints.
+- `memory.py`: local technical memory in SQLite FTS5, outside every repository, with export and expiry of agent hints, meaning vectors from the local Ollama (`index`), search by words and meaning with references (`find`) and a comparison on the owner's questions (`eval`).
 - `evidence.py`: the result format and the report writer the other scripts share.
 - `standard.py`: the engine of the standard. Run `python scripts/standard.py --help` for the commands. Needs PyYAML (`pip install pyyaml`).
 - `publish-templates.sh` (bash) and `publish-templates.ps1` (Windows PowerShell): build one template repository per profile and push them to GitHub as template repositories. They need Python with PyYAML and the GitHub CLI (`gh`), logged in.

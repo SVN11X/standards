@@ -43,6 +43,33 @@ The class comes from `~/.standards/local.yml`, which only the owner edits (`orch
 
 `preserve.py` protects data with checksums, id lists and minimum counts, and lists what an extraction still misses so it can resume. `safe_patch.py` proves a patch applies on its base and passes the tests there. `memory.py` keeps decisions and test results in SQLite FTS5, labels agent entries as hints and refuses secrets.
 
+## Recall by words and by meaning
+
+`recall.py` gives a new session the decisions and notes that fit its request. Words alone miss a question asked in other words, such as "¿por qué tardó tanto en corregir el error?" for a note that says prefill and timeout. Meaning search adds to the word search, it never replaces it:
+
+```
+python scripts/memory.py index --repo .
+python scripts/memory.py find "¿por qué tardó tanto en corregir el error?" --repo .
+python scripts/memory.py eval my-questions.yml --repo .
+```
+
+`index` asks the embedding model of the local Ollama (`memory.model`, `qwen3-embedding:0.6b`) for vectors of the entries and decision records that are new or changed. Each vector records its repository, key, source, content hash, model, model revision and dimensions. An address off this machine is refused, because notes can be private. A vector of another model, revision or size is ignored until `index` rebuilds it, and only those vectors are rebuilt. Each batch is committed, so an interrupted run keeps what it finished. Without Ollama or without vectors, the word search answers alone.
+
+`find` and `recall.py` filter to the repository first, then rank by words (FTS5) and by meaning, and fuse both lists by key with reciprocal rank (`memory.rrf_k`). A meaning match counts only above `memory.min_similarity`. Each result keeps its key, its reference and its source, so an agent hint stays a hint. The prompt hook passes at most a budget of characters.
+
+`eval` measures before anything is trusted. The owner writes real questions in Spanish and English and marks the right fragment before the test, with an exact id, a paraphrase, a question with no answer and two projects with similar words:
+
+```yaml
+queries:
+  - {query: "Colibri prefill timeout", lang: en, type: exact, expect: [docs/007-autonomous-execution.md]}
+  - {query: "¿por qué tardó tanto en corregir el error?", lang: es, type: paraphrase, expect: [entry:42]}
+  - {query: "¿qué receta de pan usamos?", lang: es, type: unanswerable, expect: []}
+```
+
+It prints, for words alone and for words and meaning, the hits among the first 3 and the first 10 per language and kind as a numerator and a denominator, how many were found only after the third place and how many questions without an answer got none. `min_similarity` 0.5 is a starting value, not a measurement: tune it with `eval`. A reranker such as Qwen3-Reranker-0.6B or BGE-reranker-v2-m3 is worth a test only when the right answer is often in the first 10 and rarely in the first 3. sqlite-vec is worth it only when the number of vectors or the search time asks for an index. Memorilla's latent memory was published for one Qwen3-8B on 80 GB H100 cards, so it stays future research.
+
+Bench runs of a coding agent record the size of the task packet in `input_chars`, so a smaller context can be compared with the `fix-bug` result it gave.
+
 ## One run for everything
 
 ```
