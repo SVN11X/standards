@@ -92,6 +92,7 @@ class WorkQueue(unittest.TestCase):
             self.assertTrue(workqueue.may_enter(repo)[0])
         self.assertEqual(workqueue.main(["--db", str(Path(self.tmp.name) / "cli.db"), "add", "--repo", str(repo), "--commit", "abc",
                                          "--needs", "cpu", "--command", "tests"]), 1)
+        self.assertFalse((Path(self.tmp.name) / "cli.db").exists())
 
     def test_a_busy_card_leaves_gpu_work_waiting(self):
         with mock.patch("resources.local_busy", return_value="the graphics card has 300 MiB free"):

@@ -4,6 +4,14 @@ All notable changes to this standard are documented here. The format follows [Ke
 
 ## [Unreleased]
 
+### Changed
+
+- The edit task types get a ceiling of 300 s on the p90 seconds to an accepted result, half of `opencode_timeout_s`. `ollama/qwen3.5-9b-ctx16k`, at p90 470 s, ran out of time once and wrote nothing in 469 s once on real work. In local-only `edit-small` now answers blocked at once, and `docs-small` falls back to Ollama as its task list says.
+
+### Fixed
+
+- `workqueue.py add` opened the queue file before it checked that the repository may enter. A refused task left `cli.db` open, and on Windows its test failed to remove the temporary folder. The check now comes first, so a refused task creates no file.
+
 ## [1.24.1] - 2026-11-21
 
 ### Changed

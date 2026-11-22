@@ -181,6 +181,7 @@ class Route(Base):
         history = rows("colibri/slow", False, 2) + rows("colibri/once", False, 1) + rows("colibri/good", True, 3)
         orchestrate.bench_file().write_text("\n".join(json.dumps(r) for r in history) + "\n", encoding="utf-8")
         conf = orchestrate.policy()
+        conf["limits"]["max_p90_s"] = {}
         failed = orchestrate.failed_models("edit-small", conf)
         self.assertEqual({key[1] for key in failed}, {"colibri/slow"})
         self.assertEqual({key[1] for key in orchestrate.measured_models("edit-small", conf)}, {"colibri/good"})
@@ -215,7 +216,7 @@ class Route(Base):
         self.assertEqual(orchestrate.measured_models("classify", conf), {})
         self.assertIn(("ollama", "a:1b"), orchestrate.slow_models("classify", conf))
         self.assertIn(("ollama", "a:1b"), orchestrate.measured_models("summarize-short", conf))
-        self.assertEqual(orchestrate.policy()["limits"]["max_p90_s"], {})
+        self.assertNotIn("classify", orchestrate.policy()["limits"]["max_p90_s"])
         caps = {"ollama": {"up": True, "models": ["a:1b"], "loaded": [], "remote": []}}
         decision = orchestrate.route("classify", self.tmp, conf=conf, local=self.local(), caps=caps)
         self.assertIn("does not count as proven: p90", " ".join(decision["reasons"]))

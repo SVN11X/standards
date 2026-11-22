@@ -124,7 +124,9 @@ limits:
   refresh_before_days: 7
   # Ceiling on the p90 seconds to an accepted result, keyed by route task type, such as {edit-small: 120}.
   # A model over it does not count as proven for that task type. {} means no limit.
-  max_p90_s: {}
+  # The edit types get half of opencode_timeout_s: on 2026-11-21 ollama/qwen3.5-9b-ctx16k, at p90 470 s, ran out of
+  # time once and wrote nothing in 469 s once on real work, so the agent did the edit itself after 18 minutes.
+  max_p90_s: {edit-small: 300, fix-test: 300, docs-small: 300, fix-check: 300, web-pattern: 300, web-test: 300}
   # A provider's price list older than this no longer proves that a model is free.
   provider_list_max_age_h: 24
   output_tail_chars: 4000
