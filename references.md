@@ -62,6 +62,7 @@ Sources behind the rules. Prefer the original source. The check verifies these l
 - GSAP in React, useGSAP: https://gsap.com/resources/React/
 - Lenis: https://github.com/darkroomengineering/lenis
 - React Bits: https://github.com/DavidHDev/react-bits
+- Motion: https://github.com/motiondivision/motion
 - web.dev, performance budgets 101: https://web.dev/articles/performance-budgets-101
 - Okabe and Ito, Color Universal Design: https://jfly.uni-koeln.de/color/
 - Okabe-Ito palette with hex values, NYU Siegal lab: https://siegal.bio.nyu.edu/color-palette/

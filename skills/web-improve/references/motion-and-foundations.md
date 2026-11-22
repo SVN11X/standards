@@ -31,13 +31,13 @@ Effects, gradients, 3D and animation that the owner asked for are not refused by
 Check the radar of the standard before adding any of these, and the current license and terms before adopting one.
 
 - CSS and SVG for buttons, illustrations and characters that fit them.
-- Motion for React or GSAP with ScrollTrigger when the stack and the interaction justify a library.
+- Motion for React or GSAP with ScrollTrigger when the stack and the interaction justify a library. With Motion, wrap the app in `<MotionConfig reducedMotion="user">` and read `useReducedMotion()` where a component moves on its own.
 
 ### GSAP, Lenis and React Bits
 
 - GSAP: wrap each animation in `gsap.matchMedia()` with a `(prefers-reduced-motion: reduce)` condition. Animations made inside it are reverted when the condition stops matching ([gsap.matchMedia](https://gsap.com/docs/v3/GSAP/gsap.matchMedia())). In React, create them in `useGSAP()` from `@gsap/react`, which cleans them up, and wrap event handlers that animate in `contextSafe` ([GSAP in React](https://gsap.com/resources/React/)). Its license is free for commercial sites and refuses use inside a tool that builds animations without code and competes with Webflow ([standard license](https://gsap.com/standard-license)).
 - Lenis: only when a WebGL or ScrollTrigger scene must follow the scroll, never for smoothness alone. Keep `respectReducedMotion` at its default `true`, set `anchors: true` or anchor links stop working, mark nested scroll areas with `data-lenis-prevent`, and load `lenis.css`. It has no CSS scroll-snap and stops over iframes. With ScrollTrigger, call `ScrollTrigger.update` on each Lenis scroll and drive Lenis from `gsap.ticker` with `lagSmoothing(0)`, as its README shows ([Lenis](https://github.com/darkroomengineering/lenis)).
-- React Bits: add one component with its CLI in the flavor of the stack and check how it reads the reduced motion setting. Its license lets a site use the components and forbids redistributing them, so never copy them into a template or a component library that others download.
+- React Bits: first see whether patterns 9 to 11 of `interaction-patterns.md` cover the need. Otherwise add one component with its CLI in the flavor of the stack and check how it reads the reduced motion setting. Its license lets a site use the components and forbids redistributing them, so never copy them into a template or a component library that others download.
 - Three.js when handling a 3D scene gives information or function, with an accessible alternative. glTF Transform to inspect and shrink imported models. A procedural shape and an imported model need different decisions.
 - Apache ECharts for interactive data, importing only the parts used.
 - Storybook when the project already has it or the component catalog pays for its upkeep.

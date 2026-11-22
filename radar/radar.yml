@@ -88,6 +88,17 @@ entries:
     expression: [expressive]
     notes: Decorative animated React components. Only for expressive repositories that already use React, with a decision record per component. Add one component with the shadcn CLI or jsrepo in the flavor of the stack (JS or TS, CSS or Tailwind). 200 of its 219 component sources read the reduced motion setting on 2026-11-22, so check the one you add. Its license forbids copying the components into this standard or into a template anyone can download.
     evaluated: 2026-11-22
+  - name: Motion
+    url: https://github.com/motiondivision/motion
+    status: trial
+    profiles: [web]
+    kind: library
+    license: MIT
+    cost: free
+    privacy: runs in the browser
+    expression: [balanced, expressive]
+    notes: Animation for React, and for plain JavaScript through its animate function, for microinteractions that CSS alone cannot coordinate, such as layout changes and exit animations. Wrap the app in MotionConfig with reducedMotion set to user, and read useReducedMotion where a component moves on its own. Never with a second library animating the same property. Version 14.14 on 2026-11-22.
+    evaluated: 2026-11-22
   - name: GSAP
     url: https://github.com/greensock/GSAP
     status: trial
