@@ -251,13 +251,14 @@ def main(argv: list[str] | None = None) -> int:
             forward = ["done", args.id, "--token", args.token, "--result", args.result] + (["--failed"] if args.failed else [])
         print(json.dumps(remote(args.via, args.remote_path, forward), ensure_ascii=False))
         return 0
-    db = connect(args.db)
     if args.command == "add":
         repo = args.repo.resolve()
         ok, why, cls = may_enter(repo, args.mode)
         if not ok:
             print(f"not queued: {why}", file=sys.stderr)
             return 1
+    db = connect(args.db)
+    if args.command == "add":
         print(add(db, repo.name, args.commit, args.needs, args.task_command, cls, args.id))
         return 0
     if args.command == "claim":

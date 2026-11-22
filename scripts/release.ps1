@@ -67,6 +67,14 @@ try {
 
     & (Join-Path $PSScriptRoot "publish-skills.ps1")
     & (Join-Path $PSScriptRoot "publish-templates.ps1")
+    # The owner's Claude Code keeps the plugin of the last release it fetched. Refresh it, so the hooks every new
+    # session loads match what was just published. A failure only warns, because the release itself is done.
+    if (Get-Command claude -ErrorAction SilentlyContinue) {
+        $market = ($slug -split "/")[0].ToLower()
+        claude plugin marketplace update $market
+        if ($LASTEXITCODE -eq 0) { claude plugin update "standards@$market" }
+        if ($LASTEXITCODE -ne 0) { Write-Warning "The standards plugin was not updated. Run: claude plugin update standards@$market" }
+    }
     Write-Host "released $tag ($major now points to $head)"
 } finally {
     Pop-Location

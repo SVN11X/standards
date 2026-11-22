@@ -4,6 +4,19 @@ All notable changes to this standard are documented here. The format follows [Ke
 
 ## [Unreleased]
 
+### Added
+
+- `.claude/settings.json` lets Claude Code run this repository's own read-only checks without a prompt: the test suite, the selftest, `ecosystem.py doctor`, `orchestrate.py models`, `bench --report` and `supervisor.py status`. The owner chose them on 2026-11-21 from the commands repeated most in the recent sessions. Interpreters stay without a wildcard rule.
+
+### Changed
+
+- `release.ps1` and `release.sh` end by updating the standards plugin of the owner's own Claude Code, when the `claude` command is there. On 2026-11-21 the plugin was still at 1.22.2 while the standard was at 1.24.1, so every agent ran the hooks of before 1.23.0: the commit gate blocked commits for files outside them. A failed update only warns.
+- The edit task types get a ceiling of 300 s on the p90 seconds to an accepted result, half of `opencode_timeout_s`. `ollama/qwen3.5-9b-ctx16k`, at p90 470 s, ran out of time once and wrote nothing in 469 s once on real work. In local-only `edit-small` now answers blocked at once, and `docs-small` falls back to Ollama as its task list says.
+
+### Fixed
+
+- `workqueue.py add` opened the queue file before it checked that the repository may enter. A refused task left `cli.db` open, and on Windows its test failed to remove the temporary folder. The check now comes first, so a refused task creates no file.
+
 ## [1.24.1] - 2026-11-21
 
 ### Changed

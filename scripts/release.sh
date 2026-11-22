@@ -52,4 +52,11 @@ gh release view "$tag" --repo "$slug" >/dev/null 2>&1 || gh release create "$tag
 
 scripts/publish-skills.sh
 scripts/publish-templates.sh
+# The owner's Claude Code keeps the plugin of the last release it fetched. Refresh it, so the hooks every new
+# session loads match what was just published. A failure only warns, because the release itself is done.
+if command -v claude >/dev/null 2>&1; then
+  market="$(printf '%s' "${slug%%/*}" | tr '[:upper:]' '[:lower:]')"
+  { claude plugin marketplace update "$market" && claude plugin update "standards@$market"; } \
+    || echo "warning: the standards plugin was not updated. Run: claude plugin update standards@$market" >&2
+fi
 echo "released $tag ($major now points to $head)"
