@@ -31,12 +31,15 @@ import resources  # noqa: E402
 import review as review_mod  # noqa: E402
 import scheduler  # noqa: E402
 import secret_scan  # noqa: E402
+import usage  # noqa: E402
 import workplan  # noqa: E402
 
 DONE = "passed"
 # Reviewed and committed, waiting for its turn in the integration queue. A restart integrates it without a new run.
 REVIEWED = "reviewed"
 AGENTS = ("opencode", "colibri")
+# A unit in one of these states has ended for this run. Each end appends one outcome row to the telemetry.
+ENDED = (DONE, "failed", "blocked", "cancelled")
 POOLS = {"remote_free": 2, "local": 1}
 
 
@@ -140,13 +143,15 @@ def secrets_added(data: dict) -> list[str]:
     return secret_scan.scan(added)
 
 
-def judge(data: dict, reviewer_model: str | None, reviewer) -> tuple[str, str]:
+def judge(data: dict, reviewer_model: str | None, reviewer, conf: dict | None = None) -> tuple[str, str]:
     """Returns (status, note). Only a review without a high finding passes. No reviewer blocks the unit."""
     if not reviewer or not reviewer_model:
         return "blocked", "no reviewer model: review is required"
     diff = orchestrate.git(Path(data["worktree"]), "diff", data["base"], data["commit"])
-    result = review_mod.review(diff, data.get("model") or "", reviewer_model, reviewer)
-    data["review"] = {"verdict": result["verdict"], "findings": result.get("findings", []), "rounds": result.get("rounds")}
+    with usage.scope(kind="review"):
+        result = review_mod.review(diff, data.get("model") or "", reviewer_model, reviewer, **review_mod.limits(conf))
+    data["review"] = {"verdict": result["verdict"], "findings": result.get("findings", []), "rounds": result.get("rounds"),
+                      "parts": result.get("parts"), "calls": result.get("calls"), "reused": result.get("reused")}
     if result["verdict"] in ("pass", "warn"):
         return DONE, f"review {result['verdict']}"
     if result["verdict"] == "blocked":
@@ -159,6 +164,8 @@ def blocker_condition(note: str) -> str:
     text = note.lower()
     if "budget" in text:
         return "a larger budget in the plan, or the owner accepts the unit as not done"
+    if "review limit" in text:
+        return "the unit split into smaller units, each with a diff a reviewer can read whole"
     if "reviewer" in text or "review" in text:
         return "a reviewer model that answers and differs from the author"
     if "timed out after changing" in text:
@@ -235,6 +242,22 @@ class Executor:
             self.record_blocker(uid, fields)
         elif status == DONE:
             blockers.resolve_unit(self.plan["plan_id"], uid, "the unit passed")
+        if status in ENDED:
+            self.record_outcome(uid, status, fields)
+
+    def record_outcome(self, uid: str, status: str, fields: dict) -> None:
+        """How the unit ended, next to the calls it made. The tokens stay in those call rows."""
+        checks = fields.get("checks") or {}
+        verdict = (fields.get("review") or {}).get("verdict")
+        try:
+            usage.append(usage.outcome_row(
+                f"{self.plan['plan_id']}/{uid}", plan_id=self.plan["plan_id"], accepted=status == DONE,
+                attempts=fields.get("attempts"), tests_passed={"PASS": True, "FAIL": False}.get(checks.get("tests")),
+                review_passed=None if verdict is None else verdict in ("pass", "warn"),
+                duration_seconds=fields.get("seconds"), executor=fields.get("executor"), model=fields.get("model"),
+                status=status))
+        except OSError:
+            pass
 
     def record_blocker(self, uid: str, fields: dict) -> None:
         """Save the six facts of a blocked unit, so "why is it stopped?" is answered from disk. It never stops the plan."""
@@ -406,7 +429,7 @@ class Executor:
         data.setdefault("checks", {})["secrets"] = "FAIL" if found else "PASS"
         if found:
             return "failed", "security: the diff adds " + ", ".join(found), data
-        status, note = judge(data, self.reviewer_model, self.reviewer)
+        status, note = judge(data, self.reviewer_model, self.reviewer, self.conf)
         return status, note, data
 
     def run_unit(self, uid: str) -> tuple[str, dict]:
@@ -414,7 +437,8 @@ class Executor:
         info = {"pools": self.slots.pop(uid, [])}
         self.stops.setdefault(uid, threading.Event())
         try:
-            self.do_unit(uid, info)
+            with usage.scope(task_id=f"{self.plan['plan_id']}/{uid}", plan_id=self.plan["plan_id"], kind="execute"):
+                self.do_unit(uid, info)
         except Exception as error:  # one broken unit must not stop the independent ones
             self.mark(uid, "failed", note=f"{type(error).__name__}: {error}")
         return self.state["units"][uid]["status"], info
@@ -484,7 +508,8 @@ class Executor:
                 info["pools"] = [pool]
             tried += runs
             seen.add((choice.get("executor"), choice.get("model")))
-            status, note, data = self.attempt(unit, choice, test)
+            with usage.scope(attempt=tried):
+                status, note, data = self.attempt(unit, choice, test)
             info["failure_code"] = (data.get("executor_result") or {}).get("failure_code")
             if runs:
                 log.append(attempt_row(choice, data, status))
@@ -552,6 +577,9 @@ class Executor:
         loop = scheduler.Scheduler(order, deps, clash, self.run_unit, self.claim, self.pools, self.parallel, done,
                                    self.control, self.on_schedule, stall_s=self.stall_s)
         result = loop.run()
+        if not result["paused"]:
+            self.review_whole()
+            self.record_plan_outcome(result["total_s"])
         for uid in result["pending"]:
             self.state["units"].setdefault(uid, {"status": "pending", "at": orchestrate.now(),
                                                  "note": "the owner paused new assignments"})
@@ -573,6 +601,55 @@ class Executor:
         except Exception:  # noqa: BLE001 (a missing handoff never fails the run)
             pass
         return self.state
+
+    def review_whole(self) -> None:
+        """One review of the whole integrated diff when more than one unit passed. Each unit's review saw its own
+        diff, so how the units work together is judged here. A plan of one unit was already reviewed whole, and a
+        head already reviewed is not reviewed again. Publishing needs this review to pass."""
+        passed = [uid for uid, entry in self.state["units"].items() if entry.get("status") == DONE and entry.get("commit")]
+        if len(passed) < 2:
+            return
+        head = orchestrate.git(self.work_repo, "rev-parse", "HEAD").strip()
+        if (self.state.get("integrated_review") or {}).get("head") == head:
+            return
+        authors = sorted({str(self.state["units"][uid].get("model")) for uid in passed if self.state["units"][uid].get("model")})
+        found = {"head": head, "units": passed, "at": orchestrate.now()}
+        if not self.reviewer or not self.reviewer_model:
+            found.update(verdict="blocked", reason="no reviewer model: the integrated change needs a review")
+        elif not authors or any(orchestrate.same_model(a, self.reviewer_model) for a in authors):
+            found.update(verdict="blocked", reason="the reviewer must differ from every author of the plan")
+        else:
+            diff = orchestrate.git(self.work_repo, "diff", self.state["integration"]["base"], head)
+            task = f"{self.plan['plan_id']}/integrated"
+            with usage.scope(task_id=task, plan_id=self.plan["plan_id"], kind="review"):
+                result = review_mod.review(diff, authors[0], self.reviewer_model, self.reviewer, **review_mod.limits(self.conf))
+            found.update({k: result.get(k) for k in ("verdict", "reason", "findings", "parts", "calls", "reused", "error")})
+            try:
+                usage.append(usage.outcome_row(task, plan_id=self.plan["plan_id"], accepted=result["verdict"] in ("pass", "warn"),
+                                               attempts=1, tests_passed=None, review_passed=result["verdict"] in ("pass", "warn"),
+                                               model=self.reviewer_model, status=result["verdict"]))
+            except OSError:
+                pass
+        self.state["integrated_review"] = {k: v for k, v in found.items() if v is not None}
+        self.event({"event": "integrated-review", "unit": None, "verdict": found.get("verdict")})
+
+    def record_plan_outcome(self, total_s) -> None:
+        """One outcome row for the plan as the owner receives it: accepted only when every unit passed and the review
+        of the whole diff, where one was needed, passed too. An A/B comparison pairs plans by this row."""
+        entries = [self.state["units"].get(u["id"]) or {} for u in self.plan["units"]]
+        whole = self.state.get("integrated_review")
+        units_ok = bool(entries) and all(e.get("status") == DONE for e in entries)
+        whole_ok = whole is None or whole.get("verdict") in ("pass", "warn")
+        tests = [(e.get("checks") or {}).get("tests") for e in entries]
+        try:
+            usage.append(usage.outcome_row(
+                self.plan["plan_id"], plan_id=self.plan["plan_id"], accepted=units_ok and whole_ok,
+                attempts=sum(e.get("attempts") or 0 for e in entries),
+                tests_passed=all(t == "PASS" for t in tests) if all(t in ("PASS", "FAIL") for t in tests) else None,
+                review_passed=whole_ok if whole is not None else (units_ok or None), duration_seconds=total_s,
+                status="accepted" if units_ok and whole_ok else "not accepted"))
+        except OSError:
+            pass
 
     def on_schedule(self, row: dict) -> None:
         # A unit the scheduler ended without running it (cancelled, or its dependency failed) gets its state here.
@@ -618,7 +695,8 @@ def report(plan: dict, state: dict) -> dict:
         counts[item["status"]] = counts.get(item["status"], 0) + 1
     return {"schema": "standards/execution-report/v1", "plan_id": plan["plan_id"], "finished": state.get("finished"),
             "integration_branch": (state.get("integration") or {}).get("branch"), "counts": counts, "units": units,
-            "metrics": state.get("metrics"), "publication": state.get("publication")}
+            "metrics": state.get("metrics"), "publication": state.get("publication"),
+            "integrated_review": state.get("integrated_review")}
 
 
 def check(plan: dict, repo: Path, route=None, conf=None, local=None) -> dict:

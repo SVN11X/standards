@@ -64,6 +64,15 @@ def main() -> int:
         text = "\n".join(t for t in (text, style.startup_lines(str(data.get("session_id") or ""))) if t) or None
     except Exception:  # noqa: BLE001 (the rules after compaction must still come back)
         pass
+    try:
+        import context_log
+        # The compaction dropped what the hooks had added, so the next prompt gets all of it again.
+        context_log.forget(data)
+        context_log.log({"date": context_log.now().replace(microsecond=0).isoformat(), "session": context_log.session_key(data),
+                         "hook": "SessionStart:compact", "blocks": {"reinject": len(text or "")},
+                         "sent_chars": len(text or ""), "skipped_chars": 0})
+    except Exception:  # noqa: BLE001
+        pass
     if text:
         print(json.dumps({"hookSpecificOutput": {"hookEventName": "SessionStart", "additionalContext": text}}))
     return 0

@@ -1421,7 +1421,7 @@ def skill_names() -> list[str]:
 
 # Scripts the skills call from the bundled copy of the standard, next to standard.py.
 BUNDLED_SCRIPTS = ("standard.py", "guardrails.py", "orchestrate.py", "verify.py", "evidence.py", "preserve.py", "adversarial.py",
-                   "safe_patch.py", "memory.py", "bench_tasks.py", "analyze.py", "providers.py",
+                   "safe_patch.py", "memory.py", "bench_tasks.py", "analyze.py", "providers.py", "usage.py",
                    # The executor loop, the planner and the router. verify.py and adversarial.py import them.
                    "execute.py", "workplan.py", "review.py", "scheduler.py", "resources.py", "plan_autopilot.py",
                    "plan_contract.py", "planner.py", "repo_fingerprint.py", "router.py", "blockers.py", "supervisor.py", "reuse.py", "readiness.py", "peerbox.py", "recall.py",
@@ -1453,7 +1453,7 @@ def cmd_package_skills(out_dir: Path) -> None:
     for script in BUNDLED_SCRIPTS:
         shutil.copy2(STANDARD_ROOT / "scripts" / script, snapshot / "scripts" / script)
     (snapshot / "hooks").mkdir()
-    for hook in ("guard.py", "secret_scan.py", "autopilot.py"):
+    for hook in ("guard.py", "secret_scan.py", "autopilot.py", "context_log.py"):
         shutil.copy2(STANDARD_ROOT / "hooks" / hook, snapshot / "hooks" / hook)
     shutil.copytree(STANDARD_ROOT / "schemas", snapshot / "schemas", ignore=ignore)
     (snapshot / "settings").mkdir()

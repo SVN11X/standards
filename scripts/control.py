@@ -26,6 +26,7 @@ import control_jobs  # noqa: E402
 import execute  # noqa: E402
 import next_actions  # noqa: E402
 import resources  # noqa: E402
+import usage  # noqa: E402
 
 PAGE = Path(__file__).resolve().parent.parent / "ui" / "control" / "index.html"
 STAGES = ["planned", "approved", "running"]
@@ -113,16 +114,10 @@ def runs(limit: int = 60) -> list[dict]:
 
 
 def telemetry() -> dict:
-    rows = read_jsonl(orchestrate.home() / "telemetry.jsonl")
-    by_model: dict[str, dict] = {}
-    for row in rows:
-        key = f"{row.get('provider')}/{row.get('model')}"
-        item = by_model.setdefault(key, {"requests": 0, "input": 0, "output": 0, "seconds": 0.0})
-        item["requests"] += 1
-        item["input"] += row.get("prompt_tokens") or 0
-        item["output"] += row.get("completion_tokens") or 0
-        item["seconds"] += row.get("seconds") or 0
-    return {"recent": rows[-60:], "by_model": by_model}
+    """Calls per model with new input, cache and output tokens apart, and the tasks with their whole cost."""
+    rows = usage.read_rows(orchestrate.home() / "telemetry.jsonl", limit=2000)
+    calls = [row for row in rows if row.get("kind") != "outcome"]
+    return {"recent": calls[-60:], "by_model": usage.by_model(rows), "tasks": usage.tasks(rows)[-40:]}
 
 
 def seconds_since(stamp: str | None) -> float | None:

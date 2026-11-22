@@ -154,6 +154,58 @@ await check("reduced motion reaches the style sheet too", { reducedMotion: "redu
   await indicatorMatches(page);
 });
 
+await check("counting value: the final value is announced at once and the digits reach it", {}, async (page) => {
+  await page.click("#right");
+  assert.equal(await page.textContent("#score-status"), "Score: 10");
+  await page.waitForFunction(() => document.getElementById("score").textContent === "10", null, { timeout: 2000 });
+  await page.click("#right");
+  await page.click("#score-reset");
+  assert.equal(await page.textContent("#score-status"), "Score: 0");
+  await page.waitForFunction(() => document.getElementById("score").textContent === "0", null, { timeout: 2000 });
+  assert.equal(await page.getAttribute("#score", "aria-hidden"), "true");
+});
+
+await check("counting value: with reduced motion the new value shows at once", { reducedMotion: "reduce" }, async (page) => {
+  await page.click("#right");
+  assert.equal(await page.textContent("#score"), "10");
+});
+
+await check("heading on entering: hidden below the view, shown once it enters", {}, async (page) => {
+  const read = () => page.$eval("#reveal", (el) => [el.dataset.shown, getComputedStyle(el).opacity]);
+  assert.equal((await read())[0], "false");
+  await page.locator("#reveal").scrollIntoViewIfNeeded();
+  await page.waitForFunction(() => document.getElementById("reveal").dataset.shown === "true", null, { timeout: 2000 });
+  await settle(page);
+  assert.equal((await read())[1], "1");
+});
+
+await check("heading on entering: with reduced motion it is never hidden", { reducedMotion: "reduce" }, async (page) => {
+  const [shown, opacity, motion] = await page.$eval("#reveal", (el) => [el.dataset.shown, getComputedStyle(el).opacity,
+    document.documentElement.classList.contains("motion-ok")]);
+  assert.deepEqual([shown, opacity, motion], ["true", "1", false]);
+});
+
+const lightAt = (page) => page.$eval("#spot-count", (el) => el.style.getPropertyValue("--x"));
+const overCard = async (page) => {
+  await page.locator("#spot-count").scrollIntoViewIfNeeded();
+  const box = await page.locator("#spot-count").boundingBox();
+  await page.mouse.move(box.x + 20, box.y + 30, { steps: 3 });
+  return box;
+};
+
+await check("card that follows the pointer: the light moves with the pointer and leaves with it", {}, async (page) => {
+  await overCard(page);
+  assert.equal(await lightAt(page), "20px");
+  await page.mouse.move(0, 0);
+  assert.equal(await lightAt(page), "");
+  assert.equal(await page.getAttribute("#spot-count", "href"), "#h-count");
+});
+
+await check("card that follows the pointer: with reduced motion the light stays centered", { reducedMotion: "reduce" }, async (page) => {
+  await overCard(page);
+  assert.equal(await lightAt(page), "");
+});
+
 await check("no horizontal scroll at 320 px in both languages", { viewport: { width: 320, height: 700 } }, async (page) => {
   const overflow = () => page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
   assert.ok((await overflow()) <= 0);

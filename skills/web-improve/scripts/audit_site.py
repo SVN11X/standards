@@ -18,6 +18,7 @@ LOCKFILES = ["pnpm-lock.yaml", "package-lock.json", "yarn.lock", "bun.lock", "bu
 GENERIC_FONTS = {"serif", "sans-serif", "monospace", "system-ui", "cursive", "fantasy", "ui-sans-serif", "ui-serif", "ui-monospace",
                  "inherit", "initial", "unset", "-apple-system", "blinkmacsystemfont", "emoji", "math"}
 FONT = re.compile(r"font-family\s*:\s*([^;}{]+)", re.I)
+GSAP_CALL = re.compile(r"\bgsap\.(?:to|from|fromTo|timeline|set)\s*\(")
 COLOR = re.compile(r"#[0-9a-f]{3,8}\b|(?:rgba?|hsla?|oklch|oklab|lab|lch)\([^)]*\)", re.I)
 DURATION = re.compile(r"(?:transition|animation)(?:-duration)?\s*:[^;}{]*?\b(\d*\.?\d+m?s)\b", re.I)
 TOKEN_TIME = re.compile(r"\b(\d*\.?\d+m?s)\b")
@@ -55,10 +56,20 @@ def design_measures(root: Path) -> dict:
                 add("duration-outside-tokens", name, ", ".join(off), "the durations in DESIGN.md")
         if "requestAnimationFrame" in text and "prefers-reduced-motion" not in text:
             add("script-ignores-reduced-motion", name, "requestAnimationFrame without reading prefers-reduced-motion", "read the setting in the loop")
+        if GSAP_CALL.search(text) and "prefers-reduced-motion" not in text and "matchMedia" not in text:
+            add("gsap-ignores-reduced-motion", name, "GSAP animates without gsap.matchMedia or prefers-reduced-motion",
+                "a (prefers-reduced-motion: reduce) condition in gsap.matchMedia()")
+        if re.search(r"\brespectReducedMotion\s*:\s*false", text):
+            add("lenis-ignores-reduced-motion", name, "respectReducedMotion: false", "the default true")
+        if re.search(r"\bnew\s+Lenis\s*\(", text) and not re.search(r"\banchors\s*:", text):
+            add("lenis-blocks-anchors", name, "Lenis without the anchors option", "anchors: true, or anchor links stop working")
         if suffix in {".html", ".htm"}:
             if re.search(r"<html\b", text, re.I) and not re.search(r"<html\b[^>]*\blang=", text, re.I):
                 add("missing-lang", name, "html without lang", "a lang attribute")
             images = re.findall(r"<img\b[^>]*>", text, re.I)
+            if images and re.search(r"\bloading\s*=\s*[\"']?lazy", images[0], re.I):
+                add("first-image-lazy", name, "the first image of the page has loading=lazy",
+                    "no lazy loading on the image that is likely the largest contentful paint")
             no_alt = sum(1 for tag in images if not re.search(r"\balt=", tag, re.I))
             no_size = sum(1 for tag in images if not (re.search(r"\bwidth=", tag, re.I) and re.search(r"\bheight=", tag, re.I)))
             if no_alt:

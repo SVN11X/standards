@@ -133,6 +133,31 @@ class Route(Base):
         self.assertEqual(decision["model"], "opencode/deepseek-v4.1-flash-free")
         self.assertIn("measured on this machine", " ".join(decision["reasons"]))
 
+    def test_a_model_that_needs_retries_ranks_by_seconds_per_accepted_result(self):
+        local = self.local()
+        local["free_models"].append({"id": "opencode/deepseek-v4.1-flash-free", "checked": dt.date.today().isoformat()})
+        flaky = [{"task": "fix-bug", "executor": "opencode", "model": "opencode/glm-5.3-flash-free", "seconds": 20,
+                  "verified": ok} for ok in (True, True, True, True, False)]
+        steady = [{"task": "fix-bug", "executor": "opencode", "model": "opencode/deepseek-v4.1-flash-free", "seconds": 22,
+                   "verified": True}] * 5
+        orchestrate.bench_file().write_text("\n".join(json.dumps(r) for r in flaky + steady) + "\n", encoding="utf-8")
+        summary = {r["model"]: r for r in orchestrate.summarize_bench(orchestrate.bench_rows())}
+        self.assertEqual(summary["opencode/glm-5.3-flash-free"]["seconds_per_accepted"], 25.0)
+        decision = orchestrate.route("fix-test", self.tmp, local=local, caps=self.caps)
+        self.assertEqual(decision["model"], "opencode/deepseek-v4.1-flash-free")
+        self.assertIn("per accepted result", " ".join(decision["reasons"]))
+
+    def test_tokens_break_a_tie_only_when_every_run_reported_them(self):
+        def rows(tokens, reported=True):
+            return [{"task": "fix-bug", "seconds": 10, "verified": True,
+                     "usage": {"input_tokens": tokens, "output_tokens": 100} if reported else {}}] * 3
+        light, heavy = orchestrate.per_accepted(rows(900)), orchestrate.per_accepted(rows(5000))
+        self.assertEqual((light, heavy), ((10, 1000), (10, 5100)))
+        self.assertLess(orchestrate.efficiency_key({"seconds_per_accepted": 10, "tokens_per_accepted": 1000}),
+                        orchestrate.efficiency_key({"seconds_per_accepted": 10, "tokens_per_accepted": 5100}))
+        mixed = rows(900)[:2] + rows(0, reported=False)[:1]
+        self.assertEqual(orchestrate.per_accepted(mixed), (10, None))
+
     def test_a_failed_specific_class_is_not_rescued_by_a_broader_one(self):
         def rows(task, model, ok):
             return [{"task": task, "executor": "ollama", "model": model, "seconds": 5, "verified": ok,
@@ -734,6 +759,21 @@ class WebSubprofiles(Base):
                                  "image-without-alt", "image-without-size", "heading-order", "no-reduced-motion-rule"})
         clean = audit_site.design_measures(ROOT / "skills" / "web-improve" / "gallery")
         self.assertEqual(clean["findings"], [])
+
+    def test_motion_libraries_and_the_first_image_are_measured(self):
+        sys.path.insert(0, str(ROOT / "skills" / "web-improve" / "scripts"))
+        import audit_site
+        site = self.tmp / "motion"
+        site.mkdir()
+        (site / "index.html").write_text('<html lang="en"><body><img src="hero.avif" alt="" width="8" height="4" loading="lazy">'
+                                         '<img src="b.avif" alt="" width="8" height="4" loading="lazy"></body></html>', encoding="utf-8")
+        (site / "site.css").write_text("@media (prefers-reduced-motion: reduce){*{animation:none}}", encoding="utf-8")
+        (site / "scroll.js").write_text("const lenis = new Lenis({ respectReducedMotion: false })\ngsap.to('.card', {y: 10})", encoding="utf-8")
+        (site / "safe.js").write_text("const mm = gsap.matchMedia()\nmm.add('(prefers-reduced-motion: no-preference)', () => gsap.to('.a', {x: 1}))\n"
+                                      "new Lenis({ anchors: true })", encoding="utf-8")
+        found = {(item["check"], item["file"]) for item in audit_site.design_measures(site)["findings"]}
+        self.assertEqual(found, {("first-image-lazy", "index.html"), ("gsap-ignores-reduced-motion", "scroll.js"),
+                                 ("lenis-ignores-reduced-motion", "scroll.js"), ("lenis-blocks-anchors", "scroll.js")})
 
 
 class OllamaOptions(unittest.TestCase):

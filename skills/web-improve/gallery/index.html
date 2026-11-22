@@ -11,7 +11,7 @@
   --space-1: 0.25rem; --space-2: 0.5rem; --space-3: 1rem; --space-4: 1.5rem; --space-5: 2.5rem;
   --text-s: 0.875rem; --text-m: 1rem; --text-l: clamp(1.25rem, 1rem + 1.2vw, 1.6rem); --text-xl: clamp(1.6rem, 1.2rem + 2.4vw, 2.4rem);
   --radius-s: 0.4rem; --radius-m: 0.75rem; --radius-full: 999px;
-  --duration-fast: 150ms; --duration-base: 250ms; --ease-out: cubic-bezier(0.2, 0, 0, 1);
+  --duration-fast: 150ms; --duration-base: 250ms; --duration-slow: 600ms; --ease-out: cubic-bezier(0.2, 0, 0, 1);
   --paper: #f6f5f1; --surface: #ffffff; --ink: #1c1b22; --muted: #55535f; --line: #c9c7d1;
   --accent: #2b4acb; --on-accent: #ffffff; --accent-deep: #1b2f86; --good: #17693a; --bad: #a3231c;
 }
@@ -74,6 +74,20 @@ details > div { padding: 0 var(--space-3) var(--space-3); }
 .stage { display: grid; place-items: center; height: 12rem; border: 1px dashed var(--line); border-radius: var(--radius-m); margin-bottom: var(--space-3); touch-action: none; }
 .orb { width: 6rem; height: 6rem; border-radius: 50%; background: radial-gradient(circle at 35% 30%, var(--surface), var(--accent) 60%, var(--accent-deep)); will-change: transform; }
 .orb[data-state="listening"] { box-shadow: 0 0 0 0.5rem color-mix(in srgb, var(--accent) 30%, transparent); }
+
+.visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.count { font-size: var(--text-xl); font-variant-numeric: tabular-nums; line-height: 1; margin: 0 0 var(--space-3); }
+
+/* Hidden only when the script runs, motion is allowed and the heading is still below the view. */
+.reveal { transition: opacity var(--duration-slow) var(--ease-out), transform var(--duration-slow) var(--ease-out); }
+.motion-ok .reveal[data-shown="false"] { opacity: 0; transform: translateY(0.75rem); }
+
+.spots { display: grid; gap: var(--space-3); grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr)); }
+.spot { --x: 50%; --y: 50%; --glow: 0%; display: block; min-height: 6rem; padding: var(--space-3); border: 1px solid var(--line); border-radius: var(--radius-m);
+  color: var(--ink); text-decoration: none; transition: border-color var(--duration-fast) var(--ease-out);
+  background: radial-gradient(14rem circle at var(--x) var(--y), color-mix(in srgb, var(--accent) var(--glow), transparent), transparent 70%), var(--surface); }
+.spot:hover, .spot:focus-visible, .spot:active { --glow: 18%; border-color: var(--accent); }
+.spot strong { display: block; margin-bottom: var(--space-1); }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; scroll-behavior: auto !important; }
@@ -149,6 +163,32 @@ details > div { padding: 0 var(--space-3) var(--space-3); }
     </div>
   </section>
 
+  <section aria-labelledby="h-count">
+    <h2 id="h-count" data-i18n="countTitle">Value that counts to its new number</h2>
+    <p data-i18n="countText">The digits travel from the old value to the new one, so the change is seen. The real value is announced once.</p>
+    <p class="count" id="score" aria-hidden="true">0</p>
+    <p class="visually-hidden" id="score-status" role="status"></p>
+    <div class="row">
+      <button type="button" class="action" id="right" data-i18n="right">Right answer, +10</button>
+      <button type="button" class="action" id="score-reset" data-i18n="reset">Reset</button>
+    </div>
+  </section>
+
+  <section aria-labelledby="h-reveal">
+    <h2 id="h-reveal" data-i18n="revealTitle">Heading that appears on entering the view</h2>
+    <p data-i18n="revealText">It marks where a new part of a long page starts. It moves once, as a whole line, and stays readable without JavaScript.</p>
+    <h3 class="reveal" id="reveal" data-i18n="revealHeading">A new part of the page starts here</h3>
+  </section>
+
+  <section aria-labelledby="h-spot">
+    <h2 id="h-spot" data-i18n="spotTitle">Card that follows the pointer</h2>
+    <p data-i18n="spotText">A soft light follows the pointer over the card it is on. Keyboard focus and touch light the card too.</p>
+    <div class="spots">
+      <a class="spot" id="spot-count" href="#h-count"><strong data-i18n="spotOne">Counting value</strong><span class="note" data-i18n="spotOneText">Jump to pattern 9</span></a>
+      <a class="spot" href="#h-reveal"><strong data-i18n="spotTwo">Heading on entering</strong><span class="note" data-i18n="spotTwoText">Jump to pattern 10</span></a>
+    </div>
+  </section>
+
   <section aria-labelledby="h-orb">
     <h2 id="h-orb" data-i18n="orbTitle">Reactive object</h2>
     <p data-i18n="orbText">The orb follows the pointer. With reduced motion it moves only while listening, the task you start yourself.</p>
@@ -173,7 +213,13 @@ const TEXT = {
         moreBody: "It opens with the keyboard, works without JavaScript and the browser search finds the text inside.",
         progressTitle: "Progress signal", stepLabel: "Finish a step", reset: "Reset", progress: " of 3 steps done", allDone: "All 3 steps done.",
         orbTitle: "Reactive object", orbText: "The orb follows the pointer. With reduced motion it moves only while listening, the task you start yourself.",
-        listen: "Start listening", stop: "Stop listening", idle: "State: idle", listening: "State: listening" },
+        listen: "Start listening", stop: "Stop listening", idle: "State: idle", listening: "State: listening",
+        countTitle: "Value that counts to its new number", countText: "The digits travel from the old value to the new one, so the change is seen. The real value is announced once.",
+        right: "Right answer, +10", scoreStatus: "Score: ",
+        revealTitle: "Heading that appears on entering the view", revealText: "It marks where a new part of a long page starts. It moves once, as a whole line, and stays readable without JavaScript.",
+        revealHeading: "A new part of the page starts here",
+        spotTitle: "Card that follows the pointer", spotText: "A soft light follows the pointer over the card it is on. Keyboard focus and touch light the card too.",
+        spotOne: "Counting value", spotOneText: "Jump to pattern 9", spotTwo: "Heading on entering", spotTwoText: "Jump to pattern 10" },
   es: { title: "Patrones de interacción", intro: "Ejemplos que funcionan para la skill web-improve. Aquí nada guarda ni envía datos.",
         segTitle: "Botonera", segText: "Las flechas mueven la selección. El indicador sigue la opción elegida y su ancho, también al cambiar de idioma.",
         study: "Estudiar", practice: "Practicar", review: "Repasar", modeNote: "Modo: ",
@@ -186,9 +232,15 @@ const TEXT = {
         moreBody: "Se abre con el teclado, funciona sin JavaScript y la búsqueda del navegador encuentra el texto de dentro.",
         progressTitle: "Señal de progreso", stepLabel: "Terminar un paso", reset: "Reiniciar", progress: " de 3 pasos hechos", allDone: "Los 3 pasos están hechos.",
         orbTitle: "Objeto reactivo", orbText: "La esfera sigue al puntero. Con movimiento reducido solo se mueve mientras escucha, la tarea que inicias tú.",
-        listen: "Empezar a escuchar", stop: "Dejar de escuchar", idle: "Estado: reposo", listening: "Estado: escuchando" },
+        listen: "Empezar a escuchar", stop: "Dejar de escuchar", idle: "Estado: reposo", listening: "Estado: escuchando",
+        countTitle: "Valor que cuenta hasta su nuevo número", countText: "Las cifras van del valor anterior al nuevo, así se ve el cambio. El valor real se anuncia una vez.",
+        right: "Respuesta correcta, +10", scoreStatus: "Puntos: ",
+        revealTitle: "Título que aparece al entrar en pantalla", revealText: "Marca dónde empieza una parte nueva de una página larga. Se mueve una vez, como una línea entera, y se lee sin JavaScript.",
+        revealHeading: "Aquí empieza una parte nueva de la página",
+        spotTitle: "Tarjeta que sigue al puntero", spotText: "Una luz suave sigue al puntero sobre la tarjeta en la que está. El foco del teclado y el toque también la iluminan.",
+        spotOne: "Valor que cuenta", spotOneText: "Ir al patrón 9", spotTwo: "Título al entrar", spotTwoText: "Ir al patrón 10" },
 };
-const state = { lang: "en", mode: "study", presses: 0, save: "rest", done: 0, listening: false };
+const state = { lang: "en", mode: "study", presses: 0, save: "rest", done: 0, listening: false, score: 0 };
 const $ = (id) => document.getElementById(id);
 const t = (key) => TEXT[state.lang][key];
 const reduced = window.matchMedia("(prefers-reduced-motion: reduce)");
@@ -300,6 +352,55 @@ reduced.addEventListener("change", rest);
 document.addEventListener("visibilitychange", wake);
 new IntersectionObserver(([entry]) => { onScreen = entry.isIntersecting; wake(); }).observe(stage);
 
+// Value that counts. Assistive technology gets the final value at once, the visible digits follow it.
+const score = $("score");
+let counting = 0;
+function showScore(from, to) {
+  cancelAnimationFrame(counting);
+  counting = 0;
+  $("score-status").textContent = t("scoreStatus") + to;
+  if (reduced.matches || from === to) { score.textContent = String(to); return; }
+  const length = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--duration-slow")) || 600;
+  const start = performance.now();
+  const step = (now) => {
+    const share = Math.min(1, (now - start) / length);
+    score.textContent = String(Math.round(from + (to - from) * (1 - (1 - share) ** 3)));
+    counting = share < 1 ? requestAnimationFrame(step) : 0;
+  };
+  counting = requestAnimationFrame(step);
+}
+$("right").addEventListener("click", () => { const before = state.score; state.score += 10; showScore(before, state.score); });
+$("score-reset").addEventListener("click", () => { const before = state.score; state.score = 0; showScore(before, 0); });
+
+// Heading that appears. Without the script, with reduced motion or with no IntersectionObserver it is simply there.
+function setupReveal() {
+  const motion = !reduced.matches && "IntersectionObserver" in window;
+  document.documentElement.classList.toggle("motion-ok", motion);
+  const pending = [...document.querySelectorAll(".reveal")].filter((el) => el.dataset.shown !== "true");
+  if (!motion) { for (const el of pending) el.dataset.shown = "true"; return; }
+  const seen = new IntersectionObserver((entries) => {
+    for (const entry of entries) {
+      if (entry.isIntersecting) { entry.target.dataset.shown = "true"; seen.unobserve(entry.target); }
+    }
+  }, { rootMargin: "0px 0px -10% 0px" });
+  for (const el of pending) {
+    el.dataset.shown = el.getBoundingClientRect().top < window.innerHeight ? "true" : "false";
+    if (el.dataset.shown === "false") seen.observe(el);
+  }
+}
+reduced.addEventListener("change", setupReveal);
+
+// Card that follows the pointer. The light moves only with motion allowed, and stays centered otherwise.
+for (const card of document.querySelectorAll(".spot")) {
+  card.addEventListener("pointermove", (event) => {
+    if (reduced.matches) return;
+    const box = card.getBoundingClientRect();
+    card.style.setProperty("--x", `${Math.round(event.clientX - box.left)}px`);
+    card.style.setProperty("--y", `${Math.round(event.clientY - box.top)}px`);
+  });
+  card.addEventListener("pointerleave", () => { card.style.removeProperty("--x"); card.style.removeProperty("--y"); });
+}
+
 // Language
 for (const button of document.querySelectorAll("[data-lang]")) {
   button.addEventListener("click", () => { state.lang = button.dataset.lang; render(); });
@@ -323,9 +424,11 @@ function render() {
   $("listen").setAttribute("aria-pressed", String(state.listening));
   $("listen").textContent = state.listening ? t("stop") : t("listen");
   $("orb-state").textContent = state.listening ? t("listening") : t("idle");
+  if (!counting) score.textContent = String(state.score);
 }
 render();
 rest();
+setupReveal();
 </script>
 </body>
 </html>

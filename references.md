@@ -54,6 +54,15 @@ Sources behind the rules. Prefer the original source. The check verifies these l
 
 - WCAG 2.2: https://www.w3.org/TR/WCAG22/
 - Core Web Vitals: https://web.dev/articles/vitals
+- web.dev, optimize Largest Contentful Paint: https://web.dev/articles/optimize-lcp
+- Lighthouse, performance scoring: https://developer.chrome.com/docs/lighthouse/performance/performance-scoring
+- pagespeed-optimizer skill: https://github.com/tuthuongvo/pagespeed-optimizer-skills
+- GSAP, standard license: https://gsap.com/standard-license
+- GSAP, [gsap.matchMedia](https://gsap.com/docs/v3/GSAP/gsap.matchMedia())
+- GSAP in React, useGSAP: https://gsap.com/resources/React/
+- Lenis: https://github.com/darkroomengineering/lenis
+- React Bits: https://github.com/DavidHDev/react-bits
+- Motion: https://github.com/motiondivision/motion
 - web.dev, performance budgets 101: https://web.dev/articles/performance-budgets-101
 - Okabe and Ito, Color Universal Design: https://jfly.uni-koeln.de/color/
 - Okabe-Ito palette with hex values, NYU Siegal lab: https://siegal.bio.nyu.edu/color-palette/
@@ -123,3 +132,12 @@ Sources behind the rules. Prefer the original source. The check verifies these l
 - Openverse API, licenses of openly licensed media: https://github.com/WordPress/openverse
 - Wikimedia Commons API: https://commons.wikimedia.org/wiki/Commons:API
 - HyperFrames, video from HTML: https://github.com/heygen-com/hyperframes
+
+## Token use
+
+- Claude Agent SDK, cost tracking: https://code.claude.com/docs/en/agent-sdk/cost-tracking
+- Claude Code, manage costs: https://code.claude.com/docs/en/costs
+- Claude API, prompt caching: https://platform.claude.com/docs/en/build-with-claude/prompt-caching
+- Claude API, pricing: https://platform.claude.com/docs/en/about-claude/pricing
+- Anthropic, effective context engineering for AI agents: https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents
+- Liu et al., Lost in the Middle: How Language Models Use Long Contexts: https://arxiv.org/abs/2307.03172

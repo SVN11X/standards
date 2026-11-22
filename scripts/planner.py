@@ -29,6 +29,7 @@ sys.path.insert(0, str(ROOT / "scripts"))
 
 import orchestrate  # noqa: E402
 import plan_contract as contract  # noqa: E402
+import usage  # noqa: E402
 
 TIERS = ("light", "medium", "advanced")
 CHOICES = ("auto", "local", "haiku", "sonnet", "opus")
@@ -216,7 +217,7 @@ def ask_claude(messages: list[dict], model: str, conf: dict, run=None, flags: li
     if result.get("exit") != 0:
         raise PlannerError(f"claude -p --model {model} failed: " + orchestrate.tail(result.get("stderr") or result.get("stdout") or "", 300))
     out = {"text": result["stdout"], "seconds": result.get("seconds"), "input_tokens": None, "output_tokens": None,
-           "reported_cost_usd": None, "model": model}
+           "reported_cost_usd": None, "model": model, "usage": usage.empty()}
     try:
         reply = json.loads(result["stdout"])
     except ValueError:
@@ -224,18 +225,14 @@ def ask_claude(messages: list[dict], model: str, conf: dict, run=None, flags: li
     if isinstance(reply, dict) and "result" in reply:
         if reply.get("is_error"):
             raise PlannerError(f"claude -p --model {model} reported an error: " + str(reply.get("result"))[:300])
-        usage = reply.get("usage") or {}
-        # The CLI reports the cached part of the prompt apart. The prompt the model read is the sum of the three.
-        parts = [usage.get(k) for k in ("input_tokens", "cache_creation_input_tokens", "cache_read_input_tokens")]
-        read = sum(n for n in parts if isinstance(n, int)) if isinstance(parts[0], int) else None
-        out.update(text=str(reply["result"]), input_tokens=read, output_tokens=usage.get("output_tokens"),
-                   reported_cost_usd=reply.get("total_cost_usd"))
-    tokens, seconds = out["output_tokens"], out["seconds"]
+        counted = usage.from_claude(reply)
+        # input_tokens stays the whole prompt the model read. `usage` keeps the cached parts apart.
+        out.update(text=str(reply["result"]), input_tokens=usage.prompt_tokens(counted), output_tokens=counted["output_tokens"],
+                   reported_cost_usd=reply.get("total_cost_usd"), usage=counted)
     # reported_cost_usd is what the CLI prints as the API price of the call. On a subscription nothing is charged for it.
-    orchestrate.append_telemetry({"date": orchestrate.now(), "provider": "claude", "model": model, "kind": "plan",
-                                  "seconds": seconds, "prompt_tokens": out["input_tokens"], "completion_tokens": tokens,
-                                  "tokens_per_second": round(tokens / seconds, 2) if tokens and seconds else None,
-                                  "reported_cost_usd": out["reported_cost_usd"]})
+    with usage.scope(kind=usage.current().get("kind") or "plan"):
+        usage.record("claude", model, out["usage"], "claude-json", out["seconds"], reported_cost_usd=out["reported_cost_usd"],
+                     input_chars=len(text) + len(SYSTEM))
     return out
 
 

@@ -78,16 +78,60 @@ entries:
     notes: Filters generic interface, copy and code patterns. Install from its own marketplace so it keeps updating.
     evaluated: 2026-11-08
   - name: React Bits
-    url: https://reactbits.dev
+    url: https://github.com/DavidHDev/react-bits
     status: hold
     profiles: [web]
     kind: library
-    license: see its repository
+    license: MIT with the Commons Clause. Use inside a site, app or product, never sell or redistribute the components
     cost: free
     privacy: local
     expression: [expressive]
-    notes: Decorative animated React components. Only for expressive repositories that already use React, with a decision record per component.
-    evaluated: 2026-11-08
+    notes: Decorative animated React components. Only for expressive repositories that already use React, with a decision record per component. Add one component with the shadcn CLI or jsrepo in the flavor of the stack (JS or TS, CSS or Tailwind). 200 of its 219 component sources read the reduced motion setting on 2026-11-22, so check the one you add. Its license forbids copying the components into this standard or into a template anyone can download.
+    evaluated: 2026-11-22
+  - name: Motion
+    url: https://github.com/motiondivision/motion
+    status: trial
+    profiles: [web]
+    kind: library
+    license: MIT
+    cost: free
+    privacy: runs in the browser
+    expression: [balanced, expressive]
+    notes: Animation for React, and for plain JavaScript through its animate function, for microinteractions that CSS alone cannot coordinate, such as layout changes and exit animations. Wrap the app in MotionConfig with reducedMotion set to user, and read useReducedMotion where a component moves on its own. Never with a second library animating the same property. Version 14.14 on 2026-11-22.
+    evaluated: 2026-11-22
+  - name: GSAP
+    url: https://github.com/greensock/GSAP
+    status: trial
+    profiles: [web]
+    kind: library
+    license: GSAP standard no charge license. Free for commercial sites, not inside a tool that builds animations without code and competes with Webflow
+    cost: free
+    privacy: runs in the browser
+    expression: [balanced, expressive]
+    notes: Timelines and ScrollTrigger for sequences that native CSS cannot express. Wrap motion in gsap.matchMedia() with a (prefers-reduced-motion) condition, which reverts it when the setting changes, and in React use useGSAP() from @gsap/react so it is cleaned up. One library owns each animated property. Version 3.15 on 2026-11-22.
+    evaluated: 2026-11-22
+  - name: Lenis
+    url: https://github.com/darkroomengineering/lenis
+    status: assess
+    profiles: [web]
+    kind: library
+    license: MIT
+    cost: free
+    privacy: runs in the browser
+    expression: [expressive]
+    notes: Smooth scroll on top of native scroll, built to keep WebGL and ScrollTrigger scenes in step with the page. Smoothness alone is decoration and is not a reason to add it. It honors prefers-reduced-motion by default (respectReducedMotion), blocks anchor links unless anchors is set, has no CSS scroll-snap and stops over iframes. Trial only in one expressive site where a scene must follow the scroll, measured against native scroll for frame rate and INP. Version 1.3.27 on 2026-11-22.
+    evaluated: 2026-11-22
+  - name: pagespeed-optimizer-skills
+    url: https://github.com/tuthuongvo/pagespeed-optimizer-skills
+    status: assess
+    profiles: [web]
+    kind: skill
+    license: none published on 2026-11-22, so none of its text or code was copied
+    cost: free
+    privacy: the PageSpeed Insights API receives the URL. Its local mode runs Lighthouse on the machine
+    expression: []
+    notes: A skill that measures a URL with PageSpeed Insights or Lighthouse, fixes the code in the order of the score weights and measures again until every category reaches 90. The method is in the web-improve skill of this standard, written from the Lighthouse and web.dev sources in references/page-speed.md. Single maintainer.
+    evaluated: 2026-11-22
   - name: DSH SuperAgent
     url: https://github.com/deepseek-ai/dsh-superagent-prototype
     status: assess

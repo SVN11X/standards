@@ -4,6 +4,30 @@ All notable changes to this standard are documented here. The format follows [Ke
 
 ## [Unreleased]
 
+### Added
+
+- The web-improve skill has `references/page-speed.md`: measure the production build three times, fix in the order Lighthouse weighs the metrics, measure again and report the medians. It follows the method of the pagespeed-optimizer skill, written from the Lighthouse and web.dev sources because that skill publishes no license. `scripts/speed_report.py` reads Lighthouse JSON reports into medians, failing audits and a before and after comparison that calls a change inside the spread of the runs no improvement. The owner asked for it on 2026-11-22.
+- Interaction patterns 9 to 11 in the web-improve gallery, written from scratch without React: a value that counts to its new number, a heading that appears on entering the view and a card that follows the pointer. They cover the purposeful part of React Bits, whose license forbids redistributing its components, and the gallery test checks them with and without reduced motion.
+- Motion in the radar at trial (MIT), with the setting that makes it honor reduced motion.
+- `audit_site.py` measures four more things: a lazy first image, GSAP without `gsap.matchMedia` or the reduced motion setting, Lenis with `respectReducedMotion: false`, and Lenis without `anchors`.
+- The radar evaluates GSAP (trial), Lenis (assess) and pagespeed-optimizer-skills (assess), and the motion reference says how to use GSAP, Lenis and React Bits with reduced motion and within their licenses.
+- `scripts/usage.py` records every model call in one shape: new input, cache read, cache write, output and reasoning tokens, with the task, plan, kind and attempt it belongs to. The executor loop adds one outcome row per unit, and `usage.py tasks` joins them, so a task's cost includes its failed attempts and its reviews. A value no tool reported stays null. The owner asked for it on 2026-11-22.
+- OpenCode runs print their events with `--format json` when the installed version lists the flag, and the tokens and cost of each step are summed. Before, every OpenCode run read n/a.
+- Bench rows carry the same usage block.
+- `usage.py compare` pairs two runs of the same plans by plan id and says whether the candidate passes the pilot: at least 15 % less per accepted plan, no plan the baseline delivered and the candidate did not, 30 pairs and every call with its usage. The executor loop writes one outcome row per plan for it.
+- Bench summaries carry `seconds_per_accepted` and `tokens_per_accepted`: the median of an accepted run divided by the pass rate.
+- `hooks/context_log.py` logs what the hooks add to each session, in characters, and `usage.py context` sums it. A routing the session already holds becomes one short line and a recalled note it has seen is left out, until a compaction, a cleared conversation or six hours.
+- A diff longer than `review.part_chars` (6000 characters) is reviewed one part at a time, each part with every file name of the change, and a diff over `review.max_diff_chars` is refused before any call. Ollama cuts a prompt longer than its context, so a long diff was judged on what was left of it.
+- A plan with more than one passed unit gets one review of its whole integrated diff. Publishing refuses a plan whose integrated review did not pass at the current commit.
+
+### Changed
+
+- React Bits in the radar: its license is MIT with the Commons Clause, so a site may use its components and nobody may redistribute them, and it installs one component at a time with the shadcn CLI or jsrepo.
+- The planner keeps the cached part of the prompt apart instead of adding it to the input, and reads `modelUsage`, which also counts subagents. `reported_cost_usd` (the price a tool prints) and `extra_charge_usd` (money charged beyond the subscription) are separate fields.
+- The dashboard shows new input, cache read, cache write and reported cost per model, and how many calls reported no usage.
+- Routing ranks the models that passed a bench class by seconds per accepted result, then tokens per accepted result, instead of the median alone. A model that fails one run in five needs more tries for the same result. With every run passing the order is unchanged.
+- The real reviewer gets the reply budget the `review-diff` bench class measured, 1500 tokens instead of 400. A part a review already judged with the same prompt is not sent again, so a fix that changes nothing keeps its failed verdict.
+
 ## [1.25.0] - 2026-11-21
 
 ### Added

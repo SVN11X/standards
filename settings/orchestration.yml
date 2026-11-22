@@ -166,17 +166,29 @@ executors:
     url: http://127.0.0.1:8000
     home: ~/.standards/tools/colibri
     command: [opencode, run, --model, "{model}", "{message}"]
+    usage_flags: [--format, json]
     ready_timeout_s: 300
     chat_timeout_s: 600
   opencode:
     # {model} and {message} are filled in. The message points to a task file in the worktree.
     command: [opencode, run, --model, "{model}", "{message}"]
+    # Added when `opencode run --help` lists them, so the run prints its events and each step's tokens and cost.
+    # An older OpenCode gets the plain command and its usage reads n/a.
+    usage_flags: [--format, json]
     # Matched against `opencode models`. Only models the owner checked as free in local.yml are used.
     # A model that keeps or trains on what it receives sorts after one that does not, whatever its name.
     prefer_match: [glm, deepseek, mimo]
   claude:
     # Used by bench only. Claude Code itself is the planner and does not delegate to itself.
     command: [claude, -p, --permission-mode, acceptEdits, "{message}"]
+
+# Cross-model review (scripts/review.py). A reviewer reads one part of a diff per call, so a long diff is never
+# cut at its context limit. With num_ctx 4096 and a reply of 1500 tokens, 6000 characters of code plus the
+# instructions fit. A diff over max_diff_chars is refused: the work is too large to judge and is split instead.
+# A plan with more than one passed unit gets one more review of its whole integrated diff before it is published.
+review:
+  part_chars: 6000
+  max_diff_chars: 100000
 
 # The planner of scripts/plan_autopilot.py. A program scores the request and the score picks the tier, so the
 # smallest Claude model that is enough drafts the plan with one `claude -p` call. The call uses the Claude

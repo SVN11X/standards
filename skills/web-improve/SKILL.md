@@ -28,6 +28,7 @@ Its `experience` option names the web sub-profile that leads the site. Read `ref
 - When the project has Playwright, `node scripts/measure_page.mjs <url-or-file>` measures the page in a browser at 360 and 1280 px: horizontal scroll, touch targets, text contrast, line length, clipped text and font families.
 - When the owner gives a public URL, compare it with the code. They can differ.
 - Read `references/stack-and-hosting.md` for hosting limits and technology choices.
+- For speed, Lighthouse, PageSpeed or Core Web Vitals, follow `references/page-speed.md`: measure the production build three times, fix in the order the score weighs the metrics, measure again. `python scripts/speed_report.py` reads the Lighthouse JSON.
 
 ## 2. Audit the experience
 
@@ -59,7 +60,7 @@ When the site teaches something, such as a diagram, a model, a simulation or tec
 - Build reusable components. Cut repeated text. One idea per block.
 - An interactive demo must work, start in a meaningful state, show current values with units, offer a reset, and have a static fallback.
 - Use motion only to show continuity, state or cause. Always respect `prefers-reduced-motion`, in CSS and in the JavaScript that animates. `references/motion-and-foundations.md` lists what motion must survive, the foundations (tokens, native CSS first, fonts, empty states, first visit) and when a library is justified.
-- For buttons and microinteractions, copy a pattern from `references/interaction-patterns.md`. Patterns 1 to 6 run in `gallery/index.html`, which opens straight from the file on a computer or a phone. Patterns 7 and 8 (form and link preview) are written out without a demo.
+- For buttons, microinteractions, changing values and section headings, copy a pattern from `references/interaction-patterns.md`. Patterns 1 to 6 and 9 to 11 run in `gallery/index.html`, which opens straight from the file on a computer or a phone. Patterns 7 and 8 (form and link preview) are written out without a demo.
 - A structural redesign shows two short versions with real content. Record the owner's choice and its reason in `DESIGN.md` under Examples.
 - Choose technology with the matrix in `references/stack-and-hosting.md`: the simplest option that meets the goal. Prefer tools marked adopt or trial in the radar of the standard, and only those whose expression levels include the one in `DESIGN.md`. A tool outside the radar is evaluated with tool-radar first.
 - Keep the output static when the host is GitHub Pages. Never put secrets in frontend code.

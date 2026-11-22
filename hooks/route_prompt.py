@@ -7,7 +7,8 @@ the request needs. A question gets no context, so asking stays as fast as before
 writes one small task record under ~/.standards. It never edits the repository and never blocks a request:
 on any error it prints nothing. It routes the owner's words, without the reminders and the wrapper a client
 adds around the prompt. It starts one thing, a supervisor pass in the background when the owner says
-continúa, sigue or retoma, and that pass only resumes plans already started.
+continúa, sigue or retoma, and that pass only resumes plans already started. What it adds is logged by
+context_log.py, and a routing or a recalled note the session already holds is not added again.
 """
 import json
 import os
@@ -42,17 +43,23 @@ def own_words(prompt: str) -> str:
 
 
 def context(data: dict) -> str | None:
+    parts = context_parts(data)
+    return "\n".join(t for t in (parts.get("router"), parts.get("recall")) if t) or None
+
+
+def context_parts(data: dict) -> dict:
+    """The routing and the recalled notes apart, so each can be left out on its own when the session holds it."""
     prompt = str(data.get("prompt") or "")
     scripts = router_dir()
     if not prompt.strip() or scripts is None:
-        return None
+        return {}
     sys.path.insert(0, str(scripts))
     import repo_fingerprint
     import router
     cwd = Path(data.get("cwd") or os.getcwd())
     # A question needs no context, and a folder outside any repository has nothing to route.
     if router.classify(prompt)[0] == "query" or repo_fingerprint.git(cwd, "rev-parse", "--show-toplevel") is None:
-        return None
+        return {}
     decision = router.decide(prompt, cwd, "claude", session=data.get("session_id"), permission_mode=data.get("permission_mode"))
     limit = int(router.owner_limits(Path(decision["repository"]["root"])).get("max_context_chars", 1800))
     text = router.render(decision, limit) or ""
@@ -74,8 +81,9 @@ def context(data: dict) -> str | None:
         except Exception:  # noqa: BLE001 (recall is a hint, the request goes on without it)
             found = []
         if found:
-            text += "\nRead before planning (recalled, not the whole history):\n" + "\n".join(found)[:900]
-    return text or None
+            return {"router": text or None, "recall": "Read before planning (recalled, not the whole history):\n"
+                    + "\n".join(found)[:900]}
+    return {"router": text or None}
 
 
 def folder_slug(data: dict) -> str:
@@ -141,9 +149,9 @@ def main() -> int:
     except Exception:  # noqa: BLE001 (fail open, the request must go through)
         pass
     try:
-        text = context(data)
+        parts = context_parts(data)
     except Exception:  # noqa: BLE001 (fail open, the request must go through)
-        text = None
+        parts = {}
     try:
         messages = inbox(data)
     except Exception:  # noqa: BLE001 (a message never blocks a request)
@@ -158,7 +166,15 @@ def main() -> int:
         styled = style.from_prompt(str(data.get("prompt") or ""), str(data.get("session_id") or ""))
     except Exception:  # noqa: BLE001
         styled = None
-    text = "\n\n".join(t for t in (styled, messages, resumed, text) if t) or None
+    blocks = [("style", styled, "always"), ("peerbox", messages, "always"), ("supervisor", resumed, "always"),
+              ("router", parts.get("router"), "once"), ("recall", parts.get("recall"), "lines")]
+    try:
+        import context_log
+        sent, row = context_log.select(data, blocks)
+        context_log.log(row)
+    except Exception:  # noqa: BLE001 (the log never changes what the session gets)
+        sent = [text for _, text, _ in blocks if text]
+    text = "\n\n".join(t for t in sent if t) or None
     if text:
         print(json.dumps({"hookSpecificOutput": {"hookEventName": "UserPromptSubmit", "additionalContext": text}}))
     return 0

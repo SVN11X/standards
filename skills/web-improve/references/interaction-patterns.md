@@ -1,6 +1,6 @@
 # Interaction patterns
 
-Eight small patterns for buttons, forms and links. Patterns 1 to 6 run in the gallery at `gallery/index.html` of this skill, so they can be opened on a phone and read as working code. Patterns 7 and 8 are not in the gallery yet. A small model may copy a pattern as it is written. It does not invent a new one.
+Eleven small patterns for buttons, forms, links, values and sections. Patterns 1 to 6 and 9 to 11 run in the gallery at `gallery/index.html` of this skill, so they can be opened on a phone and read as working code. Patterns 7 and 8 are not in the gallery yet. A small model may copy a pattern as it is written. It does not invent a new one.
 
 ## Rules for every pattern
 
@@ -94,3 +94,34 @@ Eight small patterns for buttons, forms and links. Patterns 1 to 6 run in the ga
 - Reduced motion: the preview appears at once.
 - Use it for links to articles or entries whose summary helps the choice. Do not use it on navigation menus or on every link of a page.
 - Sources: MediaWiki, Page Previews (https://www.mediawiki.org/wiki/Page_Previews) and W3C, Understanding SC 1.4.13 Content on Hover or Focus (https://www.w3.org/WAI/WCAG22/Understanding/content-on-hover-or-focus.html).
+
+## 9. Value that counts to its new number
+
+- Purpose: show that a number changed and by how much, such as a score after an answer or a total after a choice.
+- Events: an action that changed the value.
+- States: the old value, counting, the new value.
+- Behavior: the visible digits go from the old value to the new one in one slow duration token, with an easing that slows at the end and `font-variant-numeric: tabular-nums` so the width does not jump. The digits are `aria-hidden`, and a `role="status"` text says the final value once, at the moment it changes. A new change stops the count that is running and starts from what is shown.
+- Reduced motion: the new value shows at once.
+- Use it when the change itself is the information. Never count up a number on page load to decorate it.
+
+## 10. Heading that appears on entering the view
+
+- Purpose: mark where a new part of a long page starts as the reader scrolls to it.
+- Events: the heading enters the view.
+- States: waiting below the view, shown.
+- Behavior: the page is readable as it is: the script hides a heading only when motion is allowed, `IntersectionObserver` exists and the heading is still below the view. It moves once, as a whole line, with opacity and a short translate. A heading already in view when the page loads is shown at once.
+- Never split a heading into one element per letter or word: a screen reader then reads it in pieces.
+- Reduced motion: it is never hidden.
+- Use it on a few section headings of a long page. Never on body text, forms or anything the reader needs to act.
+
+## 11. Card that follows the pointer
+
+- Purpose: show which card of a group the pointer is on, in a balanced or expressive design.
+- Events: pointer move and leave, keyboard focus, touch.
+- States: rest, lit with the light under the pointer, lit and centered on focus or touch.
+- Behavior: the card is a real link or button. A radial gradient sits under its text, and the pointer only sets two custom properties with its position inside the card. Nothing moves, so the text keeps its contrast and the target stays in place. Focus and touch light the card with the light in the center.
+- Reduced motion: the light stays centered.
+- Use it for a small group of cards that lead somewhere. Never for a single button or for text the reader must read while the light moves.
+
+Patterns 9 to 11 cover the purposeful part of what React Bits offers as React components. They are written here from scratch, without React, because its license forbids redistributing its components.
+
