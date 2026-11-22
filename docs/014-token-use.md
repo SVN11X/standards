@@ -27,6 +27,19 @@ Two costs stay apart. `reported_cost_usd` is the price a tool prints, such as th
 
 Bench rows carry the same usage block, so two models can be compared by the tokens they need for a verified result, not only by their pass rate.
 
+## What the hooks add to a session
+
+`hooks/route_prompt.py` adds the router's decision and the recalled notes to every work request. The router already shortens a follow-up of the same task to one line. The recalled notes came back whole on every message. Each message also stays in the conversation, so every later turn reads it again, from the cache at best.
+
+`hooks/context_log.py` now keeps, per session, a fingerprint of each block it added. A routing the session already holds is replaced by one line that says so, and a recalled note the session has seen is left out, so a follow-up adds only what is new. Anthropic's guide asks for "the smallest possible set of high-signal tokens" in the context and for loading the rest when it is needed ([context engineering](https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents)). Leaving out is safe only while the earlier copy is still in the context, so:
+
+- a compaction (`reinject.py`) forgets the session and the next message gets everything again,
+- a cleared conversation has another transcript and starts empty,
+- an entry older than six hours is sent again,
+- the style line, the peerbox messages and the supervisor notice are always sent.
+
+Every injection is logged in `context.jsonl` with the size of each block and the characters left out. `python scripts/usage.py context` sums it. The log counts characters, because a hook sees no tokens. Planner calls record the characters of their prompt next to the tokens the CLI reported.
+
 ## Reviews in parts
 
 A local reviewer runs with `num_ctx` 4096. Ollama cuts a longer prompt instead of failing, so a long diff was judged on what was left of it. `scripts/review.py` now sends one part of at most `review.part_chars` characters per call (6000 by default). A part holds whole files when they fit and cuts a file only between hunks, or inside a hunk longer than a part. A cut hunk gets its own `@@` line with the file's line numbers, so a finding is still checked against the lines it cites. Every part of a long diff names all the files of the change. Models use what sits at the start or the end of a long context better than what sits in the middle ([Liu et al.](https://arxiv.org/abs/2307.03172)), which is one more reason to keep each part short.

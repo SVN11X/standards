@@ -1453,7 +1453,7 @@ def cmd_package_skills(out_dir: Path) -> None:
     for script in BUNDLED_SCRIPTS:
         shutil.copy2(STANDARD_ROOT / "scripts" / script, snapshot / "scripts" / script)
     (snapshot / "hooks").mkdir()
-    for hook in ("guard.py", "secret_scan.py", "autopilot.py"):
+    for hook in ("guard.py", "secret_scan.py", "autopilot.py", "context_log.py"):
         shutil.copy2(STANDARD_ROOT / "hooks" / hook, snapshot / "hooks" / hook)
     shutil.copytree(STANDARD_ROOT / "schemas", snapshot / "schemas", ignore=ignore)
     (snapshot / "settings").mkdir()

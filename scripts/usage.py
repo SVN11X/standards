@@ -14,6 +14,7 @@ one, and null when nothing says.
 
 Usage: python scripts/usage.py tasks [--plan ID] [--json]
        python scripts/usage.py models [--json]
+       python scripts/usage.py context [--json]   what the hooks added to sessions, in characters
 """
 from __future__ import annotations
 
@@ -319,7 +320,20 @@ def main(argv=None) -> int:
     listing.add_argument("--json", action="store_true")
     models = sub.add_parser("models")
     models.add_argument("--json", action="store_true")
+    sub.add_parser("context").add_argument("--json", action="store_true")
     args = parser.parse_args(argv)
+    if args.command == "context":
+        sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "hooks"))
+        import context_log
+        data = context_log.summary()
+        if args.json:
+            print(json.dumps(data, indent=2))
+        else:
+            print(f"injections {data['injections']}  characters sent {data['sent_chars']:,}  "
+                  f"left out as already held {data['skipped_chars']:,}")
+            for name, item in sorted(data["blocks"].items()):
+                print(f"  {name}: {item['count']} times, {item['chars']:,} characters")
+        return 0
     rows = read_rows()
     if args.command == "models":
         data = by_model(rows)

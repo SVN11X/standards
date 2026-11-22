@@ -231,7 +231,8 @@ def ask_claude(messages: list[dict], model: str, conf: dict, run=None, flags: li
                    reported_cost_usd=reply.get("total_cost_usd"), usage=counted)
     # reported_cost_usd is what the CLI prints as the API price of the call. On a subscription nothing is charged for it.
     with usage.scope(kind=usage.current().get("kind") or "plan"):
-        usage.record("claude", model, out["usage"], "claude-json", out["seconds"], reported_cost_usd=out["reported_cost_usd"])
+        usage.record("claude", model, out["usage"], "claude-json", out["seconds"], reported_cost_usd=out["reported_cost_usd"],
+                     input_chars=len(text) + len(SYSTEM))
     return out
 
 
