@@ -4,6 +4,8 @@ All notable changes to this standard are documented here. The format follows [Ke
 
 ## [Unreleased]
 
+## [1.24.1] - 2026-11-21
+
 ### Changed
 
 - Every Ollama call, in the bench and in real work, runs at temperature 0 with seed 42, and puts every layer on the card when the model file plus `executors.ollama.full_gpu_margin_mib` fits in its memory. Ollama's own split had left 18 % of `qwen2.5:7b` on the CPU, 6.45 s on classify instead of 2.23 s. Bench rows record the options they ran with.
