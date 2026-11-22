@@ -50,7 +50,7 @@ function status(){if(!S)return"";const t=S.tasks.find(t=>t.state==="running");
  if(!S.providers.ollama.up&&!S.providers.colibri.up)return"No local provider is answering";return"Idle"}
 function Dashboard(){const r=S.resources,p=S.providers,c=S.counts,tel=S.telemetry.by_model;
  const last=S.telemetry.recent.at(-1),ram=r.ram_total_bytes&&r.ram_free_bytes!=null?1-r.ram_free_bytes/r.ram_total_bytes:null;
- const toks=Object.values(tel).reduce((a,m)=>({i:a.i+m.input,o:a.o+m.output}),{i:0,o:0});
+ const toks=Object.values(tel).reduce((a,m)=>({i:a.i+(m.input||0)+(m.cache_read||0)+(m.cache_write||0),o:a.o+(m.output||0)}),{i:0,o:0});
  return`<div class="grid">
  ${card("Now",`<div class="big">${status()}</div><div class="muted">Cost mode ${esc(S.cost.mode)}, privacy ${esc(S.cost.privacy)}</div>`)}
  ${card("Providers",`<div>Ollama <b class="${p.ollama.up?"ok":"bad"}">${p.ollama.up?"up":"down"}</b> <span class="muted">${p.ollama.models.length} models</span></div>
@@ -78,10 +78,10 @@ function Agents(){const p=S.providers,o=p.ollama,loaded=o.loaded||[];
  <h2>Roles</h2><div class="grid">${card("Claude Haiku, Sonnet, Opus","Planning only. A program picks the smallest tier that is enough, one call per plan")}${card("OpenCode","Implementation, fixes, refactors, tests, in parallel worktrees")}${card("Ollama","Quick local tasks, summaries, classification, embeddings")}${card("Colibri","Stronger local coding model")}</div>`}
 function Tasks(){return taskTable(S.tasks)}
 function Performance(){const t=S.telemetry,r=S.resources;
- const rows=Object.entries(t.by_model).map(([k,m])=>`<tr><td>${esc(k)}</td><td>${m.requests}</td><td>${num(m.input,0)}</td><td>${num(m.output,0)}</td><td>${num(m.output/m.seconds)}</td></tr>`).join("");
+ const rows=Object.entries(t.by_model).map(([k,m])=>`<tr><td>${esc(k)}</td><td>${m.requests}${m.unreported?` <span class="muted">(${m.unreported} without usage)</span>`:""}</td><td>${num(m.input,0)}</td><td>${num(m.cache_read,0)}</td><td>${num(m.cache_write,0)}</td><td>${num(m.output,0)}</td><td>${m.output!=null&&m.seconds?num(m.output/m.seconds):NA}</td><td>${m.reported_cost_usd==null?NA:"$"+num(m.reported_cost_usd,4)}</td></tr>`).join("");
  return`<div class="grid">${card("Tokens per second",spark(hist.tps,"var(--ok)"))}${card("CPU",spark(hist.cpu))}
  ${card("Colibri engine memory",`<div class="big">${mb(r.colibri_engine_mb)}</div>`)}${card("Ollama memory",`<div class="big">${mb(r.ollama_mb)}</div>`)}</div>
- <h2>Measured requests per model</h2><div class="card">${rows?`<table><tr><th>Model</th><th>Requests</th><th>Input</th><th>Output</th><th>Tokens/s</th></tr>${rows}</table>`:`<span class="muted">No measured requests yet. Cache tokens and context use are ${NA}.</span>`}</div>`}
+ <h2>Measured requests per model</h2><div class="card">${rows?`<table><tr><th>Model</th><th>Requests</th><th>New input</th><th>Cache read</th><th>Cache write</th><th>Output</th><th>Tokens/s</th><th>Reported cost</th></tr>${rows}</table><p class="muted">Reported cost is the price the tool prints, not a charge. A Claude Code subscription call adds no API charge.</p>`:`<span class="muted">No measured requests yet. Cache tokens and context use are ${NA}.</span>`}</div>`}
 function History(){const b=S.bench;if(!b.length)return`<div class="card muted">No bench history.</div>`;
  return`<div class="card"><table><tr><th>Task</th><th>Executor</th><th>Model</th><th>Runs</th><th>Pass rate</th><th>p50 s</th></tr>${b.map(x=>`<tr><td>${esc(x.task)}</td><td>${esc(x.executor)}</td><td>${esc(x.model)}</td><td>${x.runs}</td><td>${x.pass_rate}</td><td>${num(x.p50_s)}</td></tr>`).join("")}</table></div>`}
 const secs=v=>v==null?NA:(v>=90?(v/60).toFixed(1)+" min":num(v)+" s");

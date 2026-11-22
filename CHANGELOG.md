@@ -4,6 +4,17 @@ All notable changes to this standard are documented here. The format follows [Ke
 
 ## [Unreleased]
 
+### Added
+
+- `scripts/usage.py` records every model call in one shape: new input, cache read, cache write, output and reasoning tokens, with the task, plan, kind and attempt it belongs to. The executor loop adds one outcome row per unit, and `usage.py tasks` joins them, so a task's cost includes its failed attempts and its reviews. A value no tool reported stays null. The owner asked for it on 2026-11-22.
+- OpenCode runs print their events with `--format json` when the installed version lists the flag, and the tokens and cost of each step are summed. Before, every OpenCode run read n/a.
+- Bench rows carry the same usage block.
+
+### Changed
+
+- The planner keeps the cached part of the prompt apart instead of adding it to the input, and reads `modelUsage`, which also counts subagents. `reported_cost_usd` (the price a tool prints) and `extra_charge_usd` (money charged beyond the subscription) are separate fields.
+- The dashboard shows new input, cache read, cache write and reported cost per model, and how many calls reported no usage.
+
 ## [1.25.0] - 2026-11-21
 
 ### Added

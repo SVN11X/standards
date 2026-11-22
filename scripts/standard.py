@@ -1421,7 +1421,7 @@ def skill_names() -> list[str]:
 
 # Scripts the skills call from the bundled copy of the standard, next to standard.py.
 BUNDLED_SCRIPTS = ("standard.py", "guardrails.py", "orchestrate.py", "verify.py", "evidence.py", "preserve.py", "adversarial.py",
-                   "safe_patch.py", "memory.py", "bench_tasks.py", "analyze.py", "providers.py",
+                   "safe_patch.py", "memory.py", "bench_tasks.py", "analyze.py", "providers.py", "usage.py",
                    # The executor loop, the planner and the router. verify.py and adversarial.py import them.
                    "execute.py", "workplan.py", "review.py", "scheduler.py", "resources.py", "plan_autopilot.py",
                    "plan_contract.py", "planner.py", "repo_fingerprint.py", "router.py", "blockers.py", "supervisor.py", "reuse.py", "readiness.py", "peerbox.py", "recall.py",

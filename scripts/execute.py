@@ -31,12 +31,15 @@ import resources  # noqa: E402
 import review as review_mod  # noqa: E402
 import scheduler  # noqa: E402
 import secret_scan  # noqa: E402
+import usage  # noqa: E402
 import workplan  # noqa: E402
 
 DONE = "passed"
 # Reviewed and committed, waiting for its turn in the integration queue. A restart integrates it without a new run.
 REVIEWED = "reviewed"
 AGENTS = ("opencode", "colibri")
+# A unit in one of these states has ended for this run. Each end appends one outcome row to the telemetry.
+ENDED = (DONE, "failed", "blocked", "cancelled")
 POOLS = {"remote_free": 2, "local": 1}
 
 
@@ -145,7 +148,8 @@ def judge(data: dict, reviewer_model: str | None, reviewer) -> tuple[str, str]:
     if not reviewer or not reviewer_model:
         return "blocked", "no reviewer model: review is required"
     diff = orchestrate.git(Path(data["worktree"]), "diff", data["base"], data["commit"])
-    result = review_mod.review(diff, data.get("model") or "", reviewer_model, reviewer)
+    with usage.scope(kind="review"):
+        result = review_mod.review(diff, data.get("model") or "", reviewer_model, reviewer)
     data["review"] = {"verdict": result["verdict"], "findings": result.get("findings", []), "rounds": result.get("rounds")}
     if result["verdict"] in ("pass", "warn"):
         return DONE, f"review {result['verdict']}"
@@ -235,6 +239,22 @@ class Executor:
             self.record_blocker(uid, fields)
         elif status == DONE:
             blockers.resolve_unit(self.plan["plan_id"], uid, "the unit passed")
+        if status in ENDED:
+            self.record_outcome(uid, status, fields)
+
+    def record_outcome(self, uid: str, status: str, fields: dict) -> None:
+        """How the unit ended, next to the calls it made. The tokens stay in those call rows."""
+        checks = fields.get("checks") or {}
+        verdict = (fields.get("review") or {}).get("verdict")
+        try:
+            usage.append(usage.outcome_row(
+                f"{self.plan['plan_id']}/{uid}", plan_id=self.plan["plan_id"], accepted=status == DONE,
+                attempts=fields.get("attempts"), tests_passed={"PASS": True, "FAIL": False}.get(checks.get("tests")),
+                review_passed=None if verdict is None else verdict in ("pass", "warn"),
+                duration_seconds=fields.get("seconds"), executor=fields.get("executor"), model=fields.get("model"),
+                status=status))
+        except OSError:
+            pass
 
     def record_blocker(self, uid: str, fields: dict) -> None:
         """Save the six facts of a blocked unit, so "why is it stopped?" is answered from disk. It never stops the plan."""
@@ -414,7 +434,8 @@ class Executor:
         info = {"pools": self.slots.pop(uid, [])}
         self.stops.setdefault(uid, threading.Event())
         try:
-            self.do_unit(uid, info)
+            with usage.scope(task_id=f"{self.plan['plan_id']}/{uid}", plan_id=self.plan["plan_id"], kind="execute"):
+                self.do_unit(uid, info)
         except Exception as error:  # one broken unit must not stop the independent ones
             self.mark(uid, "failed", note=f"{type(error).__name__}: {error}")
         return self.state["units"][uid]["status"], info
@@ -484,7 +505,8 @@ class Executor:
                 info["pools"] = [pool]
             tried += runs
             seen.add((choice.get("executor"), choice.get("model")))
-            status, note, data = self.attempt(unit, choice, test)
+            with usage.scope(attempt=tried):
+                status, note, data = self.attempt(unit, choice, test)
             info["failure_code"] = (data.get("executor_result") or {}).get("failure_code")
             if runs:
                 log.append(attempt_row(choice, data, status))

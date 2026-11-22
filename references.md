@@ -123,3 +123,12 @@ Sources behind the rules. Prefer the original source. The check verifies these l
 - Openverse API, licenses of openly licensed media: https://github.com/WordPress/openverse
 - Wikimedia Commons API: https://commons.wikimedia.org/wiki/Commons:API
 - HyperFrames, video from HTML: https://github.com/heygen-com/hyperframes
+
+## Token use
+
+- Claude Agent SDK, cost tracking: https://code.claude.com/docs/en/agent-sdk/cost-tracking
+- Claude Code, manage costs: https://code.claude.com/docs/en/costs
+- Claude API, prompt caching: https://platform.claude.com/docs/en/build-with-claude/prompt-caching
+- Claude API, pricing: https://platform.claude.com/docs/en/about-claude/pricing
+- Anthropic, effective context engineering for AI agents: https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents
+- Liu et al., Lost in the Middle: How Language Models Use Long Contexts: https://arxiv.org/abs/2307.03172

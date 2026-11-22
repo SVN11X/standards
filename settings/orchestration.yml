@@ -166,11 +166,15 @@ executors:
     url: http://127.0.0.1:8000
     home: ~/.standards/tools/colibri
     command: [opencode, run, --model, "{model}", "{message}"]
+    usage_flags: [--format, json]
     ready_timeout_s: 300
     chat_timeout_s: 600
   opencode:
     # {model} and {message} are filled in. The message points to a task file in the worktree.
     command: [opencode, run, --model, "{model}", "{message}"]
+    # Added when `opencode run --help` lists them, so the run prints its events and each step's tokens and cost.
+    # An older OpenCode gets the plain command and its usage reads n/a.
+    usage_flags: [--format, json]
     # Matched against `opencode models`. Only models the owner checked as free in local.yml are used.
     # A model that keeps or trains on what it receives sorts after one that does not, whatever its name.
     prefer_match: [glm, deepseek, mimo]

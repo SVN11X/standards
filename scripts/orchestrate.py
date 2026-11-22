@@ -53,6 +53,7 @@ except ImportError:  # pragma: no cover
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import bench_tasks  # noqa: E402
 import providers  # noqa: E402
+import usage as usage_mod  # noqa: E402
 
 STANDARD_ROOT = Path(__file__).resolve().parents[1]
 SETTINGS = STANDARD_ROOT / "settings" / "orchestration.yml"
@@ -987,10 +988,12 @@ def evidence_text(items: list[dict], conf: dict) -> str:
 
 
 def usage_text(usage: dict | None) -> str:
-    """Model, tokens in and out and time of one run. What the executor did not report reads n/a."""
+    """Model, tokens and time of one run. Input is the part the cache did not hold. What nobody reported reads n/a."""
     usage = usage or {}
+    cache = (f", cache read {na(usage.get('cache_read_tokens'))}, cache write {na(usage.get('cache_write_tokens'))}"
+             if usage.get("cache_read_tokens") is not None or usage.get("cache_write_tokens") is not None else "")
     return (f"model {na(usage.get('model'))}, input {na(usage.get('input_tokens'))} tokens "
-            f"({na(usage.get('input_chars'))} characters), output {na(usage.get('output_tokens'))} tokens, "
+            f"({na(usage.get('input_chars'))} characters){cache}, output {na(usage.get('output_tokens'))} tokens, "
             f"{na(usage.get('seconds'))} s")
 
 
@@ -1618,6 +1621,22 @@ def fill(template: list[str], **values) -> list[str]:
     return [part.format(**values) for part in template]
 
 
+@functools.lru_cache(maxsize=8)
+def help_text(program: str) -> str:
+    result = run([program, "run", "--help"], timeout=30)
+    return (result.get("stdout") or "") + (result.get("stderr") or "")
+
+
+def usage_flags(executor: str, conf: dict, command: list[str] | None) -> list[str]:
+    """The flags that make an agent print its token use, when the installed version lists the first one.
+    A command passed by the caller is used as given."""
+    flags = list((conf["executors"].get(executor) or {}).get("usage_flags") or [])
+    template = conf["executors"].get(executor, {}).get("command") or []
+    if command is not None or not flags or not template or flags[0] in template:
+        return []
+    return flags if re.search(r"(?m)^\s*(?:-\w, )?" + re.escape(flags[0]) + r"\b", help_text(template[0])) else []
+
+
 def delegate_opencode(repo: Path, task: str, allowed: list[str], test: str | None, model: str | None = None,
                       protect: list[str] | None = None, untrusted: str | None = None, keep: bool = False,
                       conf: dict | None = None, local: dict | None = None, command: list[str] | None = None,
@@ -1675,19 +1694,28 @@ def delegate_opencode(repo: Path, task: str, allowed: list[str], test: str | Non
     (worktree / TASK_FILE).write_text(packet, encoding="utf-8")
     message = f"Read {TASK_FILE} in this folder and do exactly that task."
     template = command or conf["executors"][executor]["command"]
+    extra = usage_flags(executor, conf, command)
+    filled = fill(template, model=model or "", message=message)
+    # The flags go before the message, which is the last argument of the template.
+    filled = filled[:-1] + extra + filled[-1:] if extra else filled
     set_state(run_data, "running")
     budget = min(timeout_s, limits["opencode_timeout_s"]) if timeout_s else limits["opencode_timeout_s"]
-    result = run(fill(template, model=model or "", message=message), cwd=worktree,
-                 timeout=budget, env=child_env(), stop=stop, idle_s=limits.get("opencode_idle_s"))
+    result = run(filled, cwd=worktree, timeout=budget, env=child_env(), stop=stop, idle_s=limits.get("opencode_idle_s"))
     size = limits["output_tail_chars"]
     run_data["executor_result"] = {"exit": result["exit"], "seconds": result["seconds"], "timeout": result["timeout"],
                                    "idle": result.get("idle", False), "cancelled": result.get("cancelled", False),
                                    "stdout_tail": tail(result["stdout"], size), "stderr_tail": tail(result["stderr"], size),
                                    "rate_limited": result["exit"] != 0 and bool(RATE_LIMIT.search(result["stdout"] + result["stderr"]))}
     code = failure_code(result["exit"], result["timeout"], result["stdout"] + result["stderr"])
-    # OpenCode reports no token counts, so they stay None and read n/a. The size of the task packet is known.
-    run_data["usage"] = {"model": model, "input_chars": len(packet), "input_tokens": None, "output_tokens": None,
-                         "seconds": result["seconds"]}
+    # Tokens come from the events of --format json. Without them they stay None and read n/a.
+    events = usage_mod.from_opencode(result["stdout"]) if extra else {"usage": usage_mod.empty(), "reported_cost_usd": None,
+                                                                       "session_id": None, "steps": 0}
+    run_data["usage"] = {"model": model, "input_chars": len(packet), **events["usage"], "seconds": result["seconds"],
+                         "reported_cost_usd": events["reported_cost_usd"], "steps": events["steps"]}
+    run_data["session_id"] = events["session_id"]
+    usage_mod.record(executor, model, events["usage"], "opencode-events", result["seconds"],
+                     reported_cost_usd=events["reported_cost_usd"], run_id=run_data["id"], input_chars=len(packet),
+                     session_id=events["session_id"])
     (worktree / TASK_FILE).unlink(missing_ok=True)
     if result.get("cancelled"):
         set_state(run_data, "blocked", "cancelled by the owner. The worktree and its branch are kept")
@@ -1854,8 +1882,10 @@ def delegate_ollama(prompt: str, model: str | None = None, want_json: bool = Fal
         "total_duration", "load_duration", "prompt_eval_count", "eval_count", "eval_duration")})
     if reply.get("eval_count") and reply.get("eval_duration"):
         run_data["metrics"]["tokens_per_s"] = round(reply["eval_count"] / (reply["eval_duration"] / 1e9), 1)
-    run_data["usage"] = {"model": reply.get("model") or model, "input_chars": len(content), "input_tokens": reply.get("prompt_eval_count"),
-                         "output_tokens": reply.get("eval_count"), "seconds": seconds}
+    counted = usage_mod.from_ollama(reply)
+    run_data["usage"] = {"model": reply.get("model") or model, "input_chars": len(content), **counted, "seconds": seconds}
+    usage_mod.record("ollama", reply.get("model") or model, counted, "ollama", seconds, run_id=run_data["id"],
+                     input_chars=len(content))
     run_data["checks"]["reply"] = "PASS" if answer.strip() else "FAIL"
     if not same_model(model, reply.get("model")):
         run_data["checks"]["effective_model"] = "FAIL"
@@ -1924,6 +1954,7 @@ def bench_agent(task: str, executor: str, model: str | None, command: list[str] 
             "checks": result.get("checks"), "hidden_tests": hidden_ok, "outside_scope": result.get("outside_scope"),
             "rate_limited": bool(outcome.get("rate_limited")), "timeout": bool(outcome.get("timeout")),
             "input_chars": (result.get("usage") or {}).get("input_chars"),
+            "usage": {key: (result.get("usage") or {}).get(key) for key in usage_mod.KEYS},
             "error": ("passed the tests it could see and failed the acceptance tests it never saw"
                       if result["state"] == "verified" and not hidden_ok else (result.get("history") or [{}])[-1].get("note")),
             "hardware": hardware()}
@@ -1963,7 +1994,7 @@ def bench_chat(task: str, executor: str, model: str | None, conf: dict | None = 
     if not ok:
         return {**row, "skipped": why}
     started = time.monotonic()
-    seen = {"failures": 0, "load": [], "speed": [], "models": set(), "error": None}
+    seen = {"failures": 0, "load": [], "speed": [], "models": set(), "error": None, "usage": []}
 
     def call(payload: dict) -> dict | None:
         if time_limit_s and time.monotonic() - started > time_limit_s:
@@ -1977,6 +2008,7 @@ def bench_chat(task: str, executor: str, model: str | None, conf: dict | None = 
             seen["error"] = str(error)[:200]
             return None
         seen["load"].append((reply.get("load_duration") or 0) / 1e9)
+        seen["usage"].append(usage_mod.from_ollama(reply))
         if reply.get("eval_count") and reply.get("eval_duration"):
             seen["speed"].append(reply["eval_count"] / (reply["eval_duration"] / 1e9))
         if reply.get("model"):
@@ -2002,6 +2034,7 @@ def bench_chat(task: str, executor: str, model: str | None, conf: dict | None = 
                cold_load_s=round(seen["load"][0], 2) if seen["load"] else None,
                warm_load_s=round(statistics.median(seen["load"][1:]), 2) if len(seen["load"]) > 1 else None,
                tokens_per_s=round(statistics.mean(seen["speed"]), 1) if seen["speed"] else None,
+               usage={key: usage_mod.total_of(u[key] for u in seen["usage"]) for key in usage_mod.KEYS},
                gpu_share=loaded.get("gpu_share"),
                verified=result["accuracy"] >= bench_tasks.PASS_ACCURACY and seen["failures"] == 0 and not wrong_model)
     if wrong_model:
@@ -2068,7 +2101,7 @@ def bench_api(task: str, model: str | None, row: dict, conf: dict, local: dict |
     per_minute = (pconf.get("limits") or {}).get("requests_per_minute")
     gap = 60 / per_minute if per_minute else 0
     started = time.monotonic()
-    seen = {"failures": 0, "requests": 0, "models": set(), "last": 0.0, "error": None}
+    seen = {"failures": 0, "requests": 0, "models": set(), "last": 0.0, "error": None, "usage": []}
 
     def call(messages: list[dict], tools=None, want_json: bool = False) -> dict:
         if time_limit_s and time.monotonic() - started > time_limit_s:
@@ -2102,6 +2135,7 @@ def bench_api(task: str, model: str | None, row: dict, conf: dict, local: dict |
             raise RunInvalid(f"the provider reported a charge of {reply['charged']} for a model listed as free", stop=True)
         if reply.get("model"):
             seen["models"].add(reply["model"])
+        seen["usage"].append(usage_mod.from_openai(reply.get("usage")))
         return reply["message"]
 
     def ask(prompt: str, images: list[str] | None):
@@ -2120,6 +2154,7 @@ def bench_api(task: str, model: str | None, row: dict, conf: dict, local: dict |
     wrong = sorted(answered for answered in seen["models"] if not providers.same_model(name, answered))
     row.update(task=result["task"], seconds=round(time.monotonic() - started, 2), accuracy=result["accuracy"], items=result["items"],
                failures=seen["failures"], notes=result["notes"], error=seen["error"], requests=seen["requests"],
+               usage={key: usage_mod.total_of(u[key] for u in seen["usage"]) for key in usage_mod.KEYS},
                effective_model=(wrong[0] if wrong else (sorted(seen["models"]) or [None])[0]),
                verified=result["accuracy"] >= bench_tasks.PASS_ACCURACY and seen["failures"] == 0 and not wrong)
     if wrong:
@@ -2161,7 +2196,13 @@ def delegate_api(prompt: str, model: str, want_json: bool = False, untrusted: st
         return run_data
     record_health("api", model, None, conf)
     answer = reply["message"].get("content", "")
-    run_data.update(answer=answer, seconds=round(time.monotonic() - started, 2), effective_model=reply.get("model"), effective_provider=reply.get("provider"), usage=reply.get("usage"))
+    seconds = round(time.monotonic() - started, 2)
+    counted = usage_mod.from_openai(reply.get("usage"))
+    run_data.update(answer=answer, seconds=seconds, effective_model=reply.get("model"), effective_provider=reply.get("provider"),
+                    usage={"model": reply.get("model") or name, "input_chars": len(content), **counted, "seconds": seconds,
+                           "reported": reply.get("usage")})
+    usage_mod.record("api", model, counted, "openai-usage", seconds, provider=provider, run_id=run_data["id"],
+                     reported_cost_usd=reply.get("charged"), charged_usd=reply.get("charged"), input_chars=len(content))
     run_data["checks"]["reply"] = "PASS" if answer.strip() else "FAIL"
     if not providers.is_gateway(pconf) and not providers.same_model(name, reply.get("model")):
         run_data["checks"]["effective_model"] = "FAIL"
@@ -2183,7 +2224,8 @@ def bench_run(task: str, executor: str, model: str | None, **options) -> dict:
                     "skipped": f"{task} needs a coding agent: opencode:<model>, colibri:colibri/<id>, or claude"}
         options.pop("caps", None)
         options.pop("time_limit_s", None)
-        return bench_agent(task, executor, model, **options)
+        with usage_mod.scope(kind="bench", task_id=f"bench/{task}"):
+            return bench_agent(task, executor, model, **options)
     options.pop("command", None)
     return bench_chat(task, executor, model, **options)
 

@@ -32,6 +32,7 @@ import execute  # noqa: E402
 import orchestrate  # noqa: E402
 import plan_contract as contract  # noqa: E402
 import planner  # noqa: E402
+import usage  # noqa: E402
 import workplan  # noqa: E402
 from plan_contract import MAX_UNITS, Blocked, high_risk, safe_path  # noqa: E402,F401
 
@@ -178,10 +179,15 @@ def ollama_asker(model: str, policy: dict, request=None):
     def ask(messages: list[dict]) -> str:
         payload = {"model": model, "stream": False, "format": "json", "think": False,
                    "options": {"num_ctx": 8192, "num_predict": 2400, "temperature": 0}, "messages": messages}
+        started = time.monotonic()
         try:
-            return request(url, payload)["message"]["content"]
+            reply = request(url, payload)
+            text = reply["message"]["content"]
         except (KeyError, TypeError, ValueError, urllib.error.URLError, TimeoutError) as exc:
             raise Blocked(f"Local planner failed to return valid structured JSON: {exc}") from exc
+        usage.record("ollama", reply.get("model") or model, usage.from_ollama(reply), "ollama",
+                     round(time.monotonic() - started, 2))
+        return text
     return ask
 
 
@@ -198,7 +204,8 @@ def local_plan(instruction: str, repo: Path, model: str, test: str, *,
     ok, reason = orchestrate.gate("ollama", model, repo, policy, local, mode="local-only", caps=caps)
     if not ok:
         raise Blocked("Local model rejected by privacy/cost gate: " + reason)
-    plan, notes = build_plan(instruction, repo, test, base, policy, ollama_asker(model, policy, request))
+    with usage.scope(plan_id=plan_id_of(repo, base, instruction), kind="plan"):
+        plan, notes = build_plan(instruction, repo, test, base, policy, ollama_asker(model, policy, request))
     if record is not None:
         record.update(notes)
     return plan
@@ -221,7 +228,7 @@ def make_plan(instruction: str, repo: Path, test: str, *, asked: str | None = No
                 reply = ask_claude(messages, who["model"], policy)
             except planner.PlannerError as error:
                 raise Blocked(str(error)) from error
-            calls.append({k: reply.get(k) for k in ("model", "seconds", "input_tokens", "output_tokens", "reported_cost_usd")})
+            calls.append({k: reply.get(k) for k in ("model", "seconds", "input_tokens", "output_tokens", "reported_cost_usd", "usage")})
             return reply["text"]
         return ask
 
@@ -233,8 +240,9 @@ def make_plan(instruction: str, repo: Path, test: str, *, asked: str | None = No
             break
         base = orchestrate.git(repo, "rev-parse", "HEAD").strip()
         try:
-            plan, record = build_plan(instruction, repo, test, base, policy, asker(choice),
-                                      asker(planner.repairer(choice, policy)))
+            with usage.scope(plan_id=plan_id_of(repo, base, instruction), kind="plan"):
+                plan, record = build_plan(instruction, repo, test, base, policy, asker(choice),
+                                          asker(planner.repairer(choice, policy)))
             break
         except contract.Unrepaired:
             # Only a draft that stayed invalid moves up. A refused scope or path is the policy's answer.
