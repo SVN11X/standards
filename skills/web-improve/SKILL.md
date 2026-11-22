@@ -28,6 +28,7 @@ Its `experience` option names the web sub-profile that leads the site. Read `ref
 - When the project has Playwright, `node scripts/measure_page.mjs <url-or-file>` measures the page in a browser at 360 and 1280 px: horizontal scroll, touch targets, text contrast, line length, clipped text and font families.
 - When the owner gives a public URL, compare it with the code. They can differ.
 - Read `references/stack-and-hosting.md` for hosting limits and technology choices.
+- For speed, Lighthouse, PageSpeed or Core Web Vitals, follow `references/page-speed.md`: measure the production build three times, fix in the order the score weighs the metrics, measure again. `python scripts/speed_report.py` reads the Lighthouse JSON.
 
 ## 2. Audit the experience
 

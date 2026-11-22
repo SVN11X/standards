@@ -54,6 +54,14 @@ Sources behind the rules. Prefer the original source. The check verifies these l
 
 - WCAG 2.2: https://www.w3.org/TR/WCAG22/
 - Core Web Vitals: https://web.dev/articles/vitals
+- web.dev, optimize Largest Contentful Paint: https://web.dev/articles/optimize-lcp
+- Lighthouse, performance scoring: https://developer.chrome.com/docs/lighthouse/performance/performance-scoring
+- pagespeed-optimizer skill: https://github.com/tuthuongvo/pagespeed-optimizer-skills
+- GSAP, standard license: https://gsap.com/standard-license
+- GSAP, [gsap.matchMedia](https://gsap.com/docs/v3/GSAP/gsap.matchMedia())
+- GSAP in React, useGSAP: https://gsap.com/resources/React/
+- Lenis: https://github.com/darkroomengineering/lenis
+- React Bits: https://github.com/DavidHDev/react-bits
 - web.dev, performance budgets 101: https://web.dev/articles/performance-budgets-101
 - Okabe and Ito, Color Universal Design: https://jfly.uni-koeln.de/color/
 - Okabe-Ito palette with hex values, NYU Siegal lab: https://siegal.bio.nyu.edu/color-palette/

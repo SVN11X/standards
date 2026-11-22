@@ -6,6 +6,9 @@ All notable changes to this standard are documented here. The format follows [Ke
 
 ### Added
 
+- The web-improve skill has `references/page-speed.md`: measure the production build three times, fix in the order Lighthouse weighs the metrics, measure again and report the medians. It follows the method of the pagespeed-optimizer skill, written from the Lighthouse and web.dev sources because that skill publishes no license. `scripts/speed_report.py` reads Lighthouse JSON reports into medians, failing audits and a before and after comparison that calls a change inside the spread of the runs no improvement. The owner asked for it on 2026-11-22.
+- `audit_site.py` measures four more things: a lazy first image, GSAP without `gsap.matchMedia` or the reduced motion setting, Lenis with `respectReducedMotion: false`, and Lenis without `anchors`.
+- The radar evaluates GSAP (trial), Lenis (assess) and pagespeed-optimizer-skills (assess), and the motion reference says how to use GSAP, Lenis and React Bits with reduced motion and within their licenses.
 - `scripts/usage.py` records every model call in one shape: new input, cache read, cache write, output and reasoning tokens, with the task, plan, kind and attempt it belongs to. The executor loop adds one outcome row per unit, and `usage.py tasks` joins them, so a task's cost includes its failed attempts and its reviews. A value no tool reported stays null. The owner asked for it on 2026-11-22.
 - OpenCode runs print their events with `--format json` when the installed version lists the flag, and the tokens and cost of each step are summed. Before, every OpenCode run read n/a.
 - Bench rows carry the same usage block.
@@ -17,6 +20,7 @@ All notable changes to this standard are documented here. The format follows [Ke
 
 ### Changed
 
+- React Bits in the radar: its license is MIT with the Commons Clause, so a site may use its components and nobody may redistribute them, and it installs one component at a time with the shadcn CLI or jsrepo.
 - The planner keeps the cached part of the prompt apart instead of adding it to the input, and reads `modelUsage`, which also counts subagents. `reported_cost_usd` (the price a tool prints) and `extra_charge_usd` (money charged beyond the subscription) are separate fields.
 - The dashboard shows new input, cache read, cache write and reported cost per model, and how many calls reported no usage.
 - Routing ranks the models that passed a bench class by seconds per accepted result, then tokens per accepted result, instead of the median alone. A model that fails one run in five needs more tries for the same result. With every run passing the order is unchanged.

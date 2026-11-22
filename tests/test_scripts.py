@@ -760,6 +760,21 @@ class WebSubprofiles(Base):
         clean = audit_site.design_measures(ROOT / "skills" / "web-improve" / "gallery")
         self.assertEqual(clean["findings"], [])
 
+    def test_motion_libraries_and_the_first_image_are_measured(self):
+        sys.path.insert(0, str(ROOT / "skills" / "web-improve" / "scripts"))
+        import audit_site
+        site = self.tmp / "motion"
+        site.mkdir()
+        (site / "index.html").write_text('<html lang="en"><body><img src="hero.avif" alt="" width="8" height="4" loading="lazy">'
+                                         '<img src="b.avif" alt="" width="8" height="4" loading="lazy"></body></html>', encoding="utf-8")
+        (site / "site.css").write_text("@media (prefers-reduced-motion: reduce){*{animation:none}}", encoding="utf-8")
+        (site / "scroll.js").write_text("const lenis = new Lenis({ respectReducedMotion: false })\ngsap.to('.card', {y: 10})", encoding="utf-8")
+        (site / "safe.js").write_text("const mm = gsap.matchMedia()\nmm.add('(prefers-reduced-motion: no-preference)', () => gsap.to('.a', {x: 1}))\n"
+                                      "new Lenis({ anchors: true })", encoding="utf-8")
+        found = {(item["check"], item["file"]) for item in audit_site.design_measures(site)["findings"]}
+        self.assertEqual(found, {("first-image-lazy", "index.html"), ("gsap-ignores-reduced-motion", "scroll.js"),
+                                 ("lenis-ignores-reduced-motion", "scroll.js"), ("lenis-blocks-anchors", "scroll.js")})
+
 
 class OllamaOptions(unittest.TestCase):
     def setUp(self):
