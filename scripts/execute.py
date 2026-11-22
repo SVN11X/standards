@@ -579,6 +579,7 @@ class Executor:
         result = loop.run()
         if not result["paused"]:
             self.review_whole()
+            self.record_plan_outcome(result["total_s"])
         for uid in result["pending"]:
             self.state["units"].setdefault(uid, {"status": "pending", "at": orchestrate.now(),
                                                  "note": "the owner paused new assignments"})
@@ -631,6 +632,24 @@ class Executor:
                 pass
         self.state["integrated_review"] = {k: v for k, v in found.items() if v is not None}
         self.event({"event": "integrated-review", "unit": None, "verdict": found.get("verdict")})
+
+    def record_plan_outcome(self, total_s) -> None:
+        """One outcome row for the plan as the owner receives it: accepted only when every unit passed and the review
+        of the whole diff, where one was needed, passed too. An A/B comparison pairs plans by this row."""
+        entries = [self.state["units"].get(u["id"]) or {} for u in self.plan["units"]]
+        whole = self.state.get("integrated_review")
+        units_ok = bool(entries) and all(e.get("status") == DONE for e in entries)
+        whole_ok = whole is None or whole.get("verdict") in ("pass", "warn")
+        tests = [(e.get("checks") or {}).get("tests") for e in entries]
+        try:
+            usage.append(usage.outcome_row(
+                self.plan["plan_id"], plan_id=self.plan["plan_id"], accepted=units_ok and whole_ok,
+                attempts=sum(e.get("attempts") or 0 for e in entries),
+                tests_passed=all(t == "PASS" for t in tests) if all(t in ("PASS", "FAIL") for t in tests) else None,
+                review_passed=whole_ok if whole is not None else (units_ok or None), duration_seconds=total_s,
+                status="accepted" if units_ok and whole_ok else "not accepted"))
+        except OSError:
+            pass
 
     def on_schedule(self, row: dict) -> None:
         # A unit the scheduler ended without running it (cancelled, or its dependency failed) gets its state here.

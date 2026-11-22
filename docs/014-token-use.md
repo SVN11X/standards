@@ -50,6 +50,32 @@ A local reviewer runs with `num_ctx` 4096. Ollama cuts a longer prompt instead o
 - The real reviewer now gets the reply budget of the `review-diff` bench class, 1500 tokens. It ran with 400, where the bench had measured that most replies were cut.
 - A plan with more than one passed unit gets one more review, of its whole integrated diff. Each unit's review saw only its own diff. Publishing refuses a plan whose integrated review did not pass at the current commit, and automatic merge needs an explicit pass. A plan of one unit is not reviewed twice.
 
+## Who does a task, per accepted result
+
+Among the models that passed the bench class of a task type, the router used to pick the one with the lowest median time. A model that fails one run in five needs more tries for the same result. The bench summary now has `seconds_per_accepted`, the median of the accepted runs divided by the pass rate, and `tokens_per_accepted`, counted the same way when every run reported its tokens. Routing ranks by the first and breaks a tie with the second. With every run passing the order is the same as before, and one odd run still cannot decide, because both come from a median. `analyze.py report` shows both columns.
+
+## Proving that quality held
+
+A saving counts only if the work is still delivered. `python scripts/usage.py compare BASELINE CANDIDATE` compares two runs of the same plans, one without a change (A) and one with it (B).
+
+1. Pick real tasks from the repositories that use the standard, not only bench tasks.
+2. Run each task in arm A with its own `STANDARDS_HOME`, reset the repository folder to the same base commit, and run it again in arm B with another `STANDARDS_HOME`. The same folder, base and instruction give the same plan id, which is how the plans are paired.
+3. Keep the models, the reviewer and the acceptance criteria the same in both arms. Note the version of the standard and of each tool.
+4. Run `usage.py compare <home A> <home B>`.
+
+A plan counts as accepted only when every unit passed its tests and review and the review of its whole diff, where one was needed, passed too. Its cost is every call of the plan: planning, attempts that failed, reviews and fixes. The comparison reports per arm the plans accepted, new input, cache read and output tokens, tokens per kind of call, attempts and the p90 time of an accepted plan.
+
+The pilot thresholds were proposed on 2026-11-22. They are evaluation criteria, not a measured saving:
+
+| Criterion | Pilot value |
+| --- | --- |
+| Saving per accepted plan | at least 15 % |
+| Plans the baseline delivered and the candidate did not | 0 |
+| Paired plans | at least 30 |
+| Calls that reported no usage | 0 |
+
+The saving is measured in the reported cost when every call of both arms reported one, else in new tokens: new input, cache writes and output, leaving out cache reads because they are reused. `--metric` picks another. Thirty pairs show a difference worth a larger run. They do not prove that quality is equal, and a regression in a task the bench does not cover is still possible. The command exits with 1 until every criterion holds.
+
 ## Not covered yet
 
 - The OpenCode event fields were read from projects that parse them, not from an OpenCode release note. Check one real run with `usage.py tasks` before trusting the numbers.

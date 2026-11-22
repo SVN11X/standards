@@ -151,6 +151,69 @@ class RowTests(unittest.TestCase):
         self.assertEqual(json.loads(out.getvalue())[0]["usage"]["input_tokens"], 10)
 
 
+def arm_rows(plans: int, tokens: int, lose=(), reviewer_cost=None) -> list[dict]:
+    rows = []
+    for n in range(plans):
+        plan = f"auto-{n:014d}"
+        with usage.scope(plan_id=plan, kind="plan"):
+            rows.append(usage.call_row("claude", "haiku", {"input_tokens": 100, "cache_read_tokens": 4000, "output_tokens": 300},
+                                       "claude-json", reported_cost_usd=0.01))
+        with usage.scope(task_id=f"{plan}/u1", plan_id=plan, kind="execute"):
+            rows.append(usage.call_row("opencode", "m", {"input_tokens": tokens, "output_tokens": 200}, "opencode-events",
+                                       reported_cost_usd=0.0))
+            with usage.scope(kind="review"):
+                rows.append(usage.call_row("ollama", "r", {"input_tokens": 500, "output_tokens": 50}, "ollama",
+                                           reported_cost_usd=reviewer_cost))
+        accepted = n not in lose
+        rows.append(usage.outcome_row(f"{plan}/u1", plan_id=plan, accepted=accepted, attempts=1, tests_passed=accepted,
+                                      review_passed=accepted))
+        rows.append(usage.outcome_row(plan, plan_id=plan, accepted=accepted, attempts=1, tests_passed=accepted,
+                                      review_passed=accepted, duration_seconds=60 + n))
+    return rows
+
+
+class CompareTests(unittest.TestCase):
+    def test_a_cheaper_candidate_that_loses_nothing_passes_the_pilot(self):
+        result = usage.compare(arm_rows(30, 4000), arm_rows(30, 2400))
+        self.assertEqual((result["metric"], result["pairs"], result["regressions"]), ("new-tokens", 30, []))
+        self.assertEqual(result["baseline"]["per_accepted"], 5150)
+        self.assertGreaterEqual(result["saving"], 0.15)
+        self.assertTrue(result["passes_pilot"], result["why_not"])
+        self.assertEqual(result["baseline"]["p90_seconds"], 86)
+
+    def test_a_plan_the_baseline_delivered_and_the_candidate_lost_fails_it(self):
+        result = usage.compare(arm_rows(30, 4000), arm_rows(30, 1000, lose=[7]))
+        self.assertEqual(result["regressions"], ["auto-00000000000007"])
+        self.assertFalse(result["passes_pilot"])
+        self.assertIn("the candidate did not", " ".join(result["why_not"]))
+
+    def test_too_few_pairs_or_too_little_saving_is_named(self):
+        result = usage.compare(arm_rows(10, 4000), arm_rows(12, 3900))
+        self.assertEqual(result["pairs"], 10)
+        self.assertEqual(result["only_in_candidate"], ["auto-00000000000010", "auto-00000000000011"])
+        why = " ".join(result["why_not"])
+        self.assertIn("10 paired plans, 30 needed", why)
+        self.assertIn("needed", why.split(";")[-1])
+
+    def test_cost_is_compared_only_when_every_call_reported_one(self):
+        self.assertEqual(usage.compare(arm_rows(3, 10, reviewer_cost=0.0), arm_rows(3, 10, reviewer_cost=0.0))["metric"], "cost")
+        self.assertEqual(usage.compare(arm_rows(3, 10), arm_rows(3, 10))["metric"], "new-tokens")
+
+    def test_the_command_reads_two_homes(self):
+        import contextlib
+        import io
+        with tempfile.TemporaryDirectory() as tmp:
+            for name, tokens in (("a", 4000), ("b", 2000)):
+                folder = Path(tmp) / name
+                folder.mkdir()
+                (folder / "telemetry.jsonl").write_text("".join(json.dumps(r) + "\n" for r in arm_rows(30, tokens)))
+            out = io.StringIO()
+            with contextlib.redirect_stdout(out):
+                code = usage.main(["compare", str(Path(tmp) / "a"), str(Path(tmp) / "b")])
+        self.assertEqual(code, 0)
+        self.assertIn("passes the pilot", out.getvalue())
+
+
 class FlagTests(unittest.TestCase):
     CONF = {"executors": {"opencode": {"command": ["opencode", "run", "--model", "{model}", "{message}"],
                                        "usage_flags": ["--format", "json"]}}}
@@ -193,10 +256,12 @@ class ExecutorTests(unittest.TestCase):
         rows = usage.read_rows()
         review = [r for r in rows if r["kind"] == "review"]
         self.assertEqual([(r["task_id"], r["plan_id"]) for r in review], [("plan1/u1", "plan1")])
-        task = usage.tasks(rows, "plan1")[0]
-        self.assertEqual((task["task_id"], task["result"]["accepted"], task["execution"]["review_passed"]),
-                         ("plan1/u1", True, True))
+        found = {t["task_id"]: t for t in usage.tasks(rows, "plan1")}
+        task = found["plan1/u1"]
+        self.assertEqual((task["result"]["accepted"], task["execution"]["review_passed"]), (True, True))
         self.assertEqual(task["usage"]["input_tokens"], 120)
+        self.assertTrue(found["plan1"]["result"]["accepted"])
+        self.assertEqual(usage.plan_results(rows)["plan1"]["status"], "accepted")
 
 
 if __name__ == "__main__":

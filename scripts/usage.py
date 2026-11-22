@@ -15,6 +15,8 @@ one, and null when nothing says.
 Usage: python scripts/usage.py tasks [--plan ID] [--json]
        python scripts/usage.py models [--json]
        python scripts/usage.py context [--json]   what the hooks added to sessions, in characters
+       python scripts/usage.py compare BASELINE CANDIDATE [--metric auto|cost|tokens|new-tokens] [--json]
+           BASELINE and CANDIDATE are telemetry files or STANDARDS_HOME folders of two runs of the same plans
 """
 from __future__ import annotations
 
@@ -298,6 +300,94 @@ def tasks(rows: list[dict], plan_id: str | None = None) -> list[dict]:
     return sorted(out, key=lambda t: t["task_id"])
 
 
+# Thresholds of the first A/B pilot, proposed on 2026-11-22. Thirty pairs show a difference, they do not prove
+# that quality is equal.
+PILOT = {"min_saving": 0.15, "max_regressions": 0, "min_pairs": 30}
+
+
+def p90(values: list[float]) -> float | None:
+    ordered = sorted(v for v in values if isinstance(v, (int, float)))
+    if not ordered:
+        return None
+    return ordered[min(len(ordered) - 1, round(0.9 * (len(ordered) - 1)))]
+
+
+def plan_results(rows: list[dict]) -> dict[str, dict]:
+    """The last outcome row of each plan, the one execute.py writes with the plan id as task id."""
+    found = {}
+    for row in rows:
+        if row.get("kind") == "outcome" and row.get("task_id") and row.get("task_id") == row.get("plan_id"):
+            found[row["plan_id"]] = row
+    return found
+
+
+def arm(rows: list[dict], plans: set[str]) -> dict:
+    """Totals of one arm over the paired plans: every call of a plan counts, planning, attempts and reviews."""
+    results = plan_results(rows)
+    calls = [r for r in rows if r.get("kind") != "outcome" and r.get("plan_id") in plans]
+    counted = add_usage(calls)
+    accepted = sum(1 for plan in plans if (results[plan].get("result") or {}).get("accepted"))
+    every = {key: counted[key] or 0 for key in KEYS}
+    costs = [r.get("reported_cost_usd") for r in calls]
+    by_kind: dict[str, int] = {}
+    for row in calls:
+        u = row.get("usage") or {}
+        by_kind[row.get("kind", "call")] = by_kind.get(row.get("kind", "call"), 0) + sum(
+            u.get(k) or 0 for k in ("input_tokens", "cache_read_tokens", "cache_write_tokens", "output_tokens"))
+    return {"plans": len(plans), "accepted": accepted, "acceptance_rate": round(accepted / len(plans), 3) if plans else None,
+            "calls": len(calls), "unreported_calls": sum(1 for r in calls if not reported(r.get("usage"))),
+            "usage": counted, "tokens": every["input_tokens"] + every["cache_read_tokens"] + every["cache_write_tokens"]
+            + every["output_tokens"], "new_tokens": every["input_tokens"] + every["cache_write_tokens"] + every["output_tokens"],
+            "tokens_by_kind": by_kind,
+            "reported_cost_usd": money(costs) if all(c is not None for c in costs) and costs else None,
+            "attempts": sum((results[p].get("execution") or {}).get("attempts") or 0 for p in plans),
+            "p90_seconds": p90([(results[p].get("execution") or {}).get("duration_seconds") for p in plans
+                                if (results[p].get("result") or {}).get("accepted")])}
+
+
+def compare(baseline: list[dict], candidate: list[dict], metric: str = "auto", thresholds: dict | None = None) -> dict:
+    """An A/B comparison of the same plans run twice, paired by plan id: the same repository folder, base commit and
+    instruction give the same id. The candidate passes the pilot when it costs at least `min_saving` less per
+    accepted plan, loses no plan the baseline delivered and has at least `min_pairs` pairs."""
+    limits = {**PILOT, **(thresholds or {})}
+    a_plans, b_plans = plan_results(baseline), plan_results(candidate)
+    pairs = set(a_plans) & set(b_plans)
+    a, b = arm(baseline, pairs), arm(candidate, pairs)
+    if metric == "auto":
+        metric = "cost" if a["reported_cost_usd"] is not None and b["reported_cost_usd"] is not None else "new-tokens"
+    field = {"cost": "reported_cost_usd", "tokens": "tokens", "new-tokens": "new_tokens"}[metric]
+
+    def each(side: dict):
+        value = side[field]
+        return round(value / side["accepted"], 6) if value is not None and side["accepted"] else None
+    a["per_accepted"], b["per_accepted"] = each(a), each(b)
+    lost = sorted(p for p in pairs if (a_plans[p].get("result") or {}).get("accepted")
+                  and not (b_plans[p].get("result") or {}).get("accepted"))
+    gained = sorted(p for p in pairs if (b_plans[p].get("result") or {}).get("accepted")
+                    and not (a_plans[p].get("result") or {}).get("accepted"))
+    saving = (round(1 - b["per_accepted"] / a["per_accepted"], 3)
+              if a["per_accepted"] and b["per_accepted"] is not None else None)
+    failed = []
+    if len(pairs) < limits["min_pairs"]:
+        failed.append(f"{len(pairs)} paired plans, {limits['min_pairs']} needed")
+    if len(lost) > limits["max_regressions"]:
+        failed.append(f"{len(lost)} plan(s) the baseline delivered and the candidate did not")
+    if saving is None:
+        failed.append(f"no {metric} per accepted plan to compare")
+    elif saving < limits["min_saving"]:
+        failed.append(f"saving {saving:.1%}, {limits['min_saving']:.0%} needed")
+    if a["unreported_calls"] or b["unreported_calls"]:
+        failed.append(f"{a['unreported_calls']} baseline and {b['unreported_calls']} candidate call(s) reported no usage")
+    return {"metric": metric, "pairs": len(pairs), "baseline": a, "candidate": b, "saving": saving,
+            "regressions": lost, "gained": gained, "thresholds": limits, "passes_pilot": not failed, "why_not": failed,
+            "only_in_baseline": sorted(set(a_plans) - pairs), "only_in_candidate": sorted(set(b_plans) - pairs)}
+
+
+def rows_at(path: str) -> list[dict]:
+    where = Path(path)
+    return read_rows(where / "telemetry.jsonl" if where.is_dir() else where)
+
+
 def fmt(value) -> str:
     return "n/a" if value is None else f"{value:,}" if isinstance(value, int) else str(value)
 
@@ -321,7 +411,26 @@ def main(argv=None) -> int:
     models = sub.add_parser("models")
     models.add_argument("--json", action="store_true")
     sub.add_parser("context").add_argument("--json", action="store_true")
+    pair = sub.add_parser("compare")
+    pair.add_argument("baseline")
+    pair.add_argument("candidate")
+    pair.add_argument("--metric", choices=["auto", "cost", "tokens", "new-tokens"], default="auto")
+    pair.add_argument("--json", action="store_true")
     args = parser.parse_args(argv)
+    if args.command == "compare":
+        data = compare(rows_at(args.baseline), rows_at(args.candidate), args.metric)
+        if args.json:
+            print(json.dumps(data, indent=2))
+        else:
+            for name in ("baseline", "candidate"):
+                side = data[name]
+                print(f"{name}: {side['accepted']} of {side['plans']} plans accepted, {data['metric']} per accepted plan "
+                      f"{fmt(side['per_accepted'])}, new input {fmt(side['usage']['input_tokens'])}, cache read "
+                      f"{fmt(side['usage']['cache_read_tokens'])}, output {fmt(side['usage']['output_tokens'])}, "
+                      f"p90 {fmt(side['p90_seconds'])} s, attempts {side['attempts']}")
+            print(f"saving {fmt(data['saving'])}, regressions {len(data['regressions'])}, pairs {data['pairs']}")
+            print("passes the pilot" if data["passes_pilot"] else "does not pass the pilot: " + "; ".join(data["why_not"]))
+        return 0 if data["passes_pilot"] else 1
     if args.command == "context":
         sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "hooks"))
         import context_log

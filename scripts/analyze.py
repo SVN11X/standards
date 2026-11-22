@@ -634,7 +634,7 @@ def proposal(conf: dict, catalog: dict, retired: set | None = None) -> list[str]
             if executor == "api":
                 return orchestrate.DATA_RANK[orchestrate.data_use(known.get(orchestrate.providers.split(model)[0]))]
             return 0
-        ranked = sorted(passed.items(), key=lambda kv: (data_rank(*kv[0]), kv[1]["p50_s"]))
+        ranked = sorted(passed.items(), key=lambda kv: (data_rank(*kv[0]), orchestrate.efficiency_key(kv[1])))
         ranked = [(key, row) for key, row in ranked if key[0] != "tools" and key not in (retired or set())]
         if not ranked:
             lines.append(f"- `{task}`: nobody passed yet. It stays with {', '.join(conf['tasks'][task])}.")
@@ -684,10 +684,11 @@ def build_report(conf: dict | None = None, catalog: dict | None = None, rows: li
                 use, evidence = describe(row["executor"], row["model"], catalog)
                 ok = row["runs"] >= limits["bench_min_runs"] and row["pass_rate"] >= limits["bench_min_pass_rate"]
                 body.append([row["executor"], row["model"], how.get(row.get("via"), row.get("via")),
-                             f"{round(row['pass_rate'] * row['runs'])} of {row['runs']}", row["p50_s"], row["errors"], use, evidence,
-                             "yes" if ok else "no"])
-            out += table(["Executor", "Model", "How", "Accepted runs", "Median s to an accepted result", "Errors", "Data use", "Evidence",
-                          "Passed the threshold"], body) + [""]
+                             f"{round(row['pass_rate'] * row['runs'])} of {row['runs']}", row["p50_s"],
+                             orchestrate.na(row.get("seconds_per_accepted")), orchestrate.na(row.get("tokens_per_accepted")),
+                             row["errors"], use, evidence, "yes" if ok else "no"])
+            out += table(["Executor", "Model", "How", "Accepted runs", "Median s to an accepted result", "s per accepted result",
+                          "Tokens per accepted result", "Errors", "Data use", "Evidence", "Passed the threshold"], body) + [""]
             if task == "design-judge-sample":
                 out += ["These pairs are a made-up sample that only proves the mechanism. They are nobody's taste and never decide who reviews design.", ""]
     if outdated:

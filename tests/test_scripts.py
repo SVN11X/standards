@@ -133,6 +133,31 @@ class Route(Base):
         self.assertEqual(decision["model"], "opencode/deepseek-v4.1-flash-free")
         self.assertIn("measured on this machine", " ".join(decision["reasons"]))
 
+    def test_a_model_that_needs_retries_ranks_by_seconds_per_accepted_result(self):
+        local = self.local()
+        local["free_models"].append({"id": "opencode/deepseek-v4.1-flash-free", "checked": dt.date.today().isoformat()})
+        flaky = [{"task": "fix-bug", "executor": "opencode", "model": "opencode/glm-5.3-flash-free", "seconds": 20,
+                  "verified": ok} for ok in (True, True, True, True, False)]
+        steady = [{"task": "fix-bug", "executor": "opencode", "model": "opencode/deepseek-v4.1-flash-free", "seconds": 22,
+                   "verified": True}] * 5
+        orchestrate.bench_file().write_text("\n".join(json.dumps(r) for r in flaky + steady) + "\n", encoding="utf-8")
+        summary = {r["model"]: r for r in orchestrate.summarize_bench(orchestrate.bench_rows())}
+        self.assertEqual(summary["opencode/glm-5.3-flash-free"]["seconds_per_accepted"], 25.0)
+        decision = orchestrate.route("fix-test", self.tmp, local=local, caps=self.caps)
+        self.assertEqual(decision["model"], "opencode/deepseek-v4.1-flash-free")
+        self.assertIn("per accepted result", " ".join(decision["reasons"]))
+
+    def test_tokens_break_a_tie_only_when_every_run_reported_them(self):
+        def rows(tokens, reported=True):
+            return [{"task": "fix-bug", "seconds": 10, "verified": True,
+                     "usage": {"input_tokens": tokens, "output_tokens": 100} if reported else {}}] * 3
+        light, heavy = orchestrate.per_accepted(rows(900)), orchestrate.per_accepted(rows(5000))
+        self.assertEqual((light, heavy), ((10, 1000), (10, 5100)))
+        self.assertLess(orchestrate.efficiency_key({"seconds_per_accepted": 10, "tokens_per_accepted": 1000}),
+                        orchestrate.efficiency_key({"seconds_per_accepted": 10, "tokens_per_accepted": 5100}))
+        mixed = rows(900)[:2] + rows(0, reported=False)[:1]
+        self.assertEqual(orchestrate.per_accepted(mixed), (10, None))
+
     def test_a_failed_specific_class_is_not_rescued_by_a_broader_one(self):
         def rows(task, model, ok):
             return [{"task": task, "executor": "ollama", "model": model, "seconds": 5, "verified": ok,

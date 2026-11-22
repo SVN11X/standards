@@ -9,6 +9,8 @@ All notable changes to this standard are documented here. The format follows [Ke
 - `scripts/usage.py` records every model call in one shape: new input, cache read, cache write, output and reasoning tokens, with the task, plan, kind and attempt it belongs to. The executor loop adds one outcome row per unit, and `usage.py tasks` joins them, so a task's cost includes its failed attempts and its reviews. A value no tool reported stays null. The owner asked for it on 2026-11-22.
 - OpenCode runs print their events with `--format json` when the installed version lists the flag, and the tokens and cost of each step are summed. Before, every OpenCode run read n/a.
 - Bench rows carry the same usage block.
+- `usage.py compare` pairs two runs of the same plans by plan id and says whether the candidate passes the pilot: at least 15 % less per accepted plan, no plan the baseline delivered and the candidate did not, 30 pairs and every call with its usage. The executor loop writes one outcome row per plan for it.
+- Bench summaries carry `seconds_per_accepted` and `tokens_per_accepted`: the median of an accepted run divided by the pass rate.
 - `hooks/context_log.py` logs what the hooks add to each session, in characters, and `usage.py context` sums it. A routing the session already holds becomes one short line and a recalled note it has seen is left out, until a compaction, a cleared conversation or six hours.
 - A diff longer than `review.part_chars` (6000 characters) is reviewed one part at a time, each part with every file name of the change, and a diff over `review.max_diff_chars` is refused before any call. Ollama cuts a prompt longer than its context, so a long diff was judged on what was left of it.
 - A plan with more than one passed unit gets one review of its whole integrated diff. Publishing refuses a plan whose integrated review did not pass at the current commit.
@@ -17,6 +19,7 @@ All notable changes to this standard are documented here. The format follows [Ke
 
 - The planner keeps the cached part of the prompt apart instead of adding it to the input, and reads `modelUsage`, which also counts subagents. `reported_cost_usd` (the price a tool prints) and `extra_charge_usd` (money charged beyond the subscription) are separate fields.
 - The dashboard shows new input, cache read, cache write and reported cost per model, and how many calls reported no usage.
+- Routing ranks the models that passed a bench class by seconds per accepted result, then tokens per accepted result, instead of the median alone. A model that fails one run in five needs more tries for the same result. With every run passing the order is unchanged.
 - The real reviewer gets the reply budget the `review-diff` bench class measured, 1500 tokens instead of 400. A part a review already judged with the same prompt is not sent again, so a fix that changes nothing keeps its failed verdict.
 
 ## [1.25.0] - 2026-11-21

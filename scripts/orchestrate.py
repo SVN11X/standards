@@ -802,6 +802,34 @@ def fresh_rows(rows: list[dict], limit_days: int | None, current: dict | None = 
     return keep
 
 
+def run_tokens(row: dict) -> int | None:
+    """Every token one bench run reported: new input, cache and output. None when the run reported none."""
+    counted = row.get("usage") or {}
+    return usage_mod.total_of(counted.get(key) for key in ("input_tokens", "cache_read_tokens", "cache_write_tokens", "output_tokens"))
+
+
+def per_accepted(items: list[dict]) -> tuple[float | None, int | None]:
+    """The expected seconds and tokens for one accepted result when a failed run is tried again: the median of a run
+    divided by the pass rate. A median keeps one odd run from deciding. Tokens are None unless every run reported
+    them, because a partial count would favor the model that reports less."""
+    accepted = [r for r in items if r.get("verified")]
+    if not accepted:
+        return None, None
+    rate = len(accepted) / len(items)
+    seconds = percentile([r["seconds"] for r in accepted if r.get("seconds") is not None], 0.5)
+    tokens = [run_tokens(r) for r in items]
+    middle = percentile([t for t in tokens if t is not None], 0.5) if all(t is not None for t in tokens) else None
+    return (round(seconds / rate, 2) if seconds is not None else None), (round(middle / rate) if middle is not None else None)
+
+
+def efficiency_key(row: dict) -> tuple:
+    """How models that passed a bench class rank: seconds per accepted result, then tokens per accepted result.
+    With every run passing it is the median, and a model that needs two tries for one result counts twice."""
+    seconds = row.get("seconds_per_accepted")
+    tokens = row.get("tokens_per_accepted")
+    return (seconds if seconds is not None else (row.get("p50_s") or 9e9), tokens if tokens is not None else float("inf"))
+
+
 def summarize_bench(rows: list[dict]) -> list[dict]:
     groups: dict[tuple, list[dict]] = {}
     for row in current_rows(rows):
@@ -811,7 +839,9 @@ def summarize_bench(rows: list[dict]) -> list[dict]:
         verified = [r["seconds"] for r in items if r.get("verified")]
         failed = [r for r in items if not r.get("verified")]
         reasons = [str(r.get("error") or "; ".join(r.get("notes") or []) or r.get("state") or "wrong answer") for r in failed]
+        seconds_each, tokens_each = per_accepted(items)
         summary.append({"task": task, "executor": executor, "model": model, "runs": len(items),
+                        "seconds_per_accepted": seconds_each, "tokens_per_accepted": tokens_each,
                         "pass_rate": round(len(verified) / len(items), 2),
                         "p50_s": percentile(verified, 0.5), "p90_s": percentile(verified, 0.9),
                         "accuracy": round(statistics.mean(r["accuracy"] for r in items if "accuracy" in r), 2)
@@ -1130,8 +1160,8 @@ def pick_ollama_model(oconf: dict, info: dict, measured: dict | None = None, nee
         usable.append((model, timed, share))
     timed_ones = [item for item in usable if item[1]]
     if timed_ones:
-        model = min(timed_ones, key=lambda item: item[1]["p50_s"])[0]
-        return model, f"local model {model} is installed and the fastest with a passing bench history"
+        model = min(timed_ones, key=lambda item: efficiency_key(item[1]))[0]
+        return model, f"local model {model} is installed and the fastest per accepted result with a passing bench history"
     if usable:
         model, _, share = usable[0]
         return model, f"local model {model} is installed" + (" and fully on the GPU" if share == 1 else "") + ", not measured yet"
@@ -1252,8 +1282,8 @@ def pick_opencode_model(models, repo, conf, local, caps, measured, mode, proven,
         return False, ". ".join(dict.fromkeys(why.rstrip(".") for _, why in refused)), None
     timed = [item for item in pool if ("opencode", item[0]) in measured]
     if timed:
-        model, why = min(timed, key=lambda item: measured[("opencode", item[0])]["p50_s"])
-        return True, f"{why}. Fastest verified free model in the bench history", model
+        model, why = min(timed, key=lambda item: efficiency_key(measured[("opencode", item[0])]))
+        return True, f"{why}. Fastest verified free model per accepted result in the bench history", model
     if proven:
         return False, "no free model checked by the owner has passed the bench class of this task", None
     order = conf["executors"]["opencode"].get("prefer_match", [])
@@ -1361,10 +1391,10 @@ def eligible(candidate, task, repo, input_chars, conf, local, caps, measured=Non
                 refused.append(f"{model} is not listed with {', '.join(needs)}")
             else:
                 ok, why = gate("api", model, repo, conf, local, mode, caps, catalog)
-                pool.append((model, why, stats["p50_s"])) if ok else refused.append(why)
+                pool.append((model, why, efficiency_key(stats))) if ok else refused.append(why)
         if pool:
             model, why, _ = min(pool, key=lambda item: item[2])
-            return True, f"{why}. Fastest provider model that passed the bench class of this task", model
+            return True, f"{why}. Fastest provider model per accepted result that passed the bench class of this task", model
         return False, refused[0] if refused else "no provider model has passed the bench class of this task", None
     return False, f"unknown executor {candidate}", None
 
