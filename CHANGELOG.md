@@ -10,6 +10,7 @@ All notable changes to this standard are documented here. The format follows [Ke
 
 ### Changed
 
+- `release.ps1` and `release.sh` end by updating the standards plugin of the owner's own Claude Code, when the `claude` command is there. On 2026-11-21 the plugin was still at 1.22.2 while the standard was at 1.24.1, so every agent ran the hooks of before 1.23.0: the commit gate blocked commits for files outside them. A failed update only warns.
 - The edit task types get a ceiling of 300 s on the p90 seconds to an accepted result, half of `opencode_timeout_s`. `ollama/qwen3.5-9b-ctx16k`, at p90 470 s, ran out of time once and wrote nothing in 469 s once on real work. In local-only `edit-small` now answers blocked at once, and `docs-small` falls back to Ollama as its task list says.
 
 ### Fixed

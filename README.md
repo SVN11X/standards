@@ -127,7 +127,7 @@ python scripts/analyze.py report
 
 1. Edit the YAML files, templates or skills here.
 2. Add an entry to `CHANGELOG.md` and raise `version` in `base/base.yml`.
-3. Run `scripts/release.ps1` in Windows PowerShell or `scripts/release.sh` in bash. It runs the selftest, commits, tags the version, moves the major tag, pushes, and publishes the skills and the templates.
+3. Run `scripts/release.ps1` in Windows PowerShell or `scripts/release.sh` in bash. It runs the selftest, commits, tags the version, moves the major tag, pushes, and publishes the skills and the templates. Then it updates the standards plugin of your own Claude Code, so new sessions load the hooks just published.
 4. In each repository, run `agents` to refresh `AGENTS.md`. Until then the check only warns.
 
 A breaking change gets a new major tag (`v2`). Each repository moves to it when the owner decides.
