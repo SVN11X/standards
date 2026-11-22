@@ -4,6 +4,10 @@ All notable changes to this standard are documented here. The format follows [Ke
 
 ## [Unreleased]
 
+### Added
+
+- `.claude/settings.json` lets Claude Code run this repository's own read-only checks without a prompt: the test suite, the selftest, `ecosystem.py doctor`, `orchestrate.py models`, `bench --report` and `supervisor.py status`. The owner chose them on 2026-11-21 from the commands repeated most in the recent sessions. Interpreters stay without a wildcard rule.
+
 ### Changed
 
 - The edit task types get a ceiling of 300 s on the p90 seconds to an accepted result, half of `opencode_timeout_s`. `ollama/qwen3.5-9b-ctx16k`, at p90 470 s, ran out of time once and wrote nothing in 469 s once on real work. In local-only `edit-small` now answers blocked at once, and `docs-small` falls back to Ollama as its task list says.

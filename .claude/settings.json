@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -m unittest discover -s tests)",
+      "Bash(python -m unittest discover -s tests -q)",
+      "Bash(python scripts/standard.py selftest)",
+      "Bash(python scripts/ecosystem.py doctor)",
+      "Bash(python scripts/orchestrate.py models)",
+      "Bash(python scripts/orchestrate.py bench --report)",
+      "Bash(python scripts/supervisor.py status)"
+    ]
+  }
+}
