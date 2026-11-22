@@ -735,5 +735,24 @@ class WebSubprofiles(Base):
         self.assertEqual(clean["findings"], [])
 
 
+class OllamaOptions(unittest.TestCase):
+    def setUp(self):
+        self.conf = orchestrate.policy()
+        self.conf["executors"]["ollama"].update(temperature=0, seed=42, full_gpu_margin_mib=1536)
+
+    def test_a_model_that_fits_goes_whole_on_the_card(self):
+        options = orchestrate.ollama_options("qwen2.5:7b", "classify", self.conf, {"vram_total_mib": 6144}, 4683073952)
+        self.assertEqual((options["temperature"], options["seed"], options["num_gpu"]), (0, 42, 999))
+
+    def test_a_model_that_does_not_fit_is_split_by_ollama(self):
+        options = orchestrate.ollama_options("qwen3.5:9b", "classify", self.conf, {"vram_total_mib": 6144}, 6550825550)
+        self.assertNotIn("num_gpu", options)
+
+    def test_no_margin_and_no_card_leave_the_split_to_ollama(self):
+        self.assertNotIn("num_gpu", orchestrate.ollama_options("qwen2.5:7b", "classify", self.conf, None, 4683073952))
+        self.conf["executors"]["ollama"]["full_gpu_margin_mib"] = None
+        self.assertNotIn("num_gpu", orchestrate.ollama_options("qwen2.5:7b", "classify", self.conf, {"vram_total_mib": 6144}, 4683073952))
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -148,6 +148,13 @@ executors:
     never_chat: [qwen3-embedding:0.6b]
     think: false
     num_ctx: 4096
+    # Fixed sampling, so two runs of one model and task can be compared, in the bench and in real calls.
+    temperature: 0
+    seed: 42
+    # Every layer goes on the card when the model file plus this margin fits in the card's memory. Left to itself,
+    # Ollama put 18 % of qwen2.5:7b on the CPU on 2026-11-21 and took 6.45 s on classify instead of 2.23 s.
+    # null leaves the split to Ollama.
+    full_gpu_margin_mib: 1536
     num_predict: 400
     # How long Ollama keeps the model loaded after a call. Unset keeps Ollama's own default.
     # keep_alive: 10m
