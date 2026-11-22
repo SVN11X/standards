@@ -4,6 +4,8 @@ All notable changes to this standard are documented here. The format follows [Ke
 
 ## [Unreleased]
 
+## [1.25.0] - 2026-11-21
+
 ### Added
 
 - `.claude/settings.json` lets Claude Code run this repository's own read-only checks without a prompt: the test suite, the selftest, `ecosystem.py doctor`, `orchestrate.py models`, `bench --report` and `supervisor.py status`. The owner chose them on 2026-11-21 from the commands repeated most in the recent sessions. Interpreters stay without a wildcard rule.
