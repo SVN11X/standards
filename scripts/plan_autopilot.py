@@ -326,6 +326,20 @@ def regression(repo: Path, command: str) -> None:
         raise Blocked("Final regression failed: " + orchestrate.tail(result["stdout"] + result["stderr"], 1500))
 
 
+def whole_review_problem(state: dict, head: str, *, auto_merge: bool) -> str | None:
+    """Why a plan of several passed units may not be published yet, from the review of its whole integrated diff."""
+    passed = sum(1 for entry in (state.get("units") or {}).values() if entry.get("status") == execute.DONE and entry.get("commit"))
+    if passed < 2:
+        return None
+    whole = state.get("integrated_review") or {}
+    if whole.get("head") != head.strip() or whole.get("verdict") not in ("pass", "warn"):
+        return ("The integrated change has no passing review of its whole diff at this commit: "
+                + str(whole.get("reason") or whole.get("verdict") or "not reviewed"))
+    if auto_merge and whole["verdict"] != "pass":
+        return "Automatic merge needs an explicit 'pass' on the review of the whole integrated diff"
+    return None
+
+
 def integration_ready(plan: dict, repo: Path, *, auto_merge: bool) -> tuple[Path, str, str]:
     state = execute.load_state(plan["plan_id"])
     units = state.get("units") or {}
@@ -358,6 +372,9 @@ def integration_ready(plan: dict, repo: Path, *, auto_merge: bool) -> tuple[Path
     head = orchestrate.git(path, "rev-parse", "HEAD")
     if head == plan["base"]:
         raise Blocked("No commits to publish")
+    problem = whole_review_problem(state, head, auto_merge=auto_merge)
+    if problem:
+        raise Blocked(problem)
     paths = orchestrate.git(path, "diff", "--name-only", plan["base"], "HEAD").splitlines()
     protected = orchestrate.policy().get("protected", [])
     if any(any(workplan.matches(p, pattern) for pattern in protected) for p in paths):

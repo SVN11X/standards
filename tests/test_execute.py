@@ -102,6 +102,55 @@ class ExecuteTests(Base):
         self.assertEqual((merged / "a.txt").read_text(), "u1\n")
         self.assertEqual((merged / "b.txt").read_text(), "u2\n")
 
+    def test_a_plan_of_several_units_gets_one_review_of_the_whole_diff(self):
+        prompts = []
+
+        def reviewer(prompt):
+            prompts.append(prompt)
+            return DIFF_OK
+        run = self.executor(plan(unit("u1", ["a.txt"]), unit("u2", ["b.txt"])), FakeAgent(), reviewer)
+        run.run()
+        whole = run.state["integrated_review"]
+        head = orchestrate.git(Path(run.state["integration"]["worktree"]), "rev-parse", "HEAD").strip()
+        self.assertEqual((whole["verdict"], whole["head"], sorted(whole["units"])), ("pass", head, ["u1", "u2"]))
+        self.assertEqual(len(prompts), 3)
+        self.assertIn("a.txt", prompts[-1])
+        self.assertIn("b.txt", prompts[-1])
+        self.assertEqual(execute.report(run.plan, run.state)["integrated_review"]["verdict"], "pass")
+
+    def test_a_plan_of_one_unit_is_not_reviewed_twice(self):
+        prompts = []
+        run = self.executor(plan(unit("u1", ["a.txt"])), FakeAgent(), lambda p: prompts.append(p) or DIFF_OK)
+        run.run()
+        self.assertNotIn("integrated_review", run.state)
+        self.assertEqual(len(prompts), 1)
+
+    def test_a_high_finding_on_the_whole_diff_stops_publishing(self):
+        import plan_autopilot
+        replies = [DIFF_OK, DIFF_OK, {"verdict": "fail", "findings": [
+            {"severity": "high", "file": "a.txt", "line_start": 1, "line_end": 1, "message": "breaks b"}]}]
+        run = self.executor(plan(unit("u1", ["a.txt"]), unit("u2", ["b.txt"])), FakeAgent(), lambda p: replies.pop(0))
+        run.run()
+        self.assertEqual(self.statuses(run), {"u1": "passed", "u2": "passed"})
+        whole = run.state["integrated_review"]
+        self.assertEqual(whole["verdict"], "fail")
+        problem = plan_autopilot.whole_review_problem(run.state, whole["head"], auto_merge=False)
+        self.assertIn("no passing review of its whole diff", problem)
+        passing = {**run.state, "integrated_review": {**whole, "verdict": "warn"}}
+        self.assertIsNone(plan_autopilot.whole_review_problem(passing, whole["head"], auto_merge=False))
+        self.assertIn("explicit 'pass'", plan_autopilot.whole_review_problem(passing, whole["head"], auto_merge=True))
+        self.assertIn("at this commit", plan_autopilot.whole_review_problem(passing, "0" * 40, auto_merge=False))
+
+    def test_a_unit_diff_over_the_review_limit_is_blocked_with_its_way_out(self):
+        conf = {**CONF, "review": {"max_diff_chars": 10}}
+        run = execute.Executor(plan(unit("u1", ["a.txt"])), self.repo, "rev:1b", Reviewer(DIFF_OK), FakeAgent(),
+                               lambda u: {"executor": "opencode", "model": "m", "fallbacks": []}, conf, {})
+        run.run()
+        entry = run.state["units"]["u1"]
+        self.assertEqual(entry["status"], "blocked")
+        self.assertIn("over the review limit", entry["note"])
+        self.assertIn("split", execute.blocker_condition(entry["note"]))
+
     def test_high_finding_fails_the_unit(self):
         run = self.executor(plan(unit("u1", ["a.txt"])), FakeAgent(), Reviewer(HIGH))
         run.run()

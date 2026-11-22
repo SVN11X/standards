@@ -143,14 +143,15 @@ def secrets_added(data: dict) -> list[str]:
     return secret_scan.scan(added)
 
 
-def judge(data: dict, reviewer_model: str | None, reviewer) -> tuple[str, str]:
+def judge(data: dict, reviewer_model: str | None, reviewer, conf: dict | None = None) -> tuple[str, str]:
     """Returns (status, note). Only a review without a high finding passes. No reviewer blocks the unit."""
     if not reviewer or not reviewer_model:
         return "blocked", "no reviewer model: review is required"
     diff = orchestrate.git(Path(data["worktree"]), "diff", data["base"], data["commit"])
     with usage.scope(kind="review"):
-        result = review_mod.review(diff, data.get("model") or "", reviewer_model, reviewer)
-    data["review"] = {"verdict": result["verdict"], "findings": result.get("findings", []), "rounds": result.get("rounds")}
+        result = review_mod.review(diff, data.get("model") or "", reviewer_model, reviewer, **review_mod.limits(conf))
+    data["review"] = {"verdict": result["verdict"], "findings": result.get("findings", []), "rounds": result.get("rounds"),
+                      "parts": result.get("parts"), "calls": result.get("calls"), "reused": result.get("reused")}
     if result["verdict"] in ("pass", "warn"):
         return DONE, f"review {result['verdict']}"
     if result["verdict"] == "blocked":
@@ -163,6 +164,8 @@ def blocker_condition(note: str) -> str:
     text = note.lower()
     if "budget" in text:
         return "a larger budget in the plan, or the owner accepts the unit as not done"
+    if "review limit" in text:
+        return "the unit split into smaller units, each with a diff a reviewer can read whole"
     if "reviewer" in text or "review" in text:
         return "a reviewer model that answers and differs from the author"
     if "timed out after changing" in text:
@@ -426,7 +429,7 @@ class Executor:
         data.setdefault("checks", {})["secrets"] = "FAIL" if found else "PASS"
         if found:
             return "failed", "security: the diff adds " + ", ".join(found), data
-        status, note = judge(data, self.reviewer_model, self.reviewer)
+        status, note = judge(data, self.reviewer_model, self.reviewer, self.conf)
         return status, note, data
 
     def run_unit(self, uid: str) -> tuple[str, dict]:
@@ -574,6 +577,8 @@ class Executor:
         loop = scheduler.Scheduler(order, deps, clash, self.run_unit, self.claim, self.pools, self.parallel, done,
                                    self.control, self.on_schedule, stall_s=self.stall_s)
         result = loop.run()
+        if not result["paused"]:
+            self.review_whole()
         for uid in result["pending"]:
             self.state["units"].setdefault(uid, {"status": "pending", "at": orchestrate.now(),
                                                  "note": "the owner paused new assignments"})
@@ -595,6 +600,37 @@ class Executor:
         except Exception:  # noqa: BLE001 (a missing handoff never fails the run)
             pass
         return self.state
+
+    def review_whole(self) -> None:
+        """One review of the whole integrated diff when more than one unit passed. Each unit's review saw its own
+        diff, so how the units work together is judged here. A plan of one unit was already reviewed whole, and a
+        head already reviewed is not reviewed again. Publishing needs this review to pass."""
+        passed = [uid for uid, entry in self.state["units"].items() if entry.get("status") == DONE and entry.get("commit")]
+        if len(passed) < 2:
+            return
+        head = orchestrate.git(self.work_repo, "rev-parse", "HEAD").strip()
+        if (self.state.get("integrated_review") or {}).get("head") == head:
+            return
+        authors = sorted({str(self.state["units"][uid].get("model")) for uid in passed if self.state["units"][uid].get("model")})
+        found = {"head": head, "units": passed, "at": orchestrate.now()}
+        if not self.reviewer or not self.reviewer_model:
+            found.update(verdict="blocked", reason="no reviewer model: the integrated change needs a review")
+        elif not authors or any(orchestrate.same_model(a, self.reviewer_model) for a in authors):
+            found.update(verdict="blocked", reason="the reviewer must differ from every author of the plan")
+        else:
+            diff = orchestrate.git(self.work_repo, "diff", self.state["integration"]["base"], head)
+            task = f"{self.plan['plan_id']}/integrated"
+            with usage.scope(task_id=task, plan_id=self.plan["plan_id"], kind="review"):
+                result = review_mod.review(diff, authors[0], self.reviewer_model, self.reviewer, **review_mod.limits(self.conf))
+            found.update({k: result.get(k) for k in ("verdict", "reason", "findings", "parts", "calls", "reused", "error")})
+            try:
+                usage.append(usage.outcome_row(task, plan_id=self.plan["plan_id"], accepted=result["verdict"] in ("pass", "warn"),
+                                               attempts=1, tests_passed=None, review_passed=result["verdict"] in ("pass", "warn"),
+                                               model=self.reviewer_model, status=result["verdict"]))
+            except OSError:
+                pass
+        self.state["integrated_review"] = {k: v for k, v in found.items() if v is not None}
+        self.event({"event": "integrated-review", "unit": None, "verdict": found.get("verdict")})
 
     def on_schedule(self, row: dict) -> None:
         # A unit the scheduler ended without running it (cancelled, or its dependency failed) gets its state here.
@@ -640,7 +676,8 @@ def report(plan: dict, state: dict) -> dict:
         counts[item["status"]] = counts.get(item["status"], 0) + 1
     return {"schema": "standards/execution-report/v1", "plan_id": plan["plan_id"], "finished": state.get("finished"),
             "integration_branch": (state.get("integration") or {}).get("branch"), "counts": counts, "units": units,
-            "metrics": state.get("metrics"), "publication": state.get("publication")}
+            "metrics": state.get("metrics"), "publication": state.get("publication"),
+            "integrated_review": state.get("integrated_review")}
 
 
 def check(plan: dict, repo: Path, route=None, conf=None, local=None) -> dict:

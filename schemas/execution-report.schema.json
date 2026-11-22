@@ -11,7 +11,7 @@
     "integration_branch": {"type": ["string", "null"]},
     "counts": {"type": "object", "additionalProperties": {"type": "integer"}},
     "metrics": {"type": ["object", "null"]},
-    "publication": {"type": ["object", "null"]},
+    "publication": {"type": ["object", "null"]}, "integrated_review": {"type": ["object", "null"]},
     "units": {
       "type": "array",
       "items": {

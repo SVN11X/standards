@@ -1812,13 +1812,14 @@ def ollama_options(model: str | None, task: str | None, conf: dict, gpu: dict | 
     return options
 
 
-def ollama_chat(payload: dict, conf: dict) -> dict:
-    """One call to the local Ollama chat API. A model that rejects the think option is asked again without it."""
+def ollama_chat(payload: dict, conf: dict, task: str | None = None) -> dict:
+    """One call to the local Ollama chat API. A model that rejects the think option is asked again without it.
+    `task` names the bench class whose reply budget the call gets."""
     oconf = conf["executors"]["ollama"]
     url = oconf.get("url", "http://127.0.0.1:11434").rstrip("/") + "/api/chat"
     payload = {"stream": False, "think": think_option(payload.get("model"), conf), **payload}
     if "options" not in payload:
-        payload["options"] = ollama_options(payload.get("model"), None, conf, detect_gpu(),
+        payload["options"] = ollama_options(payload.get("model"), task, conf, detect_gpu(),
                                             detect_ollama(oconf).get("sizes", {}).get(payload.get("model")))
     if oconf.get("keep_alive"):
         payload.setdefault("keep_alive", oconf["keep_alive"])
@@ -1839,7 +1840,7 @@ def same_model(asked: str, answered: str | None) -> bool:
 def delegate_ollama(prompt: str, model: str | None = None, want_json: bool = False, untrusted: str | None = None,
                     conf: dict | None = None, caps: dict | None = None, repo: Path | None = None,
                     local: dict | None = None, mode: str | None = None, images: list[str] | None = None,
-                    catalog: dict | None = None) -> dict:
+                    catalog: dict | None = None, task: str | None = None) -> dict:
     conf = conf or policy()
     oconf = conf["executors"]["ollama"]
     local = local if local is not None else local_config()
@@ -1867,7 +1868,7 @@ def delegate_ollama(prompt: str, model: str | None = None, want_json: bool = Fal
     set_state(run_data, "running")
     started = time.monotonic()
     try:
-        reply = ollama_chat(payload, conf)
+        reply = ollama_chat(payload, conf, task)
     except (OSError, ValueError, urllib.error.URLError) as error:
         if call_failure_code(error):
             record_health("ollama", model, call_failure_code(error), conf)

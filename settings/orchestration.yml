@@ -182,6 +182,14 @@ executors:
     # Used by bench only. Claude Code itself is the planner and does not delegate to itself.
     command: [claude, -p, --permission-mode, acceptEdits, "{message}"]
 
+# Cross-model review (scripts/review.py). A reviewer reads one part of a diff per call, so a long diff is never
+# cut at its context limit. With num_ctx 4096 and a reply of 1500 tokens, 6000 characters of code plus the
+# instructions fit. A diff over max_diff_chars is refused: the work is too large to judge and is split instead.
+# A plan with more than one passed unit gets one more review of its whole integrated diff before it is published.
+review:
+  part_chars: 6000
+  max_diff_chars: 100000
+
 # The planner of scripts/plan_autopilot.py. A program scores the request and the score picks the tier, so the
 # smallest Claude model that is enough drafts the plan with one `claude -p` call. The call uses the Claude
 # Code subscription, never an API key. Where the cost mode or the privacy class keeps Claude out, or the CLI

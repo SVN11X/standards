@@ -9,11 +9,14 @@ All notable changes to this standard are documented here. The format follows [Ke
 - `scripts/usage.py` records every model call in one shape: new input, cache read, cache write, output and reasoning tokens, with the task, plan, kind and attempt it belongs to. The executor loop adds one outcome row per unit, and `usage.py tasks` joins them, so a task's cost includes its failed attempts and its reviews. A value no tool reported stays null. The owner asked for it on 2026-11-22.
 - OpenCode runs print their events with `--format json` when the installed version lists the flag, and the tokens and cost of each step are summed. Before, every OpenCode run read n/a.
 - Bench rows carry the same usage block.
+- A diff longer than `review.part_chars` (6000 characters) is reviewed one part at a time, each part with every file name of the change, and a diff over `review.max_diff_chars` is refused before any call. Ollama cuts a prompt longer than its context, so a long diff was judged on what was left of it.
+- A plan with more than one passed unit gets one review of its whole integrated diff. Publishing refuses a plan whose integrated review did not pass at the current commit.
 
 ### Changed
 
 - The planner keeps the cached part of the prompt apart instead of adding it to the input, and reads `modelUsage`, which also counts subagents. `reported_cost_usd` (the price a tool prints) and `extra_charge_usd` (money charged beyond the subscription) are separate fields.
 - The dashboard shows new input, cache read, cache write and reported cost per model, and how many calls reported no usage.
+- The real reviewer gets the reply budget the `review-diff` bench class measured, 1500 tokens instead of 400. A part a review already judged with the same prompt is not sent again, so a fix that changes nothing keeps its failed verdict.
 
 ## [1.25.0] - 2026-11-21
 

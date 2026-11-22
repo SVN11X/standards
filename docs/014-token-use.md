@@ -27,6 +27,16 @@ Two costs stay apart. `reported_cost_usd` is the price a tool prints, such as th
 
 Bench rows carry the same usage block, so two models can be compared by the tokens they need for a verified result, not only by their pass rate.
 
+## Reviews in parts
+
+A local reviewer runs with `num_ctx` 4096. Ollama cuts a longer prompt instead of failing, so a long diff was judged on what was left of it. `scripts/review.py` now sends one part of at most `review.part_chars` characters per call (6000 by default). A part holds whole files when they fit and cuts a file only between hunks, or inside a hunk longer than a part. A cut hunk gets its own `@@` line with the file's line numbers, so a finding is still checked against the lines it cites. Every part of a long diff names all the files of the change. Models use what sits at the start or the end of a long context better than what sits in the middle ([Liu et al.](https://arxiv.org/abs/2307.03172)), which is one more reason to keep each part short.
+
+- An error in any part ends the review as an error. A diff with a part nobody judged cannot pass.
+- A diff over `review.max_diff_chars` (100000 by default) is refused before any call. The unit is blocked with the way out: split it.
+- A part whose prompt was already judged in the same review is not sent again. The reviewer runs at temperature 0 with a fixed seed, so the same prompt gets the same answer. A fix that changes nothing keeps its failed verdict without a new call.
+- The real reviewer now gets the reply budget of the `review-diff` bench class, 1500 tokens. It ran with 400, where the bench had measured that most replies were cut.
+- A plan with more than one passed unit gets one more review, of its whole integrated diff. Each unit's review saw only its own diff. Publishing refuses a plan whose integrated review did not pass at the current commit, and automatic merge needs an explicit pass. A plan of one unit is not reviewed twice.
+
 ## Not covered yet
 
 - The OpenCode event fields were read from projects that parse them, not from an OpenCode release note. Check one real run with `usage.py tasks` before trusting the numbers.
