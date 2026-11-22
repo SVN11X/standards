@@ -1771,12 +1771,27 @@ def think_option(model: str | None, conf: dict):
     return values[0] if values and False not in values and "false" not in values else wanted
 
 
+def ollama_options(model: str | None, task: str | None, conf: dict, gpu: dict | None = None, size: int | None = None) -> dict:
+    """The options of one Ollama chat call. The bench and real calls share them, so the bench measures what runs."""
+    oconf = conf["executors"]["ollama"]
+    options = {"num_ctx": oconf.get("num_ctx", 4096), "num_predict": bench_tasks.reply_tokens(task, oconf.get("num_predict", 400))}
+    for key in ("temperature", "seed"):
+        if oconf.get(key) is not None:
+            options[key] = oconf[key]
+    margin = oconf.get("full_gpu_margin_mib")
+    if margin is not None and gpu and size and size / 2**20 + margin <= (gpu.get("vram_total_mib") or 0):
+        options["num_gpu"] = 999
+    return options
+
+
 def ollama_chat(payload: dict, conf: dict) -> dict:
     """One call to the local Ollama chat API. A model that rejects the think option is asked again without it."""
     oconf = conf["executors"]["ollama"]
     url = oconf.get("url", "http://127.0.0.1:11434").rstrip("/") + "/api/chat"
     payload = {"stream": False, "think": think_option(payload.get("model"), conf), **payload}
-    payload.setdefault("options", {"num_ctx": oconf.get("num_ctx", 4096), "num_predict": oconf.get("num_predict", 400)})
+    if "options" not in payload:
+        payload["options"] = ollama_options(payload.get("model"), None, conf, detect_gpu(),
+                                            detect_ollama(oconf).get("sizes", {}).get(payload.get("model")))
     if oconf.get("keep_alive"):
         payload.setdefault("keep_alive", oconf["keep_alive"])
     try:
@@ -1954,7 +1969,8 @@ def bench_chat(task: str, executor: str, model: str | None, conf: dict | None = 
         if time_limit_s and time.monotonic() - started > time_limit_s:
             raise bench_tasks.OutOfTime()
         try:
-            options = {"num_ctx": oconf.get("num_ctx", 4096), "num_predict": bench_tasks.reply_tokens(task, oconf.get("num_predict", 400))}
+            options = ollama_options(model, task, conf, row["hardware"].get("gpu"), (info.get("sizes") or {}).get(model))
+            row["options"] = {key: options[key] for key in ("temperature", "seed", "num_gpu") if key in options}
             reply = ollama_chat({"model": model, "options": options, **payload}, conf)
         except (OSError, ValueError, urllib.error.URLError) as error:
             seen["failures"] += 1
