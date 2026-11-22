@@ -129,6 +129,7 @@ class Analyzer(unittest.TestCase):
             self.assertFalse(by[(task, "bad:1b")]["verified"], task)
         self.assertTrue(by[("design-judge-sample", "good:1b")]["verified"])
         self.assertEqual(by[("classify", "good:1b")]["cold_load_s"], 1.5)
+        self.assertEqual(by[("classify", "good:1b")]["options"]["seed"], 42)
         self.assertEqual(by[("classify", "good:1b")]["effective_model"], "good:1b")
         self.assertEqual(by[("classify", "good:1b")]["night"], state["id"])
         for task in ("fix-bug", "fix-multi", "docs-small", "refactor-module"):

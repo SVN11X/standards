@@ -75,7 +75,7 @@ From the owner's "Plan de mejoras para STANDARDS". One branch with one commit pe
 - [ ] BLOCKED: `memory.py index --repo .` finds nothing in this repository, which has no memory entries and no `docs/decisions/`. The owner decides whether recall reads its numbered docs
 - [x] Bench of `qwen3.5-9b-ctx16k` on 2026-11-21 in local-only: 3 of 3 on classify, extract, summarize, web-subprofile and vision, 2 of 3 on tool-call, 0 of 3 on the sample design judge
 - [x] Engine pilot on 2026-11-21, `qwen2.5:7b` Q4_K_M on classify: llama.cpp b12613 Vulkan median 2.69 s, Ollama 0.40.17 with all layers on the card 2.23 s, both 12 of 12. Not integrated
-- [ ] BLOCKED: Ollama put 18 % of `qwen2.5:7b` on the CPU by itself and took 6.45 s. The owner decides whether a model that fits gets `num_gpu` in the settings
+- [x] The owner chose on 2026-11-21 that every Ollama call fixes temperature, seed and GPU layers. Ollama had put 18 % of `qwen2.5:7b` on the CPU and took 6.45 s instead of 2.23 s
 - [ ] BLOCKED: the owner picks one consumer project and one pending task for the first specialist. Granite 4.1 3B if Spanish extraction fails, PaddleOCR-VL-1.5 if a table of the notes extractor is misread
 - [ ] BLOCKED: Fieldnotes and tesis_explain adopt `web-visitor-ai` in their own repositories, with the owner's Cloudflare account on Workers Free. The acceptance test needs a browser with an empty cache and the notebook off
 - [ ] BLOCKED: the Raspberry Pi 4 case adopts `3d-preview` in the prototype's repository

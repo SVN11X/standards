@@ -112,6 +112,8 @@ The first six rows are inference by API: one request per item, straight to the m
 
 Every fixture is synthetic. No model grades another. Each run records the version of the rule that graded it, and when a rule is corrected the runs it graded before stop counting. A model enters a real task only after 3 runs with a pass rate of 0.8 in the class that measures it. Three runs are a first signal on one machine, not strong statistics.
 
+Every Ollama call, in the bench and in real work, takes its options from `executors.ollama`: temperature 0 and seed 42, so two runs of one model can be compared, and every layer on the card when the model file plus `full_gpu_margin_mib` fits in its memory. Left to itself, Ollama put 18 % of `qwen2.5:7b` on the CPU on 2026-11-21 and took 6.45 s on classify instead of 2.23 s, which made a model that fits look slow. Each bench row records the options it ran with. Rows from before 2026-11-21 ran with Ollama's defaults and count until they lapse. `analyze.py run --runs 3` measures again at once.
+
 The design judge needs your choices. Put pairs of screenshots in `~/.standards/design-pairs/` with a `pairs.yml`:
 
 ```yaml
